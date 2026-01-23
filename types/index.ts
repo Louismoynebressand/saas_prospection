@@ -15,22 +15,29 @@ export interface ScrapeJob {
     deepscan?: boolean;
     enrichie_emails?: boolean;
     statut: string; // 'ALLfinish', 'queued', etc.
-    // metadata or other fields if exists
 }
 
 export interface ScrapeProspect {
-    id_prospect: string; // uuid
+    id_prospect: string; // can be bigint (int8) in DB, string in frontend
     created_at: string;
     id_user: string;
-    id_jobs: number; // fk to scrape_jobs
+    id_jobs: number | string;
 
-    // Extracted fields (if available directly or within json)
+    // Extracted fields
     ville?: string;
-    email_adresse_verified?: string[]; // jsonb or array? Assuming array based on usage or jsonb
+    secteur?: string;
+    email_adresse_verified?: string | string[]; // Can be single string in DB
+
+    // Validation fields
+    check_email?: boolean;
+    succed_validation_smtp_email?: boolean;
+    check_email_tentative?: string;
+    email_scrap_etat?: string;
 
     // Raw data
-    data_scrapping?: any; // jsonb
+    data_scrapping?: any; // jsonb/text
     deep_search?: any; // jsonb
+    resume?: string;
 }
 
 export interface WebhookPayload {
@@ -59,6 +66,6 @@ export interface WebhookPayload {
         sessionId?: string | null;
     };
     meta?: {
-        searchId: number; // Changed to number for id_jobs
+        searchId: number;
     };
 }
