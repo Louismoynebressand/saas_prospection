@@ -42,6 +42,7 @@ export function ProspectListTable({ searchId, autoRefresh }: { searchId: string,
                 table: 'scrape_prospect',
                 filter: `id_jobs=eq.${searchId}`
             }, (payload) => {
+                // Use functional update to avoid stale state
                 setProspects(prev => [payload.new as ScrapeProspect, ...prev])
             })
             .subscribe()
@@ -90,7 +91,9 @@ export function ProspectListTable({ searchId, autoRefresh }: { searchId: string,
                 <TableBody>
                     {prospects.map((prospect) => {
                         const raw = prospect.data_scrapping || {};
-                        const name = raw.name || raw.title || prospect.id_prospect.slice(0, 8);
+                        // SAFE SLICE: Ensure id_prospect is string before slicing
+                        const idStr = String(prospect.id_prospect || "");
+                        const name = raw.name || raw.title || (idStr ? idStr.slice(0, 8) : "N/A");
                         const company = raw.company || raw.title || "N/A";
                         const city = prospect.ville || raw.address;
                         const email = (prospect.email_adresse_verified && prospect.email_adresse_verified[0])
@@ -98,7 +101,7 @@ export function ProspectListTable({ searchId, autoRefresh }: { searchId: string,
                         const phone = raw.phone || (raw.phones && raw.phones[0]);
 
                         return (
-                            <TableRow key={prospect.id_prospect}>
+                            <TableRow key={idStr}>
                                 <TableCell className="font-medium">
                                     <div className="flex items-center gap-2">
                                         <User className="h-4 w-4 text-muted-foreground" />
@@ -130,7 +133,7 @@ export function ProspectListTable({ searchId, autoRefresh }: { searchId: string,
                                 <TableCell className="max-w-[120px] truncate">{city}</TableCell>
                                 <TableCell className="text-right">
                                     <Button variant="ghost" size="icon" asChild>
-                                        <Link href={`/prospects/${prospect.id_prospect}`}>
+                                        <Link href={`/prospects/${idStr}`}>
                                             <MoreHorizontal className="h-4 w-4" />
                                         </Link>
                                     </Button>

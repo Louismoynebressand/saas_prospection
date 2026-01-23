@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
 import { MoreHorizontal, Search as SearchIcon, MapPin, Loader2 } from "lucide-react"
@@ -13,6 +14,7 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
 export function SearchHistoryTable({ limit }: { limit?: number }) {
+    const router = useRouter()
     const [searches, setSearches] = useState<ScrapeJob[]>([])
     const [loading, setLoading] = useState(true)
 
@@ -56,19 +58,22 @@ export function SearchHistoryTable({ limit }: { limit?: number }) {
     }, [limit])
 
     const getStatusBadge = (status: string) => {
-        switch (status) {
+        const s = status?.toLowerCase()
+        switch (s) {
             case 'queued': return <Badge variant="secondary">En file d'attente</Badge>
             case 'running': return <Badge variant="warning" className="animate-pulse">En cours</Badge>
             case 'done':
-            case 'ALLfinish': return <Badge variant="success">Terminé</Badge>
+            case 'allfinish': return <Badge variant="success">Terminé</Badge>
             case 'error': return <Badge variant="destructive">Erreur</Badge>
-            default: return <Badge variant="outline">{status}</Badge>
+            default: return <Badge variant="outline">{status || 'Inconnu'}</Badge>
         }
     }
 
     const parseQuery = (jsonQuery: string) => {
+        if (!jsonQuery) return "N/A"
         try {
-            return JSON.parse(jsonQuery)
+            const parsed = JSON.parse(jsonQuery)
+            return typeof parsed === 'string' ? parsed : jsonQuery
         } catch (e) {
             return jsonQuery
         }
@@ -84,7 +89,7 @@ export function SearchHistoryTable({ limit }: { limit?: number }) {
 
     if (searches.length === 0) {
         return (
-            <div className="text-center p-8 text-muted-foreground">
+            <div className="text-center p-8 text-muted-foreground bg-card border rounded-md">
                 Aucune recherche pour le moment.
             </div>
         )
@@ -105,7 +110,11 @@ export function SearchHistoryTable({ limit }: { limit?: number }) {
                 </TableHeader>
                 <TableBody>
                     {searches.map((search) => (
-                        <TableRow key={search.id_jobs}>
+                        <TableRow
+                            key={search.id_jobs}
+                            className="cursor-pointer hover:bg-muted/50 transition-colors"
+                            onClick={() => router.push(`/searches/${search.id_jobs}`)}
+                        >
                             <TableCell className="font-medium">
                                 <div className="flex items-center gap-2">
                                     <SearchIcon className="h-4 w-4 text-muted-foreground" />
@@ -126,10 +135,11 @@ export function SearchHistoryTable({ limit }: { limit?: number }) {
                                 -
                             </TableCell>
                             <TableCell className="text-right">
-                                <Button variant="ghost" size="icon" asChild>
-                                    <Link href={`/searches/${search.id_jobs}`}>
-                                        <MoreHorizontal className="h-4 w-4" />
-                                    </Link>
+                                <Button variant="ghost" size="icon" onClick={(e) => {
+                                    e.stopPropagation();
+                                    router.push(`/searches/${search.id_jobs}`);
+                                }}>
+                                    <MoreHorizontal className="h-4 w-4" />
                                 </Button>
                             </TableCell>
                         </TableRow>

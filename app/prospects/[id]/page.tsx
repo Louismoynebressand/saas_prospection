@@ -1,8 +1,8 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useParams } from "next/navigation"
-import { ArrowLeft, Building2, Mail, Phone, MapPin, Globe, ExternalLink, User } from "lucide-react"
+import { useParams, useRouter } from "next/navigation"
+import { ArrowLeft, Building2, Mail, Phone, MapPin, Globe, ExternalLink, User, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase"
 import { ScrapeProspect } from "@/types"
@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge"
 
 export default function ProspectPage() {
     const params = useParams()
+    const router = useRouter()
     const id = params.id as string
     const [prospect, setProspect] = useState<ScrapeProspect | null>(null)
     const [loading, setLoading] = useState(true)
@@ -33,14 +34,19 @@ export default function ProspectPage() {
     }, [id])
 
     if (loading) {
-        return <div className="space-y-4">
+        return <div className="p-8 space-y-4">
             <Skeleton className="h-8 w-64" />
             <Skeleton className="h-64 w-full" />
         </div>
     }
 
     if (!prospect) {
-        return <div>Prospect non trouvé</div>
+        return (
+            <div className="p-8 text-center">
+                <h2 className="text-xl font-semibold">Prospect non trouvé</h2>
+                <Button variant="link" onClick={() => router.back()}>Retour</Button>
+            </div>
+        )
     }
 
     // Helper extraction
@@ -54,12 +60,10 @@ export default function ProspectPage() {
     const url = raw.url || raw.googleMapsUrl || prospect.data_scrapping?.url;
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 max-w-5xl mx-auto p-4 md:p-8">
             <div className="flex items-center gap-4">
-                <Button variant="ghost" size="icon" asChild>
-                    <Link href={`/searches/${prospect.id_jobs}`}>
-                        <ArrowLeft className="h-4 w-4" />
-                    </Link>
+                <Button variant="ghost" size="icon" onClick={() => router.back()}>
+                    <ArrowLeft className="h-4 w-4" />
                 </Button>
                 <div className="flex-1">
                     <h2 className="text-2xl font-bold tracking-tight">{company}</h2>
@@ -153,7 +157,7 @@ export default function ProspectPage() {
             {/* Raw Data Accordion or Card */}
             <Card>
                 <CardHeader>
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Données brutes (Scraping + Deep Search)</CardTitle>
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Données brutes</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <pre className="text-xs bg-muted/50 p-4 rounded-md overflow-x-auto">
