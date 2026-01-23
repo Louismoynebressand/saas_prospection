@@ -4,9 +4,9 @@ import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import {
     ArrowLeft, Building2, Mail, Phone, MapPin, Globe, ExternalLink, User,
-    Star, Clock, CheckCircle2, XCircle, AlertCircle, Sparkles, Tag, Users, Music, Info, Briefcase
+    Star, Clock, CheckCircle2, XCircle, AlertCircle, Sparkles, Tag, Users, Music, Info, Briefcase, Copy, Store
 } from "lucide-react"
-import Link from "next/link"
+import { differenceInYears, parseISO, isValid } from "date-fns"
 import { supabase } from "@/lib/supabase"
 import { ScrapeProspect } from "@/types"
 import { Button } from "@/components/ui/button"
@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 // --- TYPES ---
 interface ScrappedData {
@@ -47,12 +48,16 @@ interface DeepSearchData {
     "nom_raison_sociale"?: string;
     "naf"?: string;
     "date_creation"?: string;
+    // Stats
+    "effectif"?: string;
+    "nombre_etablissements"?: number | string;
+    "nombre_etablissements_ouverts"?: number | string;
     "dirigeants"?: Array<{
         nom?: string;
         prenoms?: string;
         qualite?: string;
         type_dirigeant?: string;
-        date_de_naissance?: string;
+        date_de_naissance?: string; // Format YYYY-MM
     }>;
 }
 
@@ -92,6 +97,39 @@ export default function ProspectPage() {
         fetchProspect()
     }, [id])
 
+    // Use TooltipProvider at root of component tree part
+    const CopyButton = ({ text, label }: { text: string | undefined | null, label: string }) => {
+        const [copied, setCopied] = useState(false)
+
+        if (!text) return <span className="text-muted-foreground">-</span>
+
+        const handleCopy = (e: React.MouseEvent) => {
+            e.stopPropagation()
+            navigator.clipboard.writeText(text)
+            setCopied(true)
+            setTimeout(() => setCopied(false), 2000)
+        }
+
+        return (
+            <TooltipProvider>
+                <Tooltip delayDuration={300}>
+                    <TooltipTrigger asChild>
+                        <div
+                            className="flex items-center gap-2 cursor-pointer group hover:bg-muted/50 p-1 -ml-1 rounded transition-colors"
+                            onClick={handleCopy}
+                        >
+                            <span className="truncate">{text}</span>
+                            <Copy className={`h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity ${copied ? 'text-green-500' : ''}`} />
+                        </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                        <p>{copied ? "Copié !" : "Cliquer pour copier"}</p>
+                    </TooltipContent>
+                </Tooltip>
+            </TooltipProvider>
+        )
+    }
+
     if (loading) {
         return <div className="p-8 space-y-4 max-w-7xl mx-auto">
             <Skeleton className="h-8 w-64" />
@@ -122,14 +160,23 @@ export default function ProspectPage() {
     const website = scrapped["Site web"] || (deep.socials?.instagram || deep.socials?.facebook);
 
     // Email Status Logic
-    // If check_email is false, it means validation wasn't performed or "Pas de domaine"
-    let emailStatus = 'inconnu';
-    if (prospect.check_email === false) {
-        emailStatus = 'non_verifie'; // Or "Pas de domaine" from text field if needed
+    let emailStatus = 'inconnu'; // Default
+    let emailStatusLabel = 'Inconnu';
+
+    // Check specific "tentative" messages first if present
+    if (prospect.check_email_tentative?.toLowerCase().includes("pas de domaine")) {
+        emailStatus = 'pas_domaine';
+        emailStatusLabel = 'Pas de domaine';
     } else if (prospect.succed_validation_smtp_email === true) {
         emailStatus = 'valide';
+        emailStatusLabel = 'Check Email Réussi';
     } else if (prospect.succed_validation_smtp_email === false) {
-        emailStatus = 'invalide';
+        emailStatus = 'echec';
+        emailStatusLabel = 'Check Email Échoué';
+    } else if (prospect.check_email === false) {
+        // Explicitly marked as not checked (or skipped)
+        emailStatus = 'non_verifie';
+        emailStatusLabel = 'Non Vérifié';
     }
 
     const displayEmail = (prospect.email_adresse_verified && prospect.email_adresse_verified.length > 0)
@@ -137,23 +184,52 @@ export default function ProspectPage() {
         : (scrapped.Email || (deep.emails && deep.emails[0]));
 
     const renderEmailBadge = () => {
-        if (!displayEmail) return <span className="text-sm text-muted-foreground italic">Aucun email</span>;
+        // If no email found at all
+        if (!displayEmail) {
+            if (emailStatus === 'pas_domaine') {
+                return <Badge variant="outline" className="text-orange-500 border-orange-200 bg-orange-50">Pas de domaine</Badge>
+            }
+            return <Badge variant="secondary" className="text-muted-foreground">Aucun email (Checké)</Badge>
+        }
 
         switch (emailStatus) {
             case 'valide':
-                return <Badge variant="default" className="bg-green-600 hover:bg-green-700 gap-1"><CheckCircle2 className="w-3 h-3" /> Vérifié</Badge>
-            case 'invalide':
-                return <Badge variant="destructive" className="gap-1"><XCircle className="w-3 h-3" /> Invalide</Badge>
+                return <Badge variant="default" className="bg-green-600 hover:bg-green-700 gap-1"><CheckCircle2 className="w-3 h-3" /> {emailStatusLabel}</Badge>
+            case 'echec':
+                return <Badge variant="destructive" className="gap-1"><XCircle className="w-3 h-3" /> {emailStatusLabel}</Badge>
+            case 'pas_domaine':
+                return <Badge variant="outline" className="text-orange-500 border-orange-200 bg-orange-50">{emailStatusLabel}</Badge>
             case 'non_verifie':
-                return <Badge variant="secondary" className="gap-1 text-muted-foreground"><AlertCircle className="w-3 h-3" /> Non vérifié</Badge>
+                return <Badge variant="secondary" className="gap-1 text-muted-foreground"><AlertCircle className="w-3 h-3" /> {emailStatusLabel}</Badge>
             default:
-                return <Badge variant="outline" className="gap-1 text-muted-foreground"><Info className="w-3 h-3" /> Inconnu</Badge>
+                return <Badge variant="outline" className="gap-1 text-muted-foreground"><Info className="w-3 h-3" /> {emailStatusLabel}</Badge>
         }
     }
 
-    // Helper for hours: "12:00 to 14:00" -> "12h00 - 14h00"
+    const renderDeepScanBadge = () => {
+        // Simple heuristic: if we have deep_search data (like siret or points_forts), deep scan ran.
+        // Or check `prospect.deep_search` is not empty object.
+        const hasDeepData = deep && (Object.keys(deep).length > 0);
+        if (hasDeepData) {
+            return <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 gap-1"><Sparkles className="w-3 h-3" /> Deep Search</Badge>
+        }
+        return <Badge variant="outline" className="text-muted-foreground bg-muted/50">Sans Deep Search</Badge>
+    }
+
+    // Helper for hours
     const formatHours = (hoursStr: string) => {
         return hoursStr.replace(/ to /g, ' - ').replace(/:/g, 'h');
+    }
+
+    // Age Helper
+    const calculateAge = (dateStr?: string) => {
+        if (!dateStr) return null;
+        // Handle YYYY-MM
+        try {
+            const date = new Date(dateStr);
+            if (!isValid(date)) return null;
+            return differenceInYears(new Date(), date);
+        } catch (e) { return null }
     }
 
     return (
@@ -168,6 +244,7 @@ export default function ProspectPage() {
                                 <ArrowLeft className="h-5 w-5" />
                             </Button>
                             <h1 className="text-3xl font-bold tracking-tight text-foreground">{companyName}</h1>
+                            {renderDeepScanBadge()}
                         </div>
                         <div className="flex items-center gap-4 text-muted-foreground ml-11">
                             <span className="flex items-center gap-1"><Building2 className="w-4 h-4" /> {category}</span>
@@ -180,6 +257,7 @@ export default function ProspectPage() {
                     </div>
 
                     <div className="flex gap-3 ml-11 md:ml-0">
+                        {/* Actions would go here */}
                         {mapsUrl && (
                             <Button variant="outline" size="sm" asChild>
                                 <a href={mapsUrl} target="_blank" rel="noopener noreferrer">
@@ -201,7 +279,7 @@ export default function ProspectPage() {
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
                     {/* LEFT COLUMN: CONTACT & IDENTITY */}
-                    <div className="space-y-8 lg:col-span-1">
+                    <div className="space-y-6 lg:col-span-1">
                         <Card>
                             <CardHeader>
                                 <CardTitle className="text-lg flex items-center gap-2"><User className="w-5 h-5 text-primary" /> Coordonnées</CardTitle>
@@ -209,13 +287,13 @@ export default function ProspectPage() {
                             <CardContent className="space-y-6">
                                 {/* Email Block */}
                                 <div className="space-y-2 p-3 bg-muted/30 rounded-lg border">
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex items-center justify-between mb-1">
                                         <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Email</span>
                                         {renderEmailBadge()}
                                     </div>
-                                    <div className="flex items-center gap-2 font-medium truncate">
-                                        <Mail className="w-4 h-4 text-muted-foreground" />
-                                        {displayEmail || "-"}
+                                    <div className="flex items-center gap-2 font-medium overflow-hidden">
+                                        <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
+                                        <CopyButton text={displayEmail} label="Email" />
                                     </div>
                                 </div>
 
@@ -224,7 +302,7 @@ export default function ProspectPage() {
                                     <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Téléphone</span>
                                     <div className="flex items-center gap-2">
                                         <Phone className="w-4 h-4 text-muted-foreground" />
-                                        {scrapped["Téléphone"] || "-"}
+                                        <CopyButton text={scrapped["Téléphone"]} label="Téléphone" />
                                     </div>
                                 </div>
 
@@ -232,8 +310,8 @@ export default function ProspectPage() {
                                 <div className="space-y-1">
                                     <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Adresse</span>
                                     <div className="flex items-start gap-2">
-                                        <MapPin className="w-4 h-4 text-muted-foreground mt-1" />
-                                        <span className="text-sm">{address}</span>
+                                        <MapPin className="w-4 h-4 text-muted-foreground mt-1 shrink-0" />
+                                        <CopyButton text={address} label="Adresse" />
                                     </div>
                                 </div>
 
@@ -275,7 +353,7 @@ export default function ProspectPage() {
                     </div>
 
                     {/* CENTER & RIGHT: DETAILS & AI INSIGHTS */}
-                    <div className="lg:col-span-2 space-y-8">
+                    <div className="lg:col-span-2 space-y-6">
 
                         <Tabs defaultValue="legal" className="w-full">
                             <TabsList className="grid w-full grid-cols-2 lg:w-[400px]">
@@ -286,46 +364,68 @@ export default function ProspectPage() {
                             <TabsContent value="legal" className="mt-4">
                                 <Card>
                                     <CardContent className="pt-6 space-y-6">
-                                        {/* Company Legal Info */}
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div className="p-4 bg-muted/20 rounded-lg">
+                                        {/* Company Legal Info Grid */}
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                            <div className="p-4 bg-muted/20 rounded-lg col-span-1 md:col-span-2">
                                                 <span className="text-xs text-muted-foreground uppercase block mb-1">Raison Sociale</span>
-                                                <p className="font-medium">{deep.nom_raison_sociale || "-"}</p>
+                                                <CopyButton text={deep.nom_raison_sociale} label="Raison Sociale" />
                                             </div>
                                             <div className="p-4 bg-muted/20 rounded-lg">
                                                 <span className="text-xs text-muted-foreground uppercase block mb-1">Siret</span>
-                                                <p className="font-mono">{deep.siret_siege || "-"}</p>
+                                                <CopyButton text={deep.siret_siege} label="Siret" />
                                             </div>
                                             <div className="p-4 bg-muted/20 rounded-lg">
                                                 <span className="text-xs text-muted-foreground uppercase block mb-1">Code NAF</span>
                                                 <p className="font-mono">{deep.naf || "-"}</p>
                                             </div>
                                             <div className="p-4 bg-muted/20 rounded-lg">
-                                                <span className="text-xs text-muted-foreground uppercase block mb-1">Date de création</span>
+                                                <span className="text-xs text-muted-foreground uppercase block mb-1">Création</span>
                                                 <p>{deep.date_creation || "-"}</p>
+                                            </div>
+                                            <div className="p-4 bg-muted/20 rounded-lg">
+                                                <span className="text-xs text-muted-foreground uppercase block mb-1">Effectif</span>
+                                                <p className="font-medium flex items-center gap-1">
+                                                    <Users className="w-3 h-3 text-muted-foreground" />
+                                                    {deep.effectif || "Non renseigné"}
+                                                </p>
+                                            </div>
+                                            <div className="p-4 bg-muted/20 rounded-lg md:col-span-2">
+                                                <span className="text-xs text-muted-foreground uppercase block mb-1">Établissements</span>
+                                                <div className="flex gap-4">
+                                                    <div className="flex items-center gap-1 text-sm">
+                                                        <Store className="w-3 h-3 text-muted-foreground" /> Total: {deep.nombre_etablissements || 1}
+                                                    </div>
+                                                    <div className="flex items-center gap-1 text-sm text-green-600">
+                                                        Ouverts: {deep.nombre_etablissements_ouverts || 1}
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
 
                                         {/* Dirigeants Section */}
                                         {deep.dirigeants && deep.dirigeants.length > 0 && (
-                                            <div>
+                                            <div className="pt-2">
                                                 <h4 className="font-semibold text-sm flex items-center gap-2 mb-3">
                                                     <Briefcase className="w-4 h-4 text-primary" /> Dirigeants
                                                 </h4>
                                                 <div className="space-y-2">
-                                                    {deep.dirigeants.map((d, i) => (
-                                                        <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 border rounded-md bg-muted/10">
-                                                            <div className="font-medium">
-                                                                {d.prenoms} {d.nom}
+                                                    {deep.dirigeants.map((d, i) => {
+                                                        const age = calculateAge(d.date_de_naissance);
+                                                        return (
+                                                            <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 border rounded-md bg-muted/10 hover:bg-muted/20 transition-colors">
+                                                                <div className="font-medium flex items-center gap-2">
+                                                                    <User className="h-4 w-4 text-muted-foreground" />
+                                                                    {d.prenoms} {d.nom}
+                                                                </div>
+                                                                <div className="text-sm text-muted-foreground flex gap-2 items-center mt-2 sm:mt-0">
+                                                                    <Badge variant="outline" className="bg-background">{d.qualite || "Dirigeant"}</Badge>
+                                                                    {age && (
+                                                                        <span className="text-xs border px-2 py-0.5 rounded-full bg-background">{age} ans</span>
+                                                                    )}
+                                                                </div>
                                                             </div>
-                                                            <div className="text-sm text-muted-foreground flex gap-2">
-                                                                <Badge variant="outline">{d.qualite || "Dirigeant"}</Badge>
-                                                                {d.date_de_naissance && (
-                                                                    <span className="text-xs self-center">Né(e) en {d.date_de_naissance}</span>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    ))}
+                                                        )
+                                                    })}
                                                 </div>
                                             </div>
                                         )}
@@ -336,7 +436,7 @@ export default function ProspectPage() {
                             <TabsContent value="infos" className="mt-4">
                                 <Card>
                                     <CardContent className="pt-6">
-                                        {/* Deep Search Highlights - Moved inside here or kept separate? Keeping somewhat related */}
+                                        {/* Deep Search Highlights */}
                                         {(deep.points_forts || deep.clients_cibles || deep.style_communication) && (
                                             <div className="mb-6 p-4 rounded-lg border-primary/20 bg-primary/5 space-y-4">
                                                 <h4 className="flex items-center gap-2 text-primary font-semibold">
@@ -354,6 +454,12 @@ export default function ProspectPage() {
                                                         </div>
                                                     )}
                                                     <div className="space-y-2">
+                                                        {deep.style_communication && (
+                                                            <div className="mb-2">
+                                                                <span className="text-xs font-semibold text-muted-foreground uppercase">Ton</span>
+                                                                <p className="text-sm italic">"{deep.style_communication}"</p>
+                                                            </div>
+                                                        )}
                                                         {deep.clients_cibles && (
                                                             <div>
                                                                 <span className="text-xs font-semibold text-muted-foreground uppercase">Cible</span>
@@ -389,7 +495,7 @@ export default function ProspectPage() {
                             </TabsContent>
                         </Tabs>
 
-                        {/* Raw Data Accordion (Moved to bottom and collapsed) */}
+                        {/* Raw Data */}
                         <div className="pt-8">
                             <Separator className="mb-4" />
                             <details className="group">

@@ -1,19 +1,88 @@
 "use client"
 
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useState, useRef, useMemo } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { MoreHorizontal, Mail, Phone, Building2, User, Loader2 } from "lucide-react"
+import {
+    MoreHorizontal, Mail, Phone, Building2, User, Loader2, ArrowUpDown,
+    Filter, Columns, Download, ChevronDown
+} from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { ScrapeProspect } from "@/types"
 import { Button } from "@/components/ui/button"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Input } from "@/components/ui/input"
+import {
+    DropdownMenu,
+    DropdownMenuCheckboxItem,
+    DropdownMenuContent,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table"
+import { Badge } from "@/components/ui/badge"
+
+// Simple export to CSV function
+const exportToCSV = (data: any[], filename: string) => {
+    // Generate headers from all keys in flattened objects
+    // For simplicity, we define a standard set of meaningful columns
+    const headers = [
+        "ID", "Société", "Catégorie", "Contact Name", "Email", "Phone", "Ville", "Adresse",
+        "Site Web", "LinkedIn", "Instagram", "Facebook",
+        "Score", "Avis", "Status Email", "Secteur", "SIRET"
+    ]
+
+    const csvContent = [
+        headers.join(","),
+        ...data.map(row => {
+            // Helper to escape CSV fields
+            const e = (val: any) => `"${String(val || "").replace(/"/g, '""')}"`
+
+            return [
+                e(row.id), e(row.company), e(row.category), e(row.name), e(row.email), e(row.phone), e(row.city), e(row.address),
+                e(row.website), e(row.linkedin), e(row.instagram), e(row.facebook),
+                e(row.rating), e(row.reviews), e(row.emailStatus), e(row.sector), e(row.siret)
+            ].join(",")
+        })
+    ].join("\n")
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.setAttribute("href", url)
+    link.setAttribute("download", filename)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+}
 
 export function ProspectListTable({ searchId, autoRefresh }: { searchId: string, autoRefresh?: boolean }) {
     const router = useRouter()
     const [prospects, setProspects] = useState<ScrapeProspect[]>([])
     const [loading, setLoading] = useState(true)
     const pollInterval = useRef<NodeJS.Timeout | null>(null)
+
+    // Filters & Sorting state
+    const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null)
+    const [filterHasEmail, setFilterHasEmail] = useState(false)
+    const [filterHasPhone, setFilterHasPhone] = useState(false)
+
+    // Column Visibility State
+    const [visibleColumns, setVisibleColumns] = useState({
+        company: true,
+        category: true,
+        contact: true,
+        phone: true, // New column
+        city: true,
+    })
 
     const fetchProspects = async () => {
         try {
@@ -35,7 +104,6 @@ export function ProspectListTable({ searchId, autoRefresh }: { searchId: string,
     useEffect(() => {
         fetchProspects()
 
-        // 1. Realtime subscription
         const subscription = supabase
             .channel(`scrape_prospects_list_${searchId}`)
             .on('postgres_changes', {
@@ -48,11 +116,8 @@ export function ProspectListTable({ searchId, autoRefresh }: { searchId: string,
             })
             .subscribe()
 
-        // 2. Polling if autoRefresh is active
         if (autoRefresh) {
-            pollInterval.current = setInterval(() => {
-                fetchProspects()
-            }, 10000)
+            pollInterval.current = setInterval(fetchProspects, 10000)
         }
 
         return () => {
@@ -60,6 +125,85 @@ export function ProspectListTable({ searchId, autoRefresh }: { searchId: string,
             if (pollInterval.current) clearInterval(pollInterval.current)
         }
     }, [searchId, autoRefresh])
+
+    // --- Process Data for Display ---
+    const processedData = useMemo(() => {
+        let data = prospects.map(p => {
+            const raw = p.data_scrapping || {};
+            const deep = p.deep_search || {};
+            // Updated Company Name Mapping: Deep Search > Raw Title > Fallback
+            const company = deep.nom_complet || raw.Titre || raw.title || deep.nom_raison_sociale || "Société Inconnue";
+
+            let email = null;
+            let emailStatus = 'inconnu';
+            if (p.email_adresse_verified && p.email_adresse_verified.length > 0) {
+                email = Array.isArray(p.email_adresse_verified) ? p.email_adresse_verified[0] : p.email_adresse_verified;
+                emailStatus = 'verifie';
+            } else if (raw.Email) {
+                email = raw.Email;
+            } else if (deep.emails && deep.emails.length > 0) {
+                email = deep.emails[0];
+            }
+
+            return {
+                original: p,
+                id: p.id_prospect,
+                company: company,
+                category: raw["Nom de catégorie"] || p.secteur || "N/A",
+                name: raw.name || "N/A",
+                email: email,
+                phone: raw["Téléphone"] || raw.phone || (raw.phones && raw.phones[0]),
+                city: p.ville || raw.address,
+                emailStatus,
+                // Extra fields for export
+                address: raw.address || raw.Rue,
+                website: raw["Site web"] || (deep.socials?.website),
+                linkedin: deep.socials?.linkedin,
+                instagram: deep.socials?.instagram,
+                facebook: deep.socials?.facebook,
+                rating: raw["Score total"],
+                reviews: raw["Nombre d'avis"],
+                sector: p.secteur,
+                siret: deep.siret_siege
+            }
+        });
+
+        // Filtering
+        if (filterHasEmail) {
+            data = data.filter(item => !!item.email);
+        }
+        if (filterHasPhone) {
+            data = data.filter(item => !!item.phone);
+        }
+
+        // Sorting
+        if (sortConfig) {
+            data.sort((a, b) => {
+                // @ts-ignore
+                const aValue = a[sortConfig.key] || "";
+                // @ts-ignore
+                const bValue = b[sortConfig.key] || "";
+                if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+                if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+                return 0;
+            });
+        }
+
+        return data;
+    }, [prospects, sortConfig, filterHasEmail, filterHasPhone]);
+
+    const handleSort = (key: string) => {
+        setSortConfig(current => {
+            if (current?.key === key) {
+                return current.direction === 'asc' ? { key, direction: 'desc' } : null;
+            }
+            return { key, direction: 'asc' };
+        });
+    }
+
+    const handleExport = () => {
+        exportToCSV(processedData, `prospects_export_${searchId}.csv`)
+    }
 
     if (loading) {
         return (
@@ -78,94 +222,145 @@ export function ProspectListTable({ searchId, autoRefresh }: { searchId: string,
     }
 
     return (
-        <div className="rounded-md border bg-card">
-            <Table>
-                <TableHeader>
-                    <TableRow>
-                        <TableHead>Société</TableHead>
-                        <TableHead>Catégorie</TableHead>
-                        <TableHead>Contact</TableHead>
-                        <TableHead>Ville</TableHead>
-                        <TableHead></TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {prospects.map((prospect) => {
-                        const raw = prospect.data_scrapping || {};
-                        const deep = prospect.deep_search || {};
-                        const idStr = String(prospect.id_prospect || "");
+        <div className="space-y-4">
+            {/* Toolbar */}
+            <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+                <div className="flex gap-2 items-center">
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" className="h-8 gap-1">
+                                <Filter className="h-3.5 w-3.5" />
+                                Filtrer
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start">
+                            <DropdownMenuLabel>Filtres rapides</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuCheckboxItem checked={filterHasEmail} onCheckedChange={setFilterHasEmail}>
+                                Avec Email uniquement
+                            </DropdownMenuCheckboxItem>
+                            <DropdownMenuCheckboxItem checked={filterHasPhone} onCheckedChange={setFilterHasPhone}>
+                                Avec Téléphone uniquement
+                            </DropdownMenuCheckboxItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
 
-                        // Priority Mapping Logic for Name/Company
-                        const company = raw.Titre || raw.title || deep.nom_raison_sociale || "Société Inconnue";
-                        const category = raw["Nom de catégorie"] || "N/A";
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" className="h-8 gap-1">
+                                <Columns className="h-3.5 w-3.5" />
+                                Colonnes
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start">
+                            <DropdownMenuCheckboxItem checked={visibleColumns.company} onCheckedChange={(b) => setVisibleColumns(prev => ({ ...prev, company: !!b }))}>Société</DropdownMenuCheckboxItem>
+                            <DropdownMenuCheckboxItem checked={visibleColumns.category} onCheckedChange={(b) => setVisibleColumns(prev => ({ ...prev, category: !!b }))}>Catégorie</DropdownMenuCheckboxItem>
+                            <DropdownMenuCheckboxItem checked={visibleColumns.contact} onCheckedChange={(b) => setVisibleColumns(prev => ({ ...prev, contact: !!b }))}>Contact (Email)</DropdownMenuCheckboxItem>
+                            <DropdownMenuCheckboxItem checked={visibleColumns.phone} onCheckedChange={(b) => setVisibleColumns(prev => ({ ...prev, phone: !!b }))}>Téléphone</DropdownMenuCheckboxItem>
+                            <DropdownMenuCheckboxItem checked={visibleColumns.city} onCheckedChange={(b) => setVisibleColumns(prev => ({ ...prev, city: !!b }))}>Ville</DropdownMenuCheckboxItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </div>
 
-                        const city = prospect.ville || raw.address;
+                <Button size="sm" variant="secondary" onClick={handleExport} className="h-8">
+                    <Download className="mr-2 h-3.5 w-3.5" />
+                    Exporter CSV
+                </Button>
+            </div>
 
-                        // Email Logic
-                        // 1. Verified email first
-                        // 2. Scraped email second
-                        let email = null;
-                        if (prospect.email_adresse_verified && prospect.email_adresse_verified.length > 0) {
-                            email = Array.isArray(prospect.email_adresse_verified) ? prospect.email_adresse_verified[0] : prospect.email_adresse_verified;
-                        } else if (raw.Email) {
-                            email = raw.Email;
-                        } else if (deep.emails && deep.emails.length > 0) {
-                            email = deep.emails[0];
-                        }
-
-                        const phone = raw["Téléphone"] || raw.phone;
-
-                        return (
+            {/* Table */}
+            <div className="rounded-md border bg-card">
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            {visibleColumns.company && (
+                                <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort('company')}>
+                                    <div className="flex items-center gap-1">Société <ArrowUpDown className="h-3 w-3" /></div>
+                                </TableHead>
+                            )}
+                            {visibleColumns.category && (
+                                <TableHead>Catégorie</TableHead>
+                            )}
+                            {visibleColumns.contact && (
+                                <TableHead>Contact (Email)</TableHead>
+                            )}
+                            {visibleColumns.phone && (
+                                <TableHead>Téléphone</TableHead> // New Column
+                            )}
+                            {visibleColumns.city && (
+                                <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort('city')}>
+                                    <div className="flex items-center gap-1">Ville <ArrowUpDown className="h-3 w-3" /></div>
+                                </TableHead>
+                            )}
+                            <TableHead></TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {processedData.map((row) => (
                             <TableRow
-                                key={idStr}
+                                key={String(row.id)}
                                 className="cursor-pointer hover:bg-muted/50 transition-colors pointer-events-auto"
                                 onClick={(e) => {
                                     if ((e.target as HTMLElement).closest('button')) return;
-                                    router.push(`/prospects/${idStr}`)
+                                    router.push(`/prospects/${row.id}`)
                                 }}
                             >
-                                <TableCell className="font-medium">
-                                    <div className="flex items-center gap-2">
-                                        <Building2 className="h-4 w-4 text-muted-foreground" />
-                                        {company}
-                                    </div>
-                                </TableCell>
-                                <TableCell>
-                                    <div className="flex items-center gap-2 text-muted-foreground">
-                                        {category}
-                                    </div>
-                                </TableCell>
-                                <TableCell>
-                                    <div className="flex flex-col gap-1">
-                                        {email ? (
-                                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                                <Mail className="h-3 w-3 text-primary" />
-                                                <span className="truncate max-w-[150px]">{email}</span>
-                                            </div>
-                                        ) : <span className="text-xs text-muted-foreground">-</span>}
-
-                                        {phone && (
+                                {visibleColumns.company && (
+                                    <TableCell className="font-medium">
+                                        <div className="flex items-center gap-2">
+                                            <Building2 className="h-4 w-4 text-muted-foreground" />
+                                            {row.company}
+                                        </div>
+                                    </TableCell>
+                                )}
+                                {visibleColumns.category && (
+                                    <TableCell>
+                                        <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                                            {row.category}
+                                        </div>
+                                    </TableCell>
+                                )}
+                                {visibleColumns.contact && (
+                                    <TableCell>
+                                        <div className="flex flex-col gap-1">
+                                            {row.email ? (
+                                                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                                    <Mail className="h-3 w-3 text-primary" />
+                                                    <span className="truncate max-w-[150px]">{row.email}</span>
+                                                </div>
+                                            ) : <span className="text-xs text-muted-foreground">-</span>}
+                                        </div>
+                                    </TableCell>
+                                )}
+                                {visibleColumns.phone && (
+                                    <TableCell>
+                                        {row.phone ? (
                                             <div className="flex items-center gap-1 text-xs text-muted-foreground">
                                                 <Phone className="h-3 w-3" />
-                                                {phone}
+                                                <span className="whitespace-nowrap">{row.phone}</span>
                                             </div>
-                                        )}
-                                    </div>
-                                </TableCell>
-                                <TableCell className="max-w-[120px] truncate">{city}</TableCell>
+                                        ) : <span className="text-xs text-muted-foreground">-</span>}
+                                    </TableCell>
+                                )}
+                                {visibleColumns.city && (
+                                    <TableCell className="max-w-[120px] truncate">{row.city}</TableCell>
+                                )}
                                 <TableCell className="text-right">
                                     <Button variant="ghost" size="icon" onClick={(e) => {
                                         e.stopPropagation();
-                                        router.push(`/prospects/${idStr}`);
+                                        router.push(`/prospects/${row.id}`);
                                     }}>
                                         <MoreHorizontal className="h-4 w-4" />
                                     </Button>
                                 </TableCell>
                             </TableRow>
-                        )
-                    })}
-                </TableBody>
-            </Table>
+                        ))}
+                    </TableBody>
+                </Table>
+            </div>
+            <div className="text-xs text-muted-foreground text-center">
+                {processedData.length} résultats affichés
+            </div>
         </div>
     )
 }
