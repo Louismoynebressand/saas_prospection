@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { useParams } from "next/navigation"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
@@ -16,9 +16,10 @@ import { Skeleton } from "@/components/ui/skeleton"
 
 export default function SearchDetailsPage() {
     const params = useParams()
-    const id = params.id as string // Treating as string but it's number in DB
+    const id = params.id as string
     const [search, setSearch] = useState<ScrapeJob | null>(null)
     const [loading, setLoading] = useState(true)
+    const pollInterval = useRef<NodeJS.Timeout | null>(null)
 
     const fetchSearch = async () => {
         const { data: searchData, error } = await supabase
@@ -34,7 +35,7 @@ export default function SearchDetailsPage() {
     useEffect(() => {
         fetchSearch()
 
-        // Subscribe to search updates 
+        // 1. Realtime subscription (Backup/Instant)
         const subscription = supabase
             .channel(`scrape_job_detail_${id}`)
             .on('postgres_changes', {
@@ -47,8 +48,14 @@ export default function SearchDetailsPage() {
             })
             .subscribe()
 
+        // 2. Polling every 10s as requested by user
+        pollInterval.current = setInterval(() => {
+            fetchSearch()
+        }, 10000)
+
         return () => {
             subscription.unsubscribe()
+            if (pollInterval.current) clearInterval(pollInterval.current)
         }
     }, [id])
 
@@ -64,19 +71,22 @@ export default function SearchDetailsPage() {
     }
 
     const getStatusBadge = (status: string) => {
-        switch (status) {
+        const s = status?.toLowerCase()
+        switch (s) {
             case 'queued': return <Badge variant="secondary">En file d'attente</Badge>
             case 'running': return <Badge variant="warning" className="animate-pulse">En cours</Badge>
             case 'done':
-            case 'ALLfinish': return <Badge variant="success">Terminé</Badge>
+            case 'allfinish': return <Badge variant="success">Terminé</Badge>
             case 'error': return <Badge variant="destructive">Erreur</Badge>
             default: return <Badge variant="outline">{status}</Badge>
         }
     }
 
     const parseQuery = (jsonQuery: string) => {
+        if (!jsonQuery) return "N/A"
         try {
-            return JSON.parse(jsonQuery)
+            const parsed = JSON.parse(jsonQuery)
+            return typeof parsed === 'string' ? parsed : jsonQuery
         } catch (e) {
             return jsonQuery
         }
@@ -114,10 +124,10 @@ export default function SearchDetailsPage() {
                 </Card>
                 <Card>
                     <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium">Résultats</CardTitle>
+                        <CardTitle className="text-sm font-medium">Limites</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">-</div>
+                        <div className="text-2xl font-bold">{search.request_count || "-"}</div>
                     </CardContent>
                 </Card>
                 <Card>
@@ -133,12 +143,19 @@ export default function SearchDetailsPage() {
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
                     <CardTitle>Prospects</CardTitle>
-                    {['queued', 'running'].includes(search.statut) && (
-                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    {['queued', 'running'].includes(search.statut?.toLowerCase()) && (
+                        <div className="flex items-center gap-2 text-primary text-sm font-medium">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Mise à jour automatique...
+                        </div>
                     )}
                 </CardHeader>
                 <CardContent>
-                    <ProspectListTable searchId={String(search.id_jobs)} />
+                    {/* Added polling to table content too via a prop if needed, 
+                  but Table already has its own Realtime. 
+                  Adding a refresh trigger for consistency.
+              */}
+                    <ProspectListTable searchId={String(search.id_jobs)} autoRefresh={['queued', 'running'].includes(search.statut?.toLowerCase())} />
                 </CardContent>
             </Card>
         </div>

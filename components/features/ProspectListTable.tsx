@@ -1,17 +1,17 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import Link from "next/link"
-import { MoreHorizontal, Mail, Phone, Building2, User } from "lucide-react"
+import { MoreHorizontal, Mail, Phone, Building2, User, Loader2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { ScrapeProspect } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Loader2 } from "lucide-react"
 
-export function ProspectListTable({ searchId }: { searchId: string }) {
+export function ProspectListTable({ searchId, autoRefresh }: { searchId: string, autoRefresh?: boolean }) {
     const [prospects, setProspects] = useState<ScrapeProspect[]>([])
     const [loading, setLoading] = useState(true)
+    const pollInterval = useRef<NodeJS.Timeout | null>(null)
 
     const fetchProspects = async () => {
         try {
@@ -33,6 +33,7 @@ export function ProspectListTable({ searchId }: { searchId: string }) {
     useEffect(() => {
         fetchProspects()
 
+        // 1. Realtime subscription
         const subscription = supabase
             .channel(`scrape_prospects_list_${searchId}`)
             .on('postgres_changes', {
@@ -41,15 +42,22 @@ export function ProspectListTable({ searchId }: { searchId: string }) {
                 table: 'scrape_prospect',
                 filter: `id_jobs=eq.${searchId}`
             }, (payload) => {
-                // Insert new prospect at the top
                 setProspects(prev => [payload.new as ScrapeProspect, ...prev])
             })
             .subscribe()
 
+        // 2. Polling if autoRefresh is active
+        if (autoRefresh) {
+            pollInterval.current = setInterval(() => {
+                fetchProspects()
+            }, 10000)
+        }
+
         return () => {
             subscription.unsubscribe()
+            if (pollInterval.current) clearInterval(pollInterval.current)
         }
-    }, [searchId])
+    }, [searchId, autoRefresh])
 
     if (loading) {
         return (
@@ -62,7 +70,7 @@ export function ProspectListTable({ searchId }: { searchId: string }) {
     if (prospects.length === 0) {
         return (
             <div className="text-center p-8 text-muted-foreground border rounded-md border-dashed">
-                Aucun prospect trouvé pour cette recherche.
+                Aucun prospect trouvé pour le moment.
             </div>
         )
     }
@@ -81,11 +89,10 @@ export function ProspectListTable({ searchId }: { searchId: string }) {
                 </TableHeader>
                 <TableBody>
                     {prospects.map((prospect) => {
-                        // Extraction logic
                         const raw = prospect.data_scrapping || {};
                         const name = raw.name || raw.title || prospect.id_prospect.slice(0, 8);
                         const company = raw.company || raw.title || "N/A";
-                        const city = prospect.ville || raw.address; // fallback
+                        const city = prospect.ville || raw.address;
                         const email = (prospect.email_adresse_verified && prospect.email_adresse_verified[0])
                             || (raw.emails && raw.emails[0]);
                         const phone = raw.phone || (raw.phones && raw.phones[0]);
@@ -109,7 +116,7 @@ export function ProspectListTable({ searchId }: { searchId: string }) {
                                         {email && (
                                             <div className="flex items-center gap-1 text-xs text-muted-foreground">
                                                 <Mail className="h-3 w-3" />
-                                                {email}
+                                                <span className="truncate max-w-[150px]">{email}</span>
                                             </div>
                                         )}
                                         {phone && (
@@ -120,7 +127,7 @@ export function ProspectListTable({ searchId }: { searchId: string }) {
                                         )}
                                     </div>
                                 </TableCell>
-                                <TableCell>{city}</TableCell>
+                                <TableCell className="max-w-[120px] truncate">{city}</TableCell>
                                 <TableCell className="text-right">
                                     <Button variant="ghost" size="icon" asChild>
                                         <Link href={`/prospects/${prospect.id_prospect}`}>

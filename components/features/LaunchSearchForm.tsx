@@ -3,11 +3,10 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Search, MapPin, Database, Send, Sparkles } from "lucide-react"
-import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { cn, DEMO_USER_ID } from "@/lib/utils"
+import { DEMO_USER_ID } from "@/lib/utils"
 
 export function LaunchSearchForm() {
     const router = useRouter()
@@ -25,33 +24,15 @@ export function LaunchSearchForm() {
         setLoading(true)
 
         try {
-            // 1. Prepare search data for scrape_jobs
-            const jobData = {
-                id_user: DEMO_USER_ID,
-                request_search: JSON.stringify(formData.query),
-                resuest_ville: formData.city,
-                request_url: "google_maps", // or specific URL if available
-                request_count: Number(formData.maxResults),
-                localisation: { lat: 48.8566, lng: 2.3522 }, // Default loc or fetch geocode
-                deepscan: formData.deepScan,
-                enrichie_emails: formData.enrichEmails,
-                statut: "queued"
-            }
+            // 1. Build mapsUrl
+            // Simplified format that Google Maps handles well for search
+            const mapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(formData.query)}+${encodeURIComponent(formData.city)}`
 
-            // 2. Insert into scrape_jobs 
-            const { data: job, error: insertError } = await supabase
-                .from('scrape_jobs')
-                .insert(jobData)
-                .select()
-                .single()
-
-            if (insertError) throw new Error("Erreur insertion DB: " + insertError.message)
-            if (!job) throw new Error("Erreur: pas de job créé")
-
-            // 3. Call Webhook
+            // 2. Prepare Webhook Payload
             const payload = {
                 job: {
                     source: "google_maps",
+                    mapsUrl: mapsUrl, // New variable requested
                     query: formData.query,
                     location: {
                         city: formData.city,
@@ -65,12 +46,15 @@ export function LaunchSearchForm() {
                     }
                 },
                 actor: { userId: DEMO_USER_ID, sessionId: null },
-                meta: { searchId: job.id_jobs } // Number id
+                meta: {
+                    // No searchId here since n8n creates it
+                }
             }
 
             const webhookUrl = process.env.NEXT_PUBLIC_SCRAPE_WEBHOOK_URL
             if (!webhookUrl) throw new Error("Webhook URL non configurée")
 
+            // 3. Trigger Webhook DIRECTLY (No DB insert here as requested)
             const res = await fetch(webhookUrl, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -79,17 +63,12 @@ export function LaunchSearchForm() {
 
             if (!res.ok) {
                 const errText = await res.text()
-                // 4a. Handle Webhook Error
-                await supabase
-                    .from('scrape_jobs')
-                    .update({ statut: 'error' })
-                    .eq('id_jobs', job.id_jobs)
-
-                throw new Error(`Webhook Error: ${res.status}`)
+                throw new Error(`Webhook Error: ${res.status} - ${errText}`)
             }
 
-            // 5. Success -> Redirect
-            router.push(`/searches/${job.id_jobs}`)
+            // 4. Success -> Redirect to History
+            // Since we don't have the ID yet, we go to the general history page
+            router.push(`/searches`)
             router.refresh()
 
         } catch (err: any) {
@@ -109,7 +88,7 @@ export function LaunchSearchForm() {
                     Nouvelle Recherche
                 </CardTitle>
                 <CardDescription>
-                    Lancez une prospection ciblée via Google Maps
+                    Lancez une prospection ciblée via Google Maps (Déclenche n8n)
                 </CardDescription>
             </CardHeader>
             <form onSubmit={handleSubmit}>
