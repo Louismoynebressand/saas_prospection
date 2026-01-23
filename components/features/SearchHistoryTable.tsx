@@ -11,17 +11,17 @@ import { DEMO_USER_ID } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 export function SearchHistoryTable({ limit }: { limit?: number }) {
-    const [searches, setSearches] = useState<SearchJob[]>([])
+    const [searches, setSearches] = useState<ScrapeJob[]>([])
     const [loading, setLoading] = useState(true)
 
     const fetchSearches = async () => {
         try {
             let query = supabase
-                .from('searches')
+                .from('scrape_jobs')
                 .select('*')
+                .eq('id_user', DEMO_USER_ID)
                 .order('created_at', { ascending: false })
 
             if (limit) {
@@ -31,7 +31,7 @@ export function SearchHistoryTable({ limit }: { limit?: number }) {
             const { data, error } = await query
 
             if (error) throw error
-            if (data) setSearches(data as SearchJob[])
+            if (data) setSearches(data as ScrapeJob[])
         } catch (error) {
             console.error('Error fetching searches:', error)
         } finally {
@@ -42,10 +42,10 @@ export function SearchHistoryTable({ limit }: { limit?: number }) {
     useEffect(() => {
         fetchSearches()
 
-        // Realtime subscription could go here
+        // Realtime subscription
         const subscription = supabase
-            .channel('searches_changes')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'searches' }, (payload) => {
+            .channel('scrape_jobs_list_changes')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'scrape_jobs' }, (payload) => {
                 fetchSearches()
             })
             .subscribe()
@@ -59,9 +59,18 @@ export function SearchHistoryTable({ limit }: { limit?: number }) {
         switch (status) {
             case 'queued': return <Badge variant="secondary">En file d'attente</Badge>
             case 'running': return <Badge variant="warning" className="animate-pulse">En cours</Badge>
-            case 'done': return <Badge variant="success">Terminé</Badge>
+            case 'done':
+            case 'ALLfinish': return <Badge variant="success">Terminé</Badge>
             case 'error': return <Badge variant="destructive">Erreur</Badge>
             default: return <Badge variant="outline">{status}</Badge>
+        }
+    }
+
+    const parseQuery = (jsonQuery: string) => {
+        try {
+            return JSON.parse(jsonQuery)
+        } catch (e) {
+            return jsonQuery
         }
     }
 
@@ -96,29 +105,29 @@ export function SearchHistoryTable({ limit }: { limit?: number }) {
                 </TableHeader>
                 <TableBody>
                     {searches.map((search) => (
-                        <TableRow key={search.id}>
+                        <TableRow key={search.id_jobs}>
                             <TableCell className="font-medium">
                                 <div className="flex items-center gap-2">
                                     <SearchIcon className="h-4 w-4 text-muted-foreground" />
-                                    {search.query}
+                                    {parseQuery(search.request_search)}
                                 </div>
                             </TableCell>
                             <TableCell>
                                 <div className="flex items-center gap-2">
                                     <MapPin className="h-4 w-4 text-muted-foreground" />
-                                    {search.city || "Zone définie"}
+                                    {search.resuest_ville || "Zone définie"}
                                 </div>
                             </TableCell>
                             <TableCell>
                                 {format(new Date(search.created_at), "d MMM yyyy HH:mm", { locale: fr })}
                             </TableCell>
-                            <TableCell>{getStatusBadge(search.status)}</TableCell>
+                            <TableCell>{getStatusBadge(search.statut)}</TableCell>
                             <TableCell className="text-right">
-                                {search.result_count !== null ? search.result_count : "-"}
+                                -
                             </TableCell>
                             <TableCell className="text-right">
                                 <Button variant="ghost" size="icon" asChild>
-                                    <Link href={`/searches/${search.id}`}>
+                                    <Link href={`/searches/${search.id_jobs}`}>
                                         <MoreHorizontal className="h-4 w-4" />
                                     </Link>
                                 </Button>

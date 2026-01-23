@@ -7,7 +7,7 @@ import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { cn } from "@/lib/utils"
+import { cn, DEMO_USER_ID } from "@/lib/utils"
 
 export function LaunchSearchForm() {
     const router = useRouter()
@@ -80,7 +80,6 @@ export function LaunchSearchForm() {
             if (!res.ok) {
                 const errText = await res.text()
                 // 4a. Handle Webhook Error
-                // Note: updating status to error. If column doesn't exist, this might fail or need simpler update
                 await supabase
                     .from('scrape_jobs')
                     .update({ statut: 'error' })

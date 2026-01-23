@@ -14,18 +14,18 @@ import { Badge } from "@/components/ui/badge"
 export default function ProspectPage() {
     const params = useParams()
     const id = params.id as string
-    const [prospect, setProspect] = useState<Prospect | null>(null)
+    const [prospect, setProspect] = useState<ScrapeProspect | null>(null)
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
         const fetchProspect = async () => {
             const { data, error } = await supabase
-                .from('prospects')
+                .from('scrape_prospect')
                 .select('*')
-                .eq('id', id)
+                .eq('id_prospect', id)
                 .single()
 
-            if (data) setProspect(data as Prospect)
+            if (data) setProspect(data as ScrapeProspect)
             setLoading(false)
         }
 
@@ -43,24 +43,41 @@ export default function ProspectPage() {
         return <div>Prospect non trouvé</div>
     }
 
+    // Helper extraction
+    const raw = prospect.data_scrapping || {};
+    const name = raw.name || raw.title || "Nom Inconnu";
+    const company = raw.company || raw.title || "Société Inconnue";
+    const address = prospect.ville || raw.address;
+    const emails = prospect.email_adresse_verified || raw.emails || [];
+    const phones = raw.phone ? [raw.phone] : (raw.phones || []);
+    const website = raw.website || prospect.deep_search?.website;
+    const url = raw.url || raw.googleMapsUrl || prospect.data_scrapping?.url;
+
     return (
         <div className="space-y-6">
             <div className="flex items-center gap-4">
                 <Button variant="ghost" size="icon" asChild>
-                    <Link href={`/searches/${prospect.search_id}`}>
+                    <Link href={`/searches/${prospect.id_jobs}`}>
                         <ArrowLeft className="h-4 w-4" />
                     </Link>
                 </Button>
                 <div className="flex-1">
-                    <h2 className="text-2xl font-bold tracking-tight">{prospect.company || "Société Inconnue"}</h2>
+                    <h2 className="text-2xl font-bold tracking-tight">{company}</h2>
                     <p className="text-muted-foreground flex items-center gap-2 text-sm">
-                        <MapPin className="h-3 w-3" /> {prospect.address || prospect.city || "Adresse inconnue"}
+                        <MapPin className="h-3 w-3" /> {address || "Adresse inconnue"}
                     </p>
                 </div>
-                {prospect.source_url && (
+                {url && (
                     <Button variant="outline" size="sm" asChild>
-                        <a href={prospect.source_url} target="_blank" rel="noopener noreferrer">
+                        <a href={url} target="_blank" rel="noopener noreferrer">
                             <ExternalLink className="mr-2 h-3 w-3" /> Voir sur Maps
+                        </a>
+                    </Button>
+                )}
+                {website && (
+                    <Button variant="outline" size="sm" asChild>
+                        <a href={website} target="_blank" rel="noopener noreferrer">
+                            <Globe className="mr-2 h-3 w-3" /> Site Web
                         </a>
                     </Button>
                 )}
@@ -77,13 +94,13 @@ export default function ProspectPage() {
                     <CardContent className="space-y-4">
                         <div className="grid grid-cols-3 gap-2 text-sm">
                             <span className="font-medium text-muted-foreground">Nom complet</span>
-                            <span className="col-span-2">{prospect.full_name || "-"}</span>
+                            <span className="col-span-2">{name}</span>
 
                             <span className="font-medium text-muted-foreground">Société</span>
-                            <span className="col-span-2">{prospect.company || "-"}</span>
+                            <span className="col-span-2">{company}</span>
 
                             <span className="font-medium text-muted-foreground">Domaine</span>
-                            <span className="col-span-2">{prospect.domain || "-"}</span>
+                            <span className="col-span-2">{raw.category || "-"}</span>
                         </div>
                     </CardContent>
                 </Card>
@@ -100,9 +117,9 @@ export default function ProspectPage() {
                             <h4 className="text-sm font-medium text-muted-foreground mb-2 flex items-center gap-2">
                                 <Mail className="h-3 w-3" /> Emails
                             </h4>
-                            {prospect.emails && prospect.emails.length > 0 ? (
+                            {emails.length > 0 ? (
                                 <div className="flex flex-wrap gap-2">
-                                    {prospect.emails.map((email, idx) => (
+                                    {emails.map((email: string, idx: number) => (
                                         <Badge key={idx} variant="outline" className="text-xs py-1">
                                             {email}
                                         </Badge>
@@ -117,9 +134,9 @@ export default function ProspectPage() {
                             <h4 className="text-sm font-medium text-muted-foreground mb-2 flex items-center gap-2">
                                 <Phone className="h-3 w-3" /> Téléphones
                             </h4>
-                            {prospect.phones && prospect.phones.length > 0 ? (
+                            {phones.length > 0 ? (
                                 <div className="flex flex-wrap gap-2">
-                                    {prospect.phones.map((phone, idx) => (
+                                    {phones.map((phone: string, idx: number) => (
                                         <Badge key={idx} variant="secondary" className="text-xs py-1">
                                             {phone}
                                         </Badge>
@@ -136,11 +153,14 @@ export default function ProspectPage() {
             {/* Raw Data Accordion or Card */}
             <Card>
                 <CardHeader>
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Données brutes</CardTitle>
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Données brutes (Scraping + Deep Search)</CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-4">
                     <pre className="text-xs bg-muted/50 p-4 rounded-md overflow-x-auto">
-                        {JSON.stringify(prospect.raw || {}, null, 2)}
+                        {JSON.stringify(prospect.data_scrapping || {}, null, 2)}
+                    </pre>
+                    <pre className="text-xs bg-muted/50 p-4 rounded-md overflow-x-auto">
+                        {JSON.stringify(prospect.deep_search || {}, null, 2)}
                     </pre>
                 </CardContent>
             </Card>

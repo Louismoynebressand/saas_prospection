@@ -10,19 +10,19 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Loader2 } from "lucide-react"
 
 export function ProspectListTable({ searchId }: { searchId: string }) {
-    const [prospects, setProspects] = useState<Prospect[]>([])
+    const [prospects, setProspects] = useState<ScrapeProspect[]>([])
     const [loading, setLoading] = useState(true)
 
     const fetchProspects = async () => {
         try {
             const { data, error } = await supabase
-                .from('prospects')
+                .from('scrape_prospect')
                 .select('*')
-                .eq('search_id', searchId)
+                .eq('id_jobs', searchId)
                 .order('created_at', { ascending: false })
 
             if (error) throw error
-            if (data) setProspects(data as Prospect[])
+            if (data) setProspects(data as ScrapeProspect[])
         } catch (error) {
             console.error('Error fetching prospects:', error)
         } finally {
@@ -34,15 +34,15 @@ export function ProspectListTable({ searchId }: { searchId: string }) {
         fetchProspects()
 
         const subscription = supabase
-            .channel(`prospects_list_${searchId}`)
+            .channel(`scrape_prospects_list_${searchId}`)
             .on('postgres_changes', {
                 event: 'INSERT',
                 schema: 'public',
-                table: 'prospects',
-                filter: `search_id=eq.${searchId}`
+                table: 'scrape_prospect',
+                filter: `id_jobs=eq.${searchId}`
             }, (payload) => {
                 // Insert new prospect at the top
-                setProspects(prev => [payload.new as Prospect, ...prev])
+                setProspects(prev => [payload.new as ScrapeProspect, ...prev])
             })
             .subscribe()
 
@@ -80,46 +80,57 @@ export function ProspectListTable({ searchId }: { searchId: string }) {
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {prospects.map((prospect) => (
-                        <TableRow key={prospect.id}>
-                            <TableCell className="font-medium">
-                                <div className="flex items-center gap-2">
-                                    <User className="h-4 w-4 text-muted-foreground" />
-                                    {prospect.full_name || "N/A"}
-                                </div>
-                            </TableCell>
-                            <TableCell>
-                                <div className="flex items-center gap-2">
-                                    <Building2 className="h-4 w-4 text-muted-foreground" />
-                                    {prospect.company || "N/A"}
-                                </div>
-                            </TableCell>
-                            <TableCell>
-                                <div className="flex flex-col gap-1">
-                                    {prospect.emails && prospect.emails.length > 0 && (
-                                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                            <Mail className="h-3 w-3" />
-                                            {prospect.emails[0]}
-                                        </div>
-                                    )}
-                                    {prospect.phones && prospect.phones.length > 0 && (
-                                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                            <Phone className="h-3 w-3" />
-                                            {prospect.phones[0]}
-                                        </div>
-                                    )}
-                                </div>
-                            </TableCell>
-                            <TableCell>{prospect.city}</TableCell>
-                            <TableCell className="text-right">
-                                <Button variant="ghost" size="icon" asChild>
-                                    <Link href={`/prospects/${prospect.id}`}>
-                                        <MoreHorizontal className="h-4 w-4" />
-                                    </Link>
-                                </Button>
-                            </TableCell>
-                        </TableRow>
-                    ))}
+                    {prospects.map((prospect) => {
+                        // Extraction logic
+                        const raw = prospect.data_scrapping || {};
+                        const name = raw.name || raw.title || prospect.id_prospect.slice(0, 8);
+                        const company = raw.company || raw.title || "N/A";
+                        const city = prospect.ville || raw.address; // fallback
+                        const email = (prospect.email_adresse_verified && prospect.email_adresse_verified[0])
+                            || (raw.emails && raw.emails[0]);
+                        const phone = raw.phone || (raw.phones && raw.phones[0]);
+
+                        return (
+                            <TableRow key={prospect.id_prospect}>
+                                <TableCell className="font-medium">
+                                    <div className="flex items-center gap-2">
+                                        <User className="h-4 w-4 text-muted-foreground" />
+                                        {name}
+                                    </div>
+                                </TableCell>
+                                <TableCell>
+                                    <div className="flex items-center gap-2">
+                                        <Building2 className="h-4 w-4 text-muted-foreground" />
+                                        {company}
+                                    </div>
+                                </TableCell>
+                                <TableCell>
+                                    <div className="flex flex-col gap-1">
+                                        {email && (
+                                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                                <Mail className="h-3 w-3" />
+                                                {email}
+                                            </div>
+                                        )}
+                                        {phone && (
+                                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                                <Phone className="h-3 w-3" />
+                                                {phone}
+                                            </div>
+                                        )}
+                                    </div>
+                                </TableCell>
+                                <TableCell>{city}</TableCell>
+                                <TableCell className="text-right">
+                                    <Button variant="ghost" size="icon" asChild>
+                                        <Link href={`/prospects/${prospect.id_prospect}`}>
+                                            <MoreHorizontal className="h-4 w-4" />
+                                        </Link>
+                                    </Button>
+                                </TableCell>
+                            </TableRow>
+                        )
+                    })}
                 </TableBody>
             </Table>
         </div>
