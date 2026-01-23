@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import {
     ArrowLeft, Building2, Mail, Phone, MapPin, Globe, ExternalLink, User,
-    Star, Clock, CheckCircle2, XCircle, AlertCircle, Sparkles, Tag, Users, Music
+    Star, Clock, CheckCircle2, XCircle, AlertCircle, Sparkles, Tag, Users, Music, Info, Briefcase
 } from "lucide-react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase"
@@ -31,7 +31,7 @@ interface ScrappedData {
     "Score total"?: number;
     "Nombre d'avis"?: number;
     "Heures d'ouverture"?: Array<{ day: string; hours: string }>;
-    "Infos"?: Record<string, Array<Record<string, boolean>>>; // e.g., "Services": [{"Terrasse": true}]
+    "Infos"?: Record<string, Array<Record<string, boolean>>>;
 }
 
 interface DeepSearchData {
@@ -47,7 +47,13 @@ interface DeepSearchData {
     "nom_raison_sociale"?: string;
     "naf"?: string;
     "date_creation"?: string;
-    "dirigeants"?: any;
+    "dirigeants"?: Array<{
+        nom?: string;
+        prenoms?: string;
+        qualite?: string;
+        type_dirigeant?: string;
+        date_de_naissance?: string;
+    }>;
 }
 
 export default function ProspectPage() {
@@ -59,7 +65,6 @@ export default function ProspectPage() {
     const [deep, setDeep] = useState<DeepSearchData>({})
     const [loading, setLoading] = useState(true)
 
-    // Helper to safely parse JSON or return object if already parsed
     const safeParse = (data: any) => {
         if (!data) return {}
         if (typeof data === 'string') {
@@ -114,15 +119,21 @@ export default function ProspectPage() {
     const rating = scrapped["Score total"];
     const reviewCount = scrapped["Nombre d'avis"];
     const mapsUrl = scrapped["URL Google Maps"];
-    const website = scrapped["Site web"] || (deep.socials?.instagram || deep.socials?.facebook); // Fallback to social if no site
+    const website = scrapped["Site web"] || (deep.socials?.instagram || deep.socials?.facebook);
 
     // Email Status Logic
-    const emailStatus = prospect.succed_validation_smtp_email === true ? 'valide' :
-        prospect.succed_validation_smtp_email === false ? 'invalide' : 'inconnu';
+    // If check_email is false, it means validation wasn't performed or "Pas de domaine"
+    let emailStatus = 'inconnu';
+    if (prospect.check_email === false) {
+        emailStatus = 'non_verifie'; // Or "Pas de domaine" from text field if needed
+    } else if (prospect.succed_validation_smtp_email === true) {
+        emailStatus = 'valide';
+    } else if (prospect.succed_validation_smtp_email === false) {
+        emailStatus = 'invalide';
+    }
 
-    // Determine which email to show (verified takes precedence)
     const displayEmail = (prospect.email_adresse_verified && prospect.email_adresse_verified.length > 0)
-        ? prospect.email_adresse_verified[0] // Assuming text or array, take first if array
+        ? (Array.isArray(prospect.email_adresse_verified) ? prospect.email_adresse_verified[0] : prospect.email_adresse_verified)
         : (scrapped.Email || (deep.emails && deep.emails[0]));
 
     const renderEmailBadge = () => {
@@ -133,9 +144,16 @@ export default function ProspectPage() {
                 return <Badge variant="default" className="bg-green-600 hover:bg-green-700 gap-1"><CheckCircle2 className="w-3 h-3" /> Vérifié</Badge>
             case 'invalide':
                 return <Badge variant="destructive" className="gap-1"><XCircle className="w-3 h-3" /> Invalide</Badge>
+            case 'non_verifie':
+                return <Badge variant="secondary" className="gap-1 text-muted-foreground"><AlertCircle className="w-3 h-3" /> Non vérifié</Badge>
             default:
-                return <Badge variant="secondary" className="gap-1"><AlertCircle className="w-3 h-3" /> Non testé</Badge>
+                return <Badge variant="outline" className="gap-1 text-muted-foreground"><Info className="w-3 h-3" /> Inconnu</Badge>
         }
+    }
+
+    // Helper for hours: "12:00 to 14:00" -> "12h00 - 14h00"
+    const formatHours = (hoursStr: string) => {
+        return hoursStr.replace(/ to /g, ' - ').replace(/:/g, 'h');
     }
 
     return (
@@ -247,7 +265,7 @@ export default function ProspectPage() {
                                         {scrapped["Heures d'ouverture"].map((day, idx) => (
                                             <li key={idx} className="flex justify-between py-1 border-b last:border-0 border-dashed border-gray-100">
                                                 <span className="font-medium capitalize">{day.day}</span>
-                                                <span className="text-muted-foreground">{day.hours}</span>
+                                                <span className="text-muted-foreground">{formatHours(day.hours)}</span>
                                             </li>
                                         ))}
                                     </ul>
@@ -259,54 +277,94 @@ export default function ProspectPage() {
                     {/* CENTER & RIGHT: DETAILS & AI INSIGHTS */}
                     <div className="lg:col-span-2 space-y-8">
 
-                        {/* Deep Search Highlights */}
-                        {(deep.points_forts || deep.clients_cibles || deep.style_communication) && (
-                            <Card className="border-primary/20 bg-primary/5">
-                                <CardHeader>
-                                    <CardTitle className="flex items-center gap-2 text-primary">
-                                        <Sparkles className="w-5 h-5" /> Analyse IA & Highlights
-                                    </CardTitle>
-                                    <CardDescription>Informations extraites par analyse approfondie (Deep Search)</CardDescription>
-                                </CardHeader>
-                                <CardContent className="grid md:grid-cols-2 gap-6">
-                                    {deep.points_forts && (
-                                        <div className="space-y-2">
-                                            <h4 className="font-semibold text-sm flex items-center gap-1"><Tag className="w-3 h-3" /> Points Forts</h4>
-                                            <div className="flex flex-wrap gap-2">
-                                                {deep.points_forts.map((pt, i) => (
-                                                    <Badge key={i} variant="outline" className="bg-background">{pt}</Badge>
-                                                ))}
+                        <Tabs defaultValue="legal" className="w-full">
+                            <TabsList className="grid w-full grid-cols-2 lg:w-[400px]">
+                                <TabsTrigger value="legal">Identité & Juridique</TabsTrigger>
+                                <TabsTrigger value="infos">Détails & Services</TabsTrigger>
+                            </TabsList>
+
+                            <TabsContent value="legal" className="mt-4">
+                                <Card>
+                                    <CardContent className="pt-6 space-y-6">
+                                        {/* Company Legal Info */}
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="p-4 bg-muted/20 rounded-lg">
+                                                <span className="text-xs text-muted-foreground uppercase block mb-1">Raison Sociale</span>
+                                                <p className="font-medium">{deep.nom_raison_sociale || "-"}</p>
+                                            </div>
+                                            <div className="p-4 bg-muted/20 rounded-lg">
+                                                <span className="text-xs text-muted-foreground uppercase block mb-1">Siret</span>
+                                                <p className="font-mono">{deep.siret_siege || "-"}</p>
+                                            </div>
+                                            <div className="p-4 bg-muted/20 rounded-lg">
+                                                <span className="text-xs text-muted-foreground uppercase block mb-1">Code NAF</span>
+                                                <p className="font-mono">{deep.naf || "-"}</p>
+                                            </div>
+                                            <div className="p-4 bg-muted/20 rounded-lg">
+                                                <span className="text-xs text-muted-foreground uppercase block mb-1">Date de création</span>
+                                                <p>{deep.date_creation || "-"}</p>
                                             </div>
                                         </div>
-                                    )}
 
-                                    <div className="space-y-4">
-                                        {deep.clients_cibles && (
-                                            <div className="space-y-1">
-                                                <h4 className="font-semibold text-sm flex items-center gap-1"><Users className="w-3 h-3" /> Cible</h4>
-                                                <p className="text-sm text-muted-foreground">{deep.clients_cibles}</p>
+                                        {/* Dirigeants Section */}
+                                        {deep.dirigeants && deep.dirigeants.length > 0 && (
+                                            <div>
+                                                <h4 className="font-semibold text-sm flex items-center gap-2 mb-3">
+                                                    <Briefcase className="w-4 h-4 text-primary" /> Dirigeants
+                                                </h4>
+                                                <div className="space-y-2">
+                                                    {deep.dirigeants.map((d, i) => (
+                                                        <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 border rounded-md bg-muted/10">
+                                                            <div className="font-medium">
+                                                                {d.prenoms} {d.nom}
+                                                            </div>
+                                                            <div className="text-sm text-muted-foreground flex gap-2">
+                                                                <Badge variant="outline">{d.qualite || "Dirigeant"}</Badge>
+                                                                {d.date_de_naissance && (
+                                                                    <span className="text-xs self-center">Né(e) en {d.date_de_naissance}</span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
                                             </div>
                                         )}
-                                        {deep.style_communication && (
-                                            <div className="space-y-1">
-                                                <h4 className="font-semibold text-sm">Communication</h4>
-                                                <p className="text-sm text-muted-foreground italic">"{deep.style_communication}"</p>
-                                            </div>
-                                        )}
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        )}
-
-                        <Tabs defaultValue="infos" className="w-full">
-                            <TabsList className="grid w-full grid-cols-2 lg:w-[400px]">
-                                <TabsTrigger value="infos">Détails & Services</TabsTrigger>
-                                <TabsTrigger value="legal">Juridique</TabsTrigger>
-                            </TabsList>
+                                    </CardContent>
+                                </Card>
+                            </TabsContent>
 
                             <TabsContent value="infos" className="mt-4">
                                 <Card>
                                     <CardContent className="pt-6">
+                                        {/* Deep Search Highlights - Moved inside here or kept separate? Keeping somewhat related */}
+                                        {(deep.points_forts || deep.clients_cibles || deep.style_communication) && (
+                                            <div className="mb-6 p-4 rounded-lg border-primary/20 bg-primary/5 space-y-4">
+                                                <h4 className="flex items-center gap-2 text-primary font-semibold">
+                                                    <Sparkles className="w-4 h-4" /> Analyse IA
+                                                </h4>
+                                                <div className="grid md:grid-cols-2 gap-4">
+                                                    {deep.points_forts && (
+                                                        <div className="space-y-2">
+                                                            <span className="text-xs font-semibold text-muted-foreground uppercase">Points Forts</span>
+                                                            <div className="flex flex-wrap gap-2">
+                                                                {deep.points_forts.map((pt, i) => (
+                                                                    <Badge key={i} variant="secondary" className="bg-background/80">{pt}</Badge>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    <div className="space-y-2">
+                                                        {deep.clients_cibles && (
+                                                            <div>
+                                                                <span className="text-xs font-semibold text-muted-foreground uppercase">Cible</span>
+                                                                <p className="text-sm">{deep.clients_cibles}</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
                                         {scrapped["Infos"] ? Object.entries(scrapped["Infos"]).map(([category, items], idx) => (
                                             <div key={idx} className="mb-6 last:mb-0">
                                                 <h4 className="font-semibold mb-3 pb-2 border-b">{category}</h4>
@@ -329,41 +387,24 @@ export default function ProspectPage() {
                                     </CardContent>
                                 </Card>
                             </TabsContent>
-
-                            <TabsContent value="legal" className="mt-4">
-                                <Card>
-                                    <CardContent className="pt-6 space-y-4">
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div className="p-4 bg-muted/20 rounded-lg">
-                                                <span className="text-xs text-muted-foreground uppercase">Raison Sociale</span>
-                                                <p className="font-medium">{deep.nom_raison_sociale || "-"}</p>
-                                            </div>
-                                            <div className="p-4 bg-muted/20 rounded-lg">
-                                                <span className="text-xs text-muted-foreground uppercase">Siret</span>
-                                                <p className="font-mono">{deep.siret_siege || "-"}</p>
-                                            </div>
-                                            <div className="p-4 bg-muted/20 rounded-lg">
-                                                <span className="text-xs text-muted-foreground uppercase">Code NAF</span>
-                                                <p className="font-mono">{deep.naf || "-"}</p>
-                                            </div>
-                                            <div className="p-4 bg-muted/20 rounded-lg">
-                                                <span className="text-xs text-muted-foreground uppercase">Date de création</span>
-                                                <p>{deep.date_creation || "-"}</p>
-                                            </div>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            </TabsContent>
                         </Tabs>
 
-                        {/* Raw Data Accordion (Kept for debug but collapsed/discreet) */}
+                        {/* Raw Data Accordion (Moved to bottom and collapsed) */}
                         <div className="pt-8">
                             <Separator className="mb-4" />
-                            <details className="text-xs text-muted-foreground cursor-pointer">
-                                <summary className="hover:text-primary transition-colors">Voir les données JSON brutes (Debug)</summary>
+                            <details className="group">
+                                <summary className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer hover:text-primary transition-colors select-none">
+                                    <div className="p-1 border rounded group-open:bg-muted">JSON Debug</div>
+                                </summary>
                                 <div className="grid md:grid-cols-2 gap-4 mt-4">
-                                    <pre className="bg-slate-950 text-slate-50 p-4 rounded-lg overflow-x-auto max-h-[300px]">{JSON.stringify(scrapped, null, 2)}</pre>
-                                    <pre className="bg-slate-950 text-slate-50 p-4 rounded-lg overflow-x-auto max-h-[300px]">{JSON.stringify(deep, null, 2)}</pre>
+                                    <div className="space-y-1">
+                                        <span className="text-xs text-muted-foreground font-mono">Data Scrapping</span>
+                                        <pre className="bg-slate-950 text-slate-50 p-4 rounded-lg overflow-x-auto max-h-[300px] text-[10px]">{JSON.stringify(scrapped, null, 2)}</pre>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <span className="text-xs text-muted-foreground font-mono">Deep Search</span>
+                                        <pre className="bg-slate-950 text-slate-50 p-4 rounded-lg overflow-x-auto max-h-[300px] text-[10px]">{JSON.stringify(deep, null, 2)}</pre>
+                                    </div>
                                 </div>
                             </details>
                         </div>

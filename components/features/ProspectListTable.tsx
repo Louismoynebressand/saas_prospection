@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { MoreHorizontal, Mail, Phone, Building2, User, Loader2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { ScrapeProspect } from "@/types"
@@ -9,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
 export function ProspectListTable({ searchId, autoRefresh }: { searchId: string, autoRefresh?: boolean }) {
+    const router = useRouter()
     const [prospects, setProspects] = useState<ScrapeProspect[]>([])
     const [loading, setLoading] = useState(true)
     const pollInterval = useRef<NodeJS.Timeout | null>(null)
@@ -42,7 +44,6 @@ export function ProspectListTable({ searchId, autoRefresh }: { searchId: string,
                 table: 'scrape_prospect',
                 filter: `id_jobs=eq.${searchId}`
             }, (payload) => {
-                // Use functional update to avoid stale state
                 setProspects(prev => [payload.new as ScrapeProspect, ...prev])
             })
             .subscribe()
@@ -81,8 +82,8 @@ export function ProspectListTable({ searchId, autoRefresh }: { searchId: string,
             <Table>
                 <TableHeader>
                     <TableRow>
-                        <TableHead>Nom</TableHead>
                         <TableHead>Société</TableHead>
+                        <TableHead>Catégorie</TableHead>
                         <TableHead>Contact</TableHead>
                         <TableHead>Ville</TableHead>
                         <TableHead></TableHead>
@@ -91,37 +92,58 @@ export function ProspectListTable({ searchId, autoRefresh }: { searchId: string,
                 <TableBody>
                     {prospects.map((prospect) => {
                         const raw = prospect.data_scrapping || {};
-                        // SAFE SLICE: Ensure id_prospect is string before slicing
+                        const deep = prospect.deep_search || {};
                         const idStr = String(prospect.id_prospect || "");
-                        const name = raw.name || raw.title || (idStr ? idStr.slice(0, 8) : "N/A");
-                        const company = raw.company || raw.title || "N/A";
+
+                        // Priority Mapping Logic for Name/Company
+                        const company = raw.Titre || raw.title || deep.nom_raison_sociale || "Société Inconnue";
+                        const category = raw["Nom de catégorie"] || "N/A";
+
                         const city = prospect.ville || raw.address;
-                        const email = (prospect.email_adresse_verified && prospect.email_adresse_verified[0])
-                            || (raw.emails && raw.emails[0]);
-                        const phone = raw.phone || (raw.phones && raw.phones[0]);
+
+                        // Email Logic
+                        // 1. Verified email first
+                        // 2. Scraped email second
+                        let email = null;
+                        if (prospect.email_adresse_verified && prospect.email_adresse_verified.length > 0) {
+                            email = Array.isArray(prospect.email_adresse_verified) ? prospect.email_adresse_verified[0] : prospect.email_adresse_verified;
+                        } else if (raw.Email) {
+                            email = raw.Email;
+                        } else if (deep.emails && deep.emails.length > 0) {
+                            email = deep.emails[0];
+                        }
+
+                        const phone = raw["Téléphone"] || raw.phone;
 
                         return (
-                            <TableRow key={idStr}>
+                            <TableRow
+                                key={idStr}
+                                className="cursor-pointer hover:bg-muted/50 transition-colors pointer-events-auto"
+                                onClick={(e) => {
+                                    if ((e.target as HTMLElement).closest('button')) return;
+                                    router.push(`/prospects/${idStr}`)
+                                }}
+                            >
                                 <TableCell className="font-medium">
-                                    <div className="flex items-center gap-2">
-                                        <User className="h-4 w-4 text-muted-foreground" />
-                                        {name}
-                                    </div>
-                                </TableCell>
-                                <TableCell>
                                     <div className="flex items-center gap-2">
                                         <Building2 className="h-4 w-4 text-muted-foreground" />
                                         {company}
                                     </div>
                                 </TableCell>
                                 <TableCell>
+                                    <div className="flex items-center gap-2 text-muted-foreground">
+                                        {category}
+                                    </div>
+                                </TableCell>
+                                <TableCell>
                                     <div className="flex flex-col gap-1">
-                                        {email && (
+                                        {email ? (
                                             <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                                <Mail className="h-3 w-3" />
+                                                <Mail className="h-3 w-3 text-primary" />
                                                 <span className="truncate max-w-[150px]">{email}</span>
                                             </div>
-                                        )}
+                                        ) : <span className="text-xs text-muted-foreground">-</span>}
+
                                         {phone && (
                                             <div className="flex items-center gap-1 text-xs text-muted-foreground">
                                                 <Phone className="h-3 w-3" />
@@ -132,10 +154,11 @@ export function ProspectListTable({ searchId, autoRefresh }: { searchId: string,
                                 </TableCell>
                                 <TableCell className="max-w-[120px] truncate">{city}</TableCell>
                                 <TableCell className="text-right">
-                                    <Button variant="ghost" size="icon" asChild>
-                                        <Link href={`/prospects/${idStr}`}>
-                                            <MoreHorizontal className="h-4 w-4" />
-                                        </Link>
+                                    <Button variant="ghost" size="icon" onClick={(e) => {
+                                        e.stopPropagation();
+                                        router.push(`/prospects/${idStr}`);
+                                    }}>
+                                        <MoreHorizontal className="h-4 w-4" />
                                     </Button>
                                 </TableCell>
                             </TableRow>

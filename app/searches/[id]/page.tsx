@@ -113,7 +113,7 @@ export default function SearchDetailsPage() {
                 </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-2">
                 <Card>
                     <CardHeader className="pb-2">
                         <CardTitle className="text-sm font-medium">Statut</CardTitle>
@@ -128,14 +128,6 @@ export default function SearchDetailsPage() {
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">{search.request_count || "-"}</div>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium">Source</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold capitalize">{search.request_url || "Google Maps"}</div>
                     </CardContent>
                 </Card>
             </div>
