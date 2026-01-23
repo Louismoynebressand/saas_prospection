@@ -16,6 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 export function SearchHistoryTable({ limit }: { limit?: number }) {
     const router = useRouter()
     const [searches, setSearches] = useState<ScrapeJob[]>([])
+    const [counts, setCounts] = useState<Record<string, number>>({})
     const [loading, setLoading] = useState(true)
 
     const fetchSearches = async () => {
@@ -33,7 +34,22 @@ export function SearchHistoryTable({ limit }: { limit?: number }) {
             const { data, error } = await query
 
             if (error) throw error
-            if (data) setSearches(data as ScrapeJob[])
+            if (data) {
+                setSearches(data as ScrapeJob[])
+                // Fetch counts for each search
+                const countMap: Record<string, number> = {}
+                await Promise.all(data.map(async (job) => {
+                    const { count } = await supabase
+                        .from('scrape_prospect')
+                        .select('*', { count: 'exact', head: true })
+                        .eq('id_jobs', job.id_jobs)
+
+                    if (count !== null) {
+                        countMap[job.id_jobs] = count
+                    }
+                }))
+                setCounts(countMap)
+            }
         } catch (error) {
             console.error('Error fetching searches:', error)
         } finally {
@@ -135,8 +151,10 @@ export function SearchHistoryTable({ limit }: { limit?: number }) {
                                 {format(new Date(search.created_at), "d MMM yyyy HH:mm", { locale: fr })}
                             </TableCell>
                             <TableCell>{getStatusBadge(search.statut)}</TableCell>
-                            <TableCell className="text-right">
-                                -
+                            <TableCell className="text-right font-medium">
+                                {counts[search.id_jobs] !== undefined ? counts[search.id_jobs] : (
+                                    <span className="text-muted-foreground text-xs">...</span>
+                                )}
                             </TableCell>
                             <TableCell className="text-right">
                                 <Button variant="ghost" size="icon" onClick={(e) => {

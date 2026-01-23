@@ -5,7 +5,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
     MoreHorizontal, Mail, Phone, Building2, User, Loader2, ArrowUpDown,
-    Filter, Columns, Download, ChevronDown
+    Filter, Columns, Download, ChevronDown, Trash2, Share2, FileDown
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { ScrapeProspect } from "@/types"
@@ -15,6 +15,7 @@ import {
     DropdownMenu,
     DropdownMenuCheckboxItem,
     DropdownMenuContent,
+    DropdownMenuItem,
     DropdownMenuLabel,
     DropdownMenuSeparator,
     DropdownMenuTrigger,
@@ -31,8 +32,6 @@ import { Badge } from "@/components/ui/badge"
 
 // Simple export to CSV function
 const exportToCSV = (data: any[], filename: string) => {
-    // Generate headers from all keys in flattened objects
-    // For simplicity, we define a standard set of meaningful columns
     const headers = [
         "ID", "Société", "Catégorie", "Contact Name", "Email", "Phone", "Ville", "Adresse",
         "Site Web", "LinkedIn", "Instagram", "Facebook",
@@ -42,9 +41,7 @@ const exportToCSV = (data: any[], filename: string) => {
     const csvContent = [
         headers.join(","),
         ...data.map(row => {
-            // Helper to escape CSV fields
             const e = (val: any) => `"${String(val || "").replace(/"/g, '""')}"`
-
             return [
                 e(row.id), e(row.company), e(row.category), e(row.name), e(row.email), e(row.phone), e(row.city), e(row.address),
                 e(row.website), e(row.linkedin), e(row.instagram), e(row.facebook),
@@ -80,7 +77,7 @@ export function ProspectListTable({ searchId, autoRefresh }: { searchId: string,
         company: true,
         category: true,
         contact: true,
-        phone: true, // New column
+        phone: true,
         city: true,
     })
 
@@ -99,6 +96,33 @@ export function ProspectListTable({ searchId, autoRefresh }: { searchId: string,
         } finally {
             setLoading(false)
         }
+    }
+
+    const handleDelete = async (id: string, e: React.MouseEvent) => {
+        e.stopPropagation() // Prevent row click
+        if (!confirm("Voulez-vous vraiment supprimer ce prospect ?")) return
+
+        try {
+            const { error } = await supabase
+                .from('scrape_prospect')
+                .delete()
+                .eq('id_prospect', id)
+
+            if (error) throw error
+
+            // Optimistic update
+            setProspects(prev => prev.filter(p => p.id_prospect !== id))
+        } catch (err) {
+            console.error("Error deleting prospect:", err)
+            alert("Erreur lors de la suppression")
+        }
+    }
+
+    const handleShare = (id: string, e: React.MouseEvent) => {
+        e.stopPropagation()
+        const url = `${window.location.origin}/prospects/${id}`
+        navigator.clipboard.writeText(url)
+        alert("Lien copié dans le presse-papier !")
     }
 
     useEffect(() => {
@@ -131,7 +155,6 @@ export function ProspectListTable({ searchId, autoRefresh }: { searchId: string,
         let data = prospects.map(p => {
             const raw = p.data_scrapping || {};
             const deep = p.deep_search || {};
-            // Updated Company Name Mapping: Deep Search > Raw Title > Fallback
             const company = deep.nom_complet || raw.Titre || raw.title || deep.nom_raison_sociale || "Société Inconnue";
 
             let email = null;
@@ -168,15 +191,9 @@ export function ProspectListTable({ searchId, autoRefresh }: { searchId: string,
             }
         });
 
-        // Filtering
-        if (filterHasEmail) {
-            data = data.filter(item => !!item.email);
-        }
-        if (filterHasPhone) {
-            data = data.filter(item => !!item.phone);
-        }
+        if (filterHasEmail) data = data.filter(item => !!item.email);
+        if (filterHasPhone) data = data.filter(item => !!item.phone);
 
-        // Sorting
         if (sortConfig) {
             data.sort((a, b) => {
                 // @ts-ignore
@@ -203,6 +220,11 @@ export function ProspectListTable({ searchId, autoRefresh }: { searchId: string,
 
     const handleExport = () => {
         exportToCSV(processedData, `prospects_export_${searchId}.csv`)
+    }
+
+    const handleSingleExport = (row: any, e: React.MouseEvent) => {
+        e.stopPropagation()
+        exportToCSV([row], `prospect_${row.company.replace(/\s+/g, '_')}.csv`)
     }
 
     if (loading) {
@@ -285,14 +307,14 @@ export function ProspectListTable({ searchId, autoRefresh }: { searchId: string,
                                 <TableHead>Contact (Email)</TableHead>
                             )}
                             {visibleColumns.phone && (
-                                <TableHead>Téléphone</TableHead> // New Column
+                                <TableHead>Téléphone</TableHead>
                             )}
                             {visibleColumns.city && (
                                 <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort('city')}>
                                     <div className="flex items-center gap-1">Ville <ArrowUpDown className="h-3 w-3" /></div>
                                 </TableHead>
                             )}
-                            <TableHead></TableHead>
+                            <TableHead className="w-[50px]"></TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -346,12 +368,25 @@ export function ProspectListTable({ searchId, autoRefresh }: { searchId: string,
                                     <TableCell className="max-w-[120px] truncate">{row.city}</TableCell>
                                 )}
                                 <TableCell className="text-right">
-                                    <Button variant="ghost" size="icon" onClick={(e) => {
-                                        e.stopPropagation();
-                                        router.push(`/prospects/${row.id}`);
-                                    }}>
-                                        <MoreHorizontal className="h-4 w-4" />
-                                    </Button>
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button variant="ghost" size="icon" onClick={(e) => e.stopPropagation()}>
+                                                <MoreHorizontal className="h-4 w-4" />
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end">
+                                            <DropdownMenuItem onClick={(e) => handleSingleExport(row, e)}>
+                                                <FileDown className="mr-2 h-4 w-4" /> Exporter CSV
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem onClick={(e) => handleShare(row.id, e)}>
+                                                <Share2 className="mr-2 h-4 w-4" /> Partager
+                                            </DropdownMenuItem>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuItem onClick={(e) => handleDelete(row.id, e)} className="text-red-600 focus:text-red-600">
+                                                <Trash2 className="mr-2 h-4 w-4" /> Supprimer
+                                            </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
                                 </TableCell>
                             </TableRow>
                         ))}

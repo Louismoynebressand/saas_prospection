@@ -1,12 +1,14 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { useParams, useRouter } from "next/navigation"
 import {
     ArrowLeft, Building2, Mail, Phone, MapPin, Globe, ExternalLink, User,
-    Star, Clock, CheckCircle2, XCircle, AlertCircle, Sparkles, Tag, Users, Music, Info, Briefcase, Copy, Store
+    Star, Clock, CheckCircle2, XCircle, AlertCircle, Sparkles, Tag, Users, Music,
+    Info, Briefcase, Copy, Store, ChevronLeft, ChevronRight, Share2, Trash2, FileDown, Printer,
+    Facebook, Instagram, Linkedin, Twitter, ChevronDown
 } from "lucide-react"
-import { differenceInYears, parseISO, isValid } from "date-fns"
+import { differenceInYears, isValid } from "date-fns"
 import { supabase } from "@/lib/supabase"
 import { ScrapeProspect } from "@/types"
 import { Button } from "@/components/ui/button"
@@ -17,6 +19,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
 // --- TYPES ---
 interface ScrappedData {
@@ -48,7 +51,6 @@ interface DeepSearchData {
     "nom_raison_sociale"?: string;
     "naf"?: string;
     "date_creation"?: string;
-    // Stats
     "effectif"?: string;
     "nombre_etablissements"?: number | string;
     "nombre_etablissements_ouverts"?: number | string;
@@ -57,8 +59,26 @@ interface DeepSearchData {
         prenoms?: string;
         qualite?: string;
         type_dirigeant?: string;
-        date_de_naissance?: string; // Format YYYY-MM
+        date_de_naissance?: string;
     }>;
+}
+
+// Simple export CSV helper
+const exportSingleToCSV = (data: any, filename: string) => {
+    // Generate simple key-value CSV for single record
+    const rows = [
+        ["Field", "Value"],
+        ...Object.entries(data).map(([k, v]) => [k, typeof v === 'object' ? JSON.stringify(v) : String(v || "")])
+    ];
+    const csvContent = rows.map(e => e.map(c => `"${c.replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 }
 
 export default function ProspectPage() {
@@ -70,6 +90,10 @@ export default function ProspectPage() {
     const [deep, setDeep] = useState<DeepSearchData>({})
     const [loading, setLoading] = useState(true)
 
+    // Navigation State
+    const [prevId, setPrevId] = useState<string | null>(null)
+    const [nextId, setNextId] = useState<string | null>(null)
+
     const safeParse = (data: any) => {
         if (!data) return {}
         if (typeof data === 'string') {
@@ -78,51 +102,128 @@ export default function ProspectPage() {
         return data
     }
 
-    useEffect(() => {
-        const fetchProspect = async () => {
-            const { data, error } = await supabase
-                .from('scrape_prospect')
-                .select('*')
-                .eq('id_prospect', id)
-                .single()
+    const fetchProspectData = async (targetId: string) => {
+        setLoading(true)
+        const { data, error } = await supabase
+            .from('scrape_prospect')
+            .select('*')
+            .eq('id_prospect', targetId)
+            .single()
 
-            if (data) {
-                setProspect(data as ScrapeProspect)
-                setScrapped(safeParse(data.data_scrapping))
-                setDeep(safeParse(data.deep_search))
-            }
-            setLoading(false)
+        if (data) {
+            setProspect(data as ScrapeProspect)
+            setScrapped(safeParse(data.data_scrapping))
+            setDeep(safeParse(data.deep_search))
+
+            // Fetch neighbors for navigation
+            fetchNeighbors(data.id_jobs, data.created_at)
         }
+        setLoading(false)
+    }
 
-        fetchProspect()
+    const fetchNeighbors = async (jobId: string | number, currentCreatedAt: string) => {
+        // Find Prev: Created AFTER current (Desc order) -> First one > current date
+        // Actually sorting is by created_at DESC.
+        // List: [Newest (Prev), Current, Oldest (Next)]
+
+        // Find ID created Just Before (so newer date, since list is Descending?) 
+        // Logic: if I am at index 5. Prev is 4 (Newer), Next is 6 (Older).
+
+        // Get Next (Older)
+        const { data: nextData } = await supabase
+            .from('scrape_prospect')
+            .select('id_prospect')
+            .eq('id_jobs', jobId)
+            .lt('created_at', currentCreatedAt)
+            .order('created_at', { ascending: false })
+            .limit(1)
+
+        if (nextData && nextData[0]) setNextId(nextData[0].id_prospect)
+        else setNextId(null)
+
+        // Get Prev (Newer)
+        const { data: prevData } = await supabase
+            .from('scrape_prospect')
+            .select('id_prospect')
+            .eq('id_jobs', jobId)
+            .gt('created_at', currentCreatedAt)
+            .order('created_at', { ascending: true }) // Get the one closest (smallest diff) but > date.
+            .limit(1)
+
+        if (prevData && prevData[0]) setPrevId(prevData[0].id_prospect)
+        else setPrevId(null)
+    }
+
+    useEffect(() => {
+        fetchProspectData(id)
     }, [id])
 
-    // Use TooltipProvider at root of component tree part
+    // --- ACTIONS ---
+    const handleCopy = (text: string) => {
+        navigator.clipboard.writeText(text)
+    }
+
+    const handleDelete = async () => {
+        if (!confirm("Voulez-vous vraiment supprimer ce prospect ?")) return
+        const { error } = await supabase.from('scrape_prospect').delete().eq('id_prospect', id)
+        if (!error) {
+            router.back()
+        } else {
+            alert("Erreur")
+        }
+    }
+
+    const handleShare = () => {
+        const url = window.location.href
+        navigator.clipboard.writeText(url)
+        alert("Lien copié !")
+    }
+
+    const handleExportCSV = () => {
+        if (!prospect) return
+        const flatData = {
+            ...prospect,
+            ...scrapped,
+            ...deep
+        }
+        exportSingleToCSV(flatData, `prospect_${companyName.replace(/\s/g, '_')}.csv`)
+    }
+
+    const handlePrint = () => {
+        window.print()
+    }
+
+    // --- COMPONENTS ---
     const CopyButton = ({ text, label }: { text: string | undefined | null, label: string }) => {
         const [copied, setCopied] = useState(false)
 
         if (!text) return <span className="text-muted-foreground">-</span>
 
-        const handleCopy = (e: React.MouseEvent) => {
-            e.stopPropagation()
-            navigator.clipboard.writeText(text)
-            setCopied(true)
-            setTimeout(() => setCopied(false), 2000)
-        }
-
         return (
             <TooltipProvider>
-                <Tooltip delayDuration={300}>
+                <Tooltip delayDuration={0}>
                     <TooltipTrigger asChild>
                         <div
                             className="flex items-center gap-2 cursor-pointer group hover:bg-muted/50 p-1 -ml-1 rounded transition-colors"
-                            onClick={handleCopy}
+                            onClick={(e) => {
+                                e.stopPropagation()
+                                handleCopy(text)
+                                setCopied(true)
+                                setTimeout(() => setCopied(false), 2000)
+                            }}
                         >
                             <span className="truncate">{text}</span>
-                            <Copy className={`h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity ${copied ? 'text-green-500' : ''}`} />
+                            {/* Visual Feedback on Click */}
+                            {copied ? (
+                                <span className="text-xs text-green-600 font-bold bg-green-50 px-1.5 py-0.5 rounded animate-in fade-in zoom-in">
+                                    ✅ Copié
+                                </span>
+                            ) : (
+                                <Copy className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                            )}
                         </div>
                     </TooltipTrigger>
-                    <TooltipContent>
+                    <TooltipContent side="right">
                         <p>{copied ? "Copié !" : "Cliquer pour copier"}</p>
                     </TooltipContent>
                 </Tooltip>
@@ -163,7 +264,6 @@ export default function ProspectPage() {
     let emailStatus = 'inconnu'; // Default
     let emailStatusLabel = 'Inconnu';
 
-    // Check specific "tentative" messages first if present
     if (prospect.check_email_tentative?.toLowerCase().includes("pas de domaine")) {
         emailStatus = 'pas_domaine';
         emailStatusLabel = 'Pas de domaine';
@@ -174,7 +274,6 @@ export default function ProspectPage() {
         emailStatus = 'echec';
         emailStatusLabel = 'Check Email Échoué';
     } else if (prospect.check_email === false) {
-        // Explicitly marked as not checked (or skipped)
         emailStatus = 'non_verifie';
         emailStatusLabel = 'Non Vérifié';
     }
@@ -184,7 +283,6 @@ export default function ProspectPage() {
         : (scrapped.Email || (deep.emails && deep.emails[0]));
 
     const renderEmailBadge = () => {
-        // If no email found at all
         if (!displayEmail) {
             if (emailStatus === 'pas_domaine') {
                 return <Badge variant="outline" className="text-orange-500 border-orange-200 bg-orange-50">Pas de domaine</Badge>
@@ -207,8 +305,6 @@ export default function ProspectPage() {
     }
 
     const renderDeepScanBadge = () => {
-        // Simple heuristic: if we have deep_search data (like siret or points_forts), deep scan ran.
-        // Or check `prospect.deep_search` is not empty object.
         const hasDeepData = deep && (Object.keys(deep).length > 0);
         if (hasDeepData) {
             return <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 gap-1"><Sparkles className="w-3 h-3" /> Deep Search</Badge>
@@ -216,15 +312,12 @@ export default function ProspectPage() {
         return <Badge variant="outline" className="text-muted-foreground bg-muted/50">Sans Deep Search</Badge>
     }
 
-    // Helper for hours
     const formatHours = (hoursStr: string) => {
         return hoursStr.replace(/ to /g, ' - ').replace(/:/g, 'h');
     }
 
-    // Age Helper
     const calculateAge = (dateStr?: string) => {
         if (!dateStr) return null;
-        // Handle YYYY-MM
         try {
             const date = new Date(dateStr);
             if (!isValid(date)) return null;
@@ -232,21 +325,68 @@ export default function ProspectPage() {
         } catch (e) { return null }
     }
 
+    // Social Icon Mapper
+    const getSocialIcon = (network: string) => {
+        const n = network.toLowerCase()
+        if (n.includes('facebook')) return <Facebook className="w-4 h-4 text-blue-600" />
+        if (n.includes('instagram')) return <Instagram className="w-4 h-4 text-pink-600" />
+        if (n.includes('linkedin')) return <Linkedin className="w-4 h-4 text-blue-700" />
+        if (n.includes('twitter') || n.includes('x.com')) return <Twitter className="w-4 h-4 text-sky-500" />
+        return <Globe className="w-4 h-4 text-gray-500" />
+    }
+
     return (
-        <div className="min-h-screen bg-gray-50/50 dark:bg-black/10">
-            <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-8">
+        <div className="min-h-screen bg-gray-50/50 dark:bg-black/10 print:bg-white">
+            <style jsx global>{`
+                @media print {
+                    .no-print { display: none !important; }
+                    .print-full { width: 100% !important; margin: 0 !important; max-width: none !important; }
+                    body { background: white !important; }
+                }
+            `}</style>
+
+            <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-8 print-full">
 
                 {/* --- HEADER --- */}
-                <div className="flex flex-col md:flex-row gap-6 justify-between items-start md:items-center">
+                <div className="flex flex-col md:flex-row gap-6 justify-between items-start md:items-center no-print">
                     <div className="space-y-2">
                         <div className="flex items-center gap-2">
-                            <Button variant="ghost" size="icon" onClick={() => router.back()} className="mr-2 -ml-2">
-                                <ArrowLeft className="h-5 w-5" />
-                            </Button>
+                            <div className="flex bg-card border rounded-md mr-4 shadow-sm">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => router.back()}
+                                    className="border-r rounded-none h-9 w-9"
+                                    title="Retour liste"
+                                >
+                                    <ArrowLeft className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    disabled={!prevId}
+                                    onClick={() => prevId && router.push(`/prospects/${prevId}`)}
+                                    className="border-r rounded-none h-9 w-9"
+                                    title="Précédent"
+                                >
+                                    <ChevronLeft className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    disabled={!nextId}
+                                    onClick={() => nextId && router.push(`/prospects/${nextId}`)}
+                                    className="rounded-none h-9 w-9"
+                                    title="Suivant"
+                                >
+                                    <ChevronRight className="h-4 w-4" />
+                                </Button>
+                            </div>
+
                             <h1 className="text-3xl font-bold tracking-tight text-foreground">{companyName}</h1>
                             {renderDeepScanBadge()}
                         </div>
-                        <div className="flex items-center gap-4 text-muted-foreground ml-11">
+                        <div className="flex items-center gap-4 text-muted-foreground ml-1">
                             <span className="flex items-center gap-1"><Building2 className="w-4 h-4" /> {category}</span>
                             {rating && (
                                 <span className="flex items-center gap-1 text-amber-500 font-medium">
@@ -256,22 +396,35 @@ export default function ProspectPage() {
                         </div>
                     </div>
 
-                    <div className="flex gap-3 ml-11 md:ml-0">
-                        {/* Actions would go here */}
+                    <div className="flex gap-2">
                         {mapsUrl && (
-                            <Button variant="outline" size="sm" asChild>
+                            <Button variant="outline" size="sm" asChild className="hidden md:flex">
                                 <a href={mapsUrl} target="_blank" rel="noopener noreferrer">
                                     <MapPin className="mr-2 h-4 w-4" /> Voir sur Maps
                                 </a>
                             </Button>
                         )}
-                        {website && (
-                            <Button size="sm" asChild>
-                                <a href={website} target="_blank" rel="noopener noreferrer">
-                                    <Globe className="mr-2 h-4 w-4" /> Site Web
-                                </a>
-                            </Button>
-                        )}
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="sm">Actions <ChevronDown className="ml-2 h-4 w-4" /></Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={handleShare}>
+                                    <Share2 className="mr-2 h-4 w-4" /> Partager
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={handleExportCSV}>
+                                    <FileDown className="mr-2 h-4 w-4" /> Exporter CSV
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={handlePrint}>
+                                    <Printer className="mr-2 h-4 w-4" /> Imprimer / PDF
+                                </DropdownMenuItem>
+                                <DropdownMenuNavigation /> {/* Fallback space */}
+                                <Separator className="my-1" />
+                                <DropdownMenuItem onClick={handleDelete} className="text-red-600">
+                                    <Trash2 className="mr-2 h-4 w-4" /> Supprimer
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
                 </div>
 
@@ -315,17 +468,24 @@ export default function ProspectPage() {
                                     </div>
                                 </div>
 
-                                {/* Socials */}
+                                {/* Socials - Updated with REAL ICONS */}
                                 {deep.socials && Object.keys(deep.socials).length > 0 && (
                                     <div className="pt-4 border-t">
                                         <div className="flex gap-3 justify-center">
                                             {Object.entries(deep.socials).map(([net, link]) => link && (
-                                                <Button key={net} variant="outline" size="icon" asChild title={net}>
+                                                <Button key={net} variant="outline" size="icon" asChild title={net} className="h-10 w-10">
                                                     <a href={link} target="_blank" rel="noopener noreferrer" className="capitalize">
-                                                        <ExternalLink className="w-4 h-4" />
+                                                        {getSocialIcon(net)}
                                                     </a>
                                                 </Button>
                                             ))}
+                                            {website && (
+                                                <Button variant="outline" size="icon" asChild title="Site Web" className="h-10 w-10">
+                                                    <a href={website} target="_blank" rel="noopener noreferrer">
+                                                        <Globe className="w-4 h-4 text-gray-700" />
+                                                    </a>
+                                                </Button>
+                                            )}
                                         </div>
                                     </div>
                                 )}
@@ -356,7 +516,7 @@ export default function ProspectPage() {
                     <div className="lg:col-span-2 space-y-6">
 
                         <Tabs defaultValue="legal" className="w-full">
-                            <TabsList className="grid w-full grid-cols-2 lg:w-[400px]">
+                            <TabsList className="grid w-full grid-cols-2 lg:w-[400px] no-print">
                                 <TabsTrigger value="legal">Identité & Juridique</TabsTrigger>
                                 <TabsTrigger value="infos">Détails & Services</TabsTrigger>
                             </TabsList>
@@ -402,41 +562,7 @@ export default function ProspectPage() {
                                             </div>
                                         </div>
 
-                                        {/* Dirigeants Section */}
-                                        {deep.dirigeants && deep.dirigeants.length > 0 && (
-                                            <div className="pt-2">
-                                                <h4 className="font-semibold text-sm flex items-center gap-2 mb-3">
-                                                    <Briefcase className="w-4 h-4 text-primary" /> Dirigeants
-                                                </h4>
-                                                <div className="space-y-2">
-                                                    {deep.dirigeants.map((d, i) => {
-                                                        const age = calculateAge(d.date_de_naissance);
-                                                        return (
-                                                            <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 border rounded-md bg-muted/10 hover:bg-muted/20 transition-colors">
-                                                                <div className="font-medium flex items-center gap-2">
-                                                                    <User className="h-4 w-4 text-muted-foreground" />
-                                                                    {d.prenoms} {d.nom}
-                                                                </div>
-                                                                <div className="text-sm text-muted-foreground flex gap-2 items-center mt-2 sm:mt-0">
-                                                                    <Badge variant="outline" className="bg-background">{d.qualite || "Dirigeant"}</Badge>
-                                                                    {age && (
-                                                                        <span className="text-xs border px-2 py-0.5 rounded-full bg-background">{age} ans</span>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        )
-                                                    })}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </CardContent>
-                                </Card>
-                            </TabsContent>
-
-                            <TabsContent value="infos" className="mt-4">
-                                <Card>
-                                    <CardContent className="pt-6">
-                                        {/* Deep Search Highlights */}
+                                        {/* AI Analysis Block - MOVED HERE */}
                                         {(deep.points_forts || deep.clients_cibles || deep.style_communication) && (
                                             <div className="mb-6 p-4 rounded-lg border-primary/20 bg-primary/5 space-y-4">
                                                 <h4 className="flex items-center gap-2 text-primary font-semibold">
@@ -471,6 +597,41 @@ export default function ProspectPage() {
                                             </div>
                                         )}
 
+                                        {/* Dirigeants Section */}
+                                        {deep.dirigeants && deep.dirigeants.length > 0 && (
+                                            <div className="pt-2">
+                                                <h4 className="font-semibold text-sm flex items-center gap-2 mb-3">
+                                                    <Briefcase className="w-4 h-4 text-primary" /> Dirigeants
+                                                </h4>
+                                                <div className="space-y-2">
+                                                    {deep.dirigeants.map((d, i) => {
+                                                        const age = calculateAge(d.date_de_naissance);
+                                                        return (
+                                                            <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 border rounded-md bg-muted/10 hover:bg-muted/20 transition-colors">
+                                                                <div className="font-medium flex items-center gap-2">
+                                                                    <User className="h-4 w-4 text-muted-foreground" />
+                                                                    {d.prenoms} {d.nom}
+                                                                </div>
+                                                                <div className="text-sm text-muted-foreground flex gap-2 items-center mt-2 sm:mt-0">
+                                                                    <Badge variant="outline" className="bg-background">{d.qualite || "Dirigeant"}</Badge>
+                                                                    {age && (
+                                                                        <span className="text-xs border px-2 py-0.5 rounded-full bg-background">{age} ans</span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        )
+                                                    })}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                            </TabsContent>
+
+                            <TabsContent value="infos" className="mt-4">
+                                <Card>
+                                    <CardContent className="pt-6">
+
                                         {scrapped["Infos"] ? Object.entries(scrapped["Infos"]).map(([category, items], idx) => (
                                             <div key={idx} className="mb-6 last:mb-0">
                                                 <h4 className="font-semibold mb-3 pb-2 border-b">{category}</h4>
@@ -496,7 +657,7 @@ export default function ProspectPage() {
                         </Tabs>
 
                         {/* Raw Data */}
-                        <div className="pt-8">
+                        <div className="pt-8 no-print">
                             <Separator className="mb-4" />
                             <details className="group">
                                 <summary className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer hover:text-primary transition-colors select-none">
@@ -520,4 +681,8 @@ export default function ProspectPage() {
             </div>
         </div>
     )
+}
+
+function DropdownMenuNavigation() {
+    return null;
 }
