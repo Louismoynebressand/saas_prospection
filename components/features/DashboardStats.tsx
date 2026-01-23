@@ -15,50 +15,57 @@ export function DashboardStats() {
     })
 
     const fetchStats = async () => {
-        // 1. Total Searches
-        const { count: totalSearches } = await supabase
-            .from('searches')
-            .select('*', { count: 'exact', head: true })
+        try {
+            // 1. Total Searches for current demo user
+            const { count: totalSearches } = await supabase
+                .from('scrape_jobs')
+                .select('*', { count: 'exact', head: true })
+                .eq('id_user', DEMO_USER_ID)
 
-        // 2. Active Searches (queued or running)
-        const { count: activeSearches } = await supabase
-            .from('searches')
-            .select('*', { count: 'exact', head: true })
-            .in('status', ['queued', 'running'])
+            // 2. Active Searches (queued or running)
+            const { count: activeSearches } = await supabase
+                .from('scrape_jobs')
+                .select('*', { count: 'exact', head: true })
+                .eq('id_user', DEMO_USER_ID)
+                .in('statut', ['queued', 'running'])
 
-        // 3. Total Prospects
-        const { count: totalProspects } = await supabase
-            .from('prospects')
-            .select('*', { count: 'exact', head: true })
+            // 3. Total Prospects for the demo user
+            const { count: totalProspects } = await supabase
+                .from('scrape_prospect')
+                .select('*', { count: 'exact', head: true })
+                .eq('id_user', DEMO_USER_ID)
 
-        // 4. Enrich rate (approx using raw SQL count if possible, else standard count)
-        // Checking "emails" not null for now
-        const { count: emailsFound } = await supabase
-            .from('prospects')
-            .select('*', { count: 'exact', head: true })
-            .not('emails', 'is', null)
+            // 4. Enrich rate (checking email_adresse_verified)
+            const { count: emailsFound } = await supabase
+                .from('scrape_prospect')
+                .select('*', { count: 'exact', head: true })
+                .eq('id_user', DEMO_USER_ID)
+                .not('email_adresse_verified', 'is', null)
 
-        setStats({
-            totalSearches: totalSearches || 0,
-            activeSearches: activeSearches || 0,
-            totalProspects: totalProspects || 0,
-            emailsFound: emailsFound || 0
-        })
+            setStats({
+                totalSearches: totalSearches || 0,
+                activeSearches: activeSearches || 0,
+                totalProspects: totalProspects || 0,
+                emailsFound: emailsFound || 0
+            })
+        } catch (error) {
+            console.error("Error fetching stats:", error)
+        }
     }
 
     useEffect(() => {
         fetchStats()
 
         const searchSub = supabase
-            .channel('dashboard_stats_searches')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'searches' }, () => {
+            .channel('dashboard_stats_scrape_jobs')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'scrape_jobs' }, () => {
                 fetchStats()
             })
             .subscribe()
 
         const prospectSub = supabase
-            .channel('dashboard_stats_prospects')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'prospects' }, () => {
+            .channel('dashboard_stats_scrape_prospects')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'scrape_prospect' }, () => {
                 fetchStats()
             })
             .subscribe()
