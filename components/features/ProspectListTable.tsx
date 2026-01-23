@@ -151,10 +151,20 @@ export function ProspectListTable({ searchId, autoRefresh }: { searchId: string,
     }, [searchId, autoRefresh])
 
     // --- Process Data for Display ---
+    const safeParse = (data: any) => {
+        if (!data) return {}
+        if (typeof data === 'string') {
+            try { return JSON.parse(data) } catch (e) { return {} }
+        }
+        return data
+    }
+
     const processedData = useMemo(() => {
         let data = prospects.map(p => {
-            const raw = p.data_scrapping || {};
-            const deep = p.deep_search || {};
+            const raw = safeParse(p.data_scrapping);
+            const deep = safeParse(p.deep_search);
+
+            // Priority: deep.nom_complet > raw.Titre > fallbacks
             const company = deep.nom_complet || raw.Titre || raw.title || deep.nom_raison_sociale || "Société Inconnue";
 
             let email = null;
