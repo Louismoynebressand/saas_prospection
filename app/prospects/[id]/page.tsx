@@ -19,7 +19,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
 // --- TYPES ---
 interface ScrappedData {
@@ -418,8 +418,11 @@ export default function ProspectPage() {
                                 <DropdownMenuItem onClick={handlePrint}>
                                     <Printer className="mr-2 h-4 w-4" /> Imprimer / PDF
                                 </DropdownMenuItem>
-                                <DropdownMenuNavigation /> {/* Fallback space */}
-                                <Separator className="my-1" />
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => alert("Génération d'email (Fonctionnalité à venir)")}>
+                                    <Mail className="mr-2 h-4 w-4 text-blue-600" /> Générer un Email
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
                                 <DropdownMenuItem onClick={handleDelete} className="text-red-600">
                                     <Trash2 className="mr-2 h-4 w-4" /> Supprimer
                                 </DropdownMenuItem>
