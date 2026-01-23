@@ -112,8 +112,12 @@ export function SearchHistoryTable({ limit }: { limit?: number }) {
                     {searches.map((search) => (
                         <TableRow
                             key={search.id_jobs}
-                            className="cursor-pointer hover:bg-muted/50 transition-colors"
-                            onClick={() => router.push(`/searches/${search.id_jobs}`)}
+                            className="cursor-pointer hover:bg-muted/50 transition-colors pointer-events-auto"
+                            onClick={(e) => {
+                                // Prevent navigation if clicking on a button inside the row
+                                if ((e.target as HTMLElement).closest('button')) return;
+                                router.push(`/searches/${search.id_jobs}`)
+                            }}
                         >
                             <TableCell className="font-medium">
                                 <div className="flex items-center gap-2">
@@ -136,6 +140,7 @@ export function SearchHistoryTable({ limit }: { limit?: number }) {
                             </TableCell>
                             <TableCell className="text-right">
                                 <Button variant="ghost" size="icon" onClick={(e) => {
+                                    // Already handled by closest check but explicit valid
                                     e.stopPropagation();
                                     router.push(`/searches/${search.id_jobs}`);
                                 }}>
