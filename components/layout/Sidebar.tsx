@@ -133,15 +133,7 @@ export function Sidebar() {
 
             {/* User Profile & Logout */}
             <div className="border-t p-4 space-y-2">
-                <div className="flex items-center gap-3 rounded-lg bg-muted/50 p-3">
-                    <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">
-                        DU
-                    </div>
-                    <div className="text-sm flex-1">
-                        <p className="font-medium">Demo User</p>
-                        <p className="text-xs text-muted-foreground">Neuraflow</p>
-                    </div>
-                </div>
+
 
                 <Button
                     variant="outline"
