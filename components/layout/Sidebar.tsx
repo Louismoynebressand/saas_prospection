@@ -144,9 +144,13 @@ export function Sidebar() {
                 </div>
 
                 <Button
-                    variant="ghost"
-                    className="w-full justify-start text-muted-foreground hover:text-foreground hover:bg-muted gap-2"
-                    onClick={handleLogout}
+                    variant="outline"
+                    size="sm"
+                    className="w-full justify-start gap-2"
+                    onClick={async () => {
+                        await fetch('/auth/logout', { method: 'POST' })
+                        window.location.href = '/login'
+                    }}
                 >
                     <LogOut className="h-4 w-4" />
                     Déconnexion

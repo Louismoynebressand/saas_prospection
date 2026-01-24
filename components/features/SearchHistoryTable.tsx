@@ -1,14 +1,13 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
 import { MoreHorizontal, Search as SearchIcon, MapPin, Loader2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { createClient } from "@/lib/supabase/client"
 import { ScrapeJob } from "@/types"
-import { DEMO_USER_ID } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -21,10 +20,20 @@ export function SearchHistoryTable({ limit }: { limit?: number }) {
 
     const fetchSearches = async () => {
         try {
+            // Get authenticated user
+            const supabase = createClient()
+            const { data: { user } } = await supabase.auth.getUser()
+
+            if (!user) {
+                console.error('No authenticated user found')
+                setLoading(false)
+                return
+            }
+
             let query = supabase
                 .from('scrape_jobs')
                 .select('*')
-                .eq('id_user', DEMO_USER_ID)
+                .eq('id_user', user.id)
                 .order('created_at', { ascending: false })
 
             if (limit) {
@@ -158,9 +167,8 @@ export function SearchHistoryTable({ limit }: { limit?: number }) {
                             </TableCell>
                             <TableCell className="text-right">
                                 <Button variant="ghost" size="icon" onClick={(e) => {
-                                    // Already handled by closest check but explicit valid
-                                    e.stopPropagation();
-                                    router.push(`/searches/${search.id_jobs}`);
+                                    e.stopPropagation()
+                                    router.push(`/searches/${search.id_jobs}`)
                                 }}>
                                     <MoreHorizontal className="h-4 w-4" />
                                 </Button>

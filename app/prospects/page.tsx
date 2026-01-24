@@ -6,8 +6,8 @@ import {
     Search, Filter, Columns, Download, Building2, Mail, Phone, MapPin, Calendar, Loader2
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { createClient } from "@/lib/supabase/client"
 import { ScrapeProspect } from "@/types"
-import { DEMO_USER_ID } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -52,11 +52,21 @@ export default function ProspectsPage() {
 
     const fetchAllProspects = async () => {
         try {
-            // Fetch all prospects for the demo user via their jobs
+            // Get authenticated user
+            const supabase = createClient()
+            const { data: { user } } = await supabase.auth.getUser()
+
+            if (!user) {
+                console.error('No authenticated user found')
+                setLoading(false)
+                return
+            }
+
+            // Fetch all prospects for the user via their jobs
             const { data: jobs } = await supabase
                 .from('scrape_jobs')
                 .select('id_jobs')
-                .eq('id_user', DEMO_USER_ID)
+                .eq('id_user', user.id)
 
             if (!jobs || jobs.length === 0) {
                 setLoading(false)

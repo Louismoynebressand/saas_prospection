@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { Users, Search as SearchIcon, Database, ArrowUpRight } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { supabase } from "@/lib/supabase"
-import { DEMO_USER_ID } from "@/lib/utils"
+import { createClient } from "@/lib/supabase/client"
 
 export function DashboardStats() {
     const [stats, setStats] = useState({
@@ -16,30 +16,39 @@ export function DashboardStats() {
 
     const fetchStats = async () => {
         try {
-            // 1. Total Searches for current demo user
+            // Get authenticated user
+            const supabase = createClient()
+            const { data: { user } } = await supabase.auth.getUser()
+
+            if (!user) {
+                console.error('No authenticated user found')
+                return
+            }
+
+            // 1. Total Searches for current user
             const { count: totalSearches } = await supabase
                 .from('scrape_jobs')
                 .select('*', { count: 'exact', head: true })
-                .eq('id_user', DEMO_USER_ID)
+                .eq('id_user', user.id)
 
             // 2. Active Searches (queued or running)
             const { count: activeSearches } = await supabase
                 .from('scrape_jobs')
                 .select('*', { count: 'exact', head: true })
-                .eq('id_user', DEMO_USER_ID)
+                .eq('id_user', user.id)
                 .in('statut', ['queued', 'running'])
 
-            // 3. Total Prospects for the demo user
+            // 3. Total Prospects for the user
             const { count: totalProspects } = await supabase
                 .from('scrape_prospect')
                 .select('*', { count: 'exact', head: true })
-                .eq('id_user', DEMO_USER_ID)
+                .eq('id_user', user.id)
 
             // 4. Enrich rate (checking email_adresse_verified)
             const { count: emailsFound } = await supabase
                 .from('scrape_prospect')
                 .select('*', { count: 'exact', head: true })
-                .eq('id_user', DEMO_USER_ID)
+                .eq('id_user', user.id)
                 .not('email_adresse_verified', 'is', null)
 
             setStats({

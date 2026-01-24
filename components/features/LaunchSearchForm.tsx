@@ -6,7 +6,7 @@ import { Search, MapPin, Send, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { DEMO_USER_ID } from "@/lib/utils"
+import { createClient } from "@/lib/supabase/client"
 
 export function LaunchSearchForm() {
     const router = useRouter()
@@ -49,6 +49,16 @@ export function LaunchSearchForm() {
         setLoading(true)
 
         try {
+            // Get authenticated user
+            const supabase = createClient()
+            const { data: { user } } = await supabase.auth.getUser()
+
+            if (!user) {
+                alert('Vous devez être connecté pour lancer une recherche')
+                setLoading(false)
+                return
+            }
+
             // 1. Geocode the city to get coordinates
             const coords = await geocodeCity(formData.city)
 
@@ -80,7 +90,7 @@ export function LaunchSearchForm() {
                         enrichEmails: formData.enrichEmails
                     }
                 },
-                actor: { userId: DEMO_USER_ID, sessionId: null },
+                actor: { userId: user.id, sessionId: null },
                 meta: {}
             }
 
