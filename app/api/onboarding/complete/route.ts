@@ -22,17 +22,37 @@ export async function POST(request: Request) {
 
         console.log('[Onboarding] User authenticated:', user.id)
 
-        // Define limits based on plan
-        let limits = {
-            scraps: 100,
-            deep_search: 50,
-            emails: 50
+        // Mapping frontend plan ID to DB "offre" name
+        const planMapping: Record<string, string> = {
+            'starter': 'Starter',
+            'pro': 'Pro',
+            'enterprise': 'Entreprise'
         }
 
-        if (plan === 'pro') {
-            limits = { scraps: 500, deep_search: 200, emails: 200 }
-        } else if (plan === 'enterprise') {
-            limits = { scraps: 999999, deep_search: 1000, emails: 1000 }
+        const dbPlanName = planMapping[plan] || 'Starter'
+
+        // Fetch limits from 'forfait' table
+        const { data: forfaitData, error: forfaitError } = await supabase
+            .from('forfait')
+            .select('*')
+            .eq('offre', dbPlanName)
+            .single()
+
+        if (forfaitError || !forfaitData) {
+            console.error('[Onboarding] Error fetching forfait:', forfaitError)
+            // Fallback to hardcoded if DB fetch fails (safety net)
+            // But ideally we should throw error
+            throw new Error("Impossible de récupérer les détails du forfait.")
+        }
+
+        const limits = {
+            scraps: forfaitData.scrape_count,
+            deep_search: forfaitData.deep_search_count,
+            emails: forfaitData.cold_mail_count,
+            // check_email functionality not yet in quotas table? User mentioned it in table.
+            // Assuming current quotas table has: scraps_limit, deep_search_limit, emails_limit.
+            // If the user wants check_email_count recorded, we might need to add it to quotas table later.
+            // For now, sticking to existing columns.
         }
 
         // 1. Create/Update Subscription
@@ -40,7 +60,7 @@ export async function POST(request: Request) {
             .from('subscriptions')
             .upsert({
                 user_id: user.id,
-                plan: plan,
+                plan: plan, // We keep the slug 'starter'/'pro'/'enterprise' in our subscriptions table for consistency
                 status: 'active',
                 start_date: new Date().toISOString(),
                 // End date is 1 month from now

@@ -30,6 +30,13 @@ export default function OnboardingPage() {
         if (loading) return
         setLoading(plan)
 
+        const planNames: Record<string, string> = {
+            'starter': 'Starter',
+            'pro': 'Pro',
+            'enterprise': 'Enterprise'
+        }
+
+
         try {
             const response = await fetch('/api/onboarding/complete', {
                 method: 'POST',
@@ -43,7 +50,7 @@ export default function OnboardingPage() {
                 throw new Error(data.error || "Une erreur est survenue")
             }
 
-            toast.success("Forfait activé avec succès !")
+            toast.success(`Merci pour votre achat, votre plan ${planNames[plan] || 'Starter'} est bien activé !`)
             router.push('/dashboard')
             router.refresh()
         } catch (error: any) {
