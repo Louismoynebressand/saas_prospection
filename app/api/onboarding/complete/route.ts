@@ -59,11 +59,11 @@ export async function POST(request: Request) {
             .from('subscriptions')
             .upsert({
                 user_id: user.id,
-                plan: plan, // We keep the slug 'starter'/'pro'/'enterprise' in our subscriptions table for consistency
+                plan: plan, // We keep the slug 'starter'/'pro'/'enterprise'
                 status: 'active',
-                start_date: new Date().toISOString(),
+                current_period_start: new Date().toISOString(),
                 // End date is 1 month from now
-                end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+                current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
             }, { onConflict: 'user_id' })
 
         if (subError) {

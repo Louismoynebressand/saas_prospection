@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, List, Search, Users, Settings, CreditCard, Mail, LogOut, TrendingUp, Loader2 } from "lucide-react"
+import { LayoutDashboard, List, Search, Users, Settings, CreditCard, Mail, LogOut, TrendingUp, Loader2, ShieldCheck } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
@@ -65,6 +65,7 @@ export function Sidebar() {
         { name: "Historique", href: "/searches", icon: List },
         { name: "Prospects", href: "/prospects", icon: Users },
         { name: "Mails", href: "/emails", icon: Mail },
+        { name: "Vérificateur Emails", href: "/email-verifier", icon: ShieldCheck },
     ]
 
     const configNavigation = [
