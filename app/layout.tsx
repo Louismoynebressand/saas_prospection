@@ -4,6 +4,7 @@ import "./globals.css";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Topbar } from "@/components/layout/Topbar";
 import { cn } from "@/lib/utils";
+import { Toaster } from "sonner";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -42,6 +43,7 @@ export default function RootLayout({
             <div className="relative z-10">
               {children}
             </div>
+            <Toaster />
           </main>
         </div>
       </body>

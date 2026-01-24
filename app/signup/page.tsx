@@ -58,13 +58,13 @@ export default function SignupPage() {
             setLoading(false)
         } else {
             // Success - user is automatically logged in
-            router.push('/dashboard')
+            router.push('/onboarding')
             router.refresh()
         }
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 animate-in fade-in zoom-in duration-300">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/30 backdrop-blur-md p-4 animate-in fade-in zoom-in duration-300">
             <Card className="w-full max-w-md">
                 <CardHeader className="space-y-1 text-center">
                     <div className="flex justify-center mb-4">

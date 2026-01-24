@@ -2,55 +2,95 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, List, Search, Users, Settings, CreditCard, Mail, LogOut, TrendingUp } from "lucide-react"
+import { LayoutDashboard, List, Search, Users, Settings, CreditCard, Mail, LogOut, TrendingUp, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { Progress } from "@/components/ui/progress"
-
-const navigation = [
-    { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-    { name: "Historique", href: "/searches", icon: List },
-    { name: "Prospects", href: "/prospects", icon: Users },
-    { name: "Mails", href: "/emails", icon: Mail },
-]
-
-const settingsNavigation = [
-    { name: "Configuration", href: "/settings", icon: Settings },
-    { name: "Forfait", href: "/billing", icon: CreditCard },
-]
-
-// Mock quota data (to be replaced with real data later)
-const quotas = {
-    scraps: { used: 67, total: 100 },
-    deepSearch: { used: 34, total: 100 },
-    coldEmails: { used: 45, total: 100 }
-}
+import { useEffect, useState } from "react"
+import { createClient } from "@/lib/supabase/client"
 
 export function Sidebar() {
     const pathname = usePathname()
+    const [userProfile, setUserProfile] = useState<{
+        first_name: string | null
+        last_name: string | null
+        company_name: string | null
+    } | null>(null)
+    const [loadingProfile, setLoadingProfile] = useState(true)
+    const [quotas, setQuotas] = useState<{
+        scraps: { used: number; total: number }
+        deepSearch: { used: number; total: number }
+        coldEmails: { used: number; total: number }
+    } | null>(null)
 
-    const handleLogout = () => {
-        alert("Déconnexion (Fonctionnalité à venir)")
-    }
+    useEffect(() => {
+        const fetchData = async () => {
+            const supabase = createClient()
+            const { data: { user } } = await supabase.auth.getUser()
+
+            if (user) {
+                // Fetch Profile
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('first_name, last_name, company_name')
+                    .eq('id', user.id)
+                    .single()
+
+                if (profile) setUserProfile(profile)
+
+                // Fetch Quotas
+                const { data: quotaData } = await supabase
+                    .from('quotas')
+                    .select('*')
+                    .eq('user_id', user.id)
+                    .single()
+
+                if (quotaData) {
+                    setQuotas({
+                        scraps: { used: quotaData.scraps_used, total: quotaData.scraps_limit },
+                        deepSearch: { used: quotaData.deep_search_used, total: quotaData.deep_search_limit },
+                        coldEmails: { used: quotaData.emails_used, total: quotaData.emails_limit }
+                    })
+                }
+            }
+            setLoadingProfile(false)
+        }
+
+        fetchData()
+    }, [])
+
+    const navigation = [
+        { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+        { name: "Historique", href: "/searches", icon: List },
+        { name: "Prospects", href: "/prospects", icon: Users },
+        { name: "Mails", href: "/emails", icon: Mail },
+    ]
+
+    const configNavigation = [
+        { name: "Configuration", href: "/settings", icon: Settings },
+        { name: "Forfait", href: "/billing", icon: CreditCard },
+    ]
 
     return (
-        <div className="flex h-screen w-64 flex-col border-r bg-card text-card-foreground shadow-sm z-20">
-            <div className="flex h-16 items-center px-6 border-b">
-                <div className="flex items-center gap-2 font-bold text-xl">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white">
-                        N
-                    </span>
-                    <span className="tracking-tight">SUPER <span className="text-primary">Prospect</span></span>
+        <div className="flex h-full w-64 flex-col border-r bg-card">
+            <div className="p-6">
+                <div className="flex items-center gap-2 font-bold text-xl text-primary mb-8">
+                    <div className="h-8 w-8 rounded-lg bg-primary text-white flex items-center justify-center">N</div>
+                    SUPER Prospect
                 </div>
-            </div>
 
-            <div className="flex-1 overflow-y-auto py-6 px-3">
-                {/* Main Navigation */}
+                <Button className="w-full gap-2 mb-6" size="lg" asChild>
+                    <Link href="/dashboard">
+                        <Search className="h-4 w-4" />
+                        Nouvelle recherche
+                    </Link>
+                </Button>
+
                 <nav className="space-y-1">
                     {navigation.map((item) => {
-                        const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
                         const Icon = item.icon
+                        const isActive = pathname === item.href
                         return (
                             <Link
                                 key={item.name}
@@ -68,50 +108,69 @@ export function Sidebar() {
                         )
                     })}
                 </nav>
+            </div>
 
-                <Separator className="my-4" />
-
+            <div className="mt-auto p-6 pt-0">
                 {/* Quotas Section */}
-                <div className="space-y-4 px-3 py-4">
+                <div className="mb-6 space-y-4">
                     <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                         <TrendingUp className="h-3 w-3" />
                         Quotas
                     </div>
 
-                    <div className="space-y-3">
-                        <div className="space-y-1.5">
-                            <div className="flex items-center justify-between text-xs">
-                                <span className="text-muted-foreground">Scraps</span>
-                                <span className="font-medium">{quotas.scraps.used}/{quotas.scraps.total}</span>
+                    {quotas ? (
+                        <>
+                            <div className="space-y-2">
+                                <div className="flex justify-between text-xs">
+                                    <span className="text-muted-foreground">Scraps</span>
+                                    <span className="font-medium">{quotas.scraps.used}/{quotas.scraps.total}</span>
+                                </div>
+                                <Progress value={(quotas.scraps.used / quotas.scraps.total) * 100} className="h-1.5" />
                             </div>
-                            <Progress value={(quotas.scraps.used / quotas.scraps.total) * 100} className="h-1.5" />
-                        </div>
 
-                        <div className="space-y-1.5">
-                            <div className="flex items-center justify-between text-xs">
-                                <span className="text-muted-foreground">Deep Search</span>
-                                <span className="font-medium">{quotas.deepSearch.used}/{quotas.deepSearch.total}</span>
+                            <div className="space-y-2">
+                                <div className="flex justify-between text-xs">
+                                    <span className="text-muted-foreground">Deep Search</span>
+                                    <span className="font-medium">{quotas.deepSearch.used}/{quotas.deepSearch.total}</span>
+                                </div>
+                                <Progress value={(quotas.deepSearch.used / quotas.deepSearch.total) * 100} className="h-1.5" />
                             </div>
-                            <Progress value={(quotas.deepSearch.used / quotas.deepSearch.total) * 100} className="h-1.5" />
-                        </div>
 
-                        <div className="space-y-1.5">
-                            <div className="flex items-center justify-between text-xs">
-                                <span className="text-muted-foreground">Cold Emails</span>
-                                <span className="font-medium">{quotas.coldEmails.used}/{quotas.coldEmails.total}</span>
+                            <div className="space-y-2">
+                                <div className="flex justify-between text-xs">
+                                    <span className="text-muted-foreground">Cold Emails</span>
+                                    <span className="font-medium">{quotas.coldEmails.used}/{quotas.coldEmails.total}</span>
+                                </div>
+                                <Progress value={(quotas.coldEmails.used / quotas.coldEmails.total) * 100} className="h-1.5" />
                             </div>
-                            <Progress value={(quotas.coldEmails.used / quotas.coldEmails.total) * 100} className="h-1.5" />
+                        </>
+                    ) : (
+                        <div className="space-y-2 animate-pulse">
+                            <div className="h-4 bg-muted rounded w-full"></div>
+                            <div className="h-4 bg-muted rounded w-3/4"></div>
+                            <div className="h-4 bg-muted rounded w-5/6"></div>
                         </div>
-                    </div>
+                    )}
+
+                    <Button
+                        variant="default"
+                        size="sm"
+                        className="w-full bg-green-600 hover:bg-green-700 text-white mt-2"
+                        asChild
+                    >
+                        <Link href="/billing">
+                            <TrendingUp className="mr-2 h-4 w-4" />
+                            Upgrade Plan
+                        </Link>
+                    </Button>
                 </div>
 
                 <Separator className="my-4" />
 
-                {/* Settings Navigation */}
-                <nav className="space-y-1">
-                    {settingsNavigation.map((item) => {
-                        const isActive = pathname === item.href || pathname.startsWith(item.href)
+                <nav className="space-y-1 mb-4">
+                    {configNavigation.map((item) => {
                         const Icon = item.icon
+                        const isActive = pathname === item.href
                         return (
                             <Link
                                 key={item.name}
@@ -133,7 +192,25 @@ export function Sidebar() {
 
             {/* User Profile & Logout */}
             <div className="border-t p-4 space-y-2">
-
+                {userProfile ? (
+                    <div className="flex items-center gap-3 rounded-lg bg-muted/50 p-3 mb-2">
+                        <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">
+                            {userProfile.first_name?.[0]}{userProfile.last_name?.[0]}
+                        </div>
+                        <div className="text-sm flex-1 truncate">
+                            <p className="font-medium truncate">{userProfile.first_name} {userProfile.last_name}</p>
+                            <p className="text-xs text-muted-foreground truncate">{userProfile.company_name}</p>
+                        </div>
+                    </div>
+                ) : loadingProfile ? (
+                    <div className="flex items-center gap-3 rounded-lg bg-muted/20 p-3 mb-2 animate-pulse">
+                        <div className="h-8 w-8 rounded-full bg-muted"></div>
+                        <div className="space-y-2 flex-1">
+                            <div className="h-3 w-20 bg-muted rounded"></div>
+                            <div className="h-2 w-16 bg-muted rounded"></div>
+                        </div>
+                    </div>
+                ) : null}
 
                 <Button
                     variant="outline"
