@@ -49,11 +49,10 @@ export async function POST(request: Request) {
             scraps: forfaitData.scrape_count,
             deep_search: forfaitData.deep_search_count,
             emails: forfaitData.cold_mail_count,
-            // check_email functionality not yet in quotas table? User mentioned it in table.
-            // Assuming current quotas table has: scraps_limit, deep_search_limit, emails_limit.
-            // If the user wants check_email_count recorded, we might need to add it to quotas table later.
-            // For now, sticking to existing columns.
+            check_emails: forfaitData.check_email_count
         }
+
+        console.log('[Onboarding] Fetched limits:', limits)
 
         // 1. Create/Update Subscription
         const { error: subError } = await supabase
@@ -80,6 +79,7 @@ export async function POST(request: Request) {
                 scraps_limit: limits.scraps,
                 deep_search_limit: limits.deep_search,
                 emails_limit: limits.emails,
+                check_email_limit: limits.check_emails,
                 reset_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
             }, { onConflict: 'user_id' })
 
