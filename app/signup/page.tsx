@@ -21,6 +21,7 @@ export default function SignupPage() {
     })
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const [success, setSuccess] = useState(false)
 
     const handleSignup = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -41,7 +42,7 @@ export default function SignupPage() {
         }
 
         const supabase = createClient()
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
             email: formData.email,
             password: formData.password,
             options: {
@@ -49,7 +50,8 @@ export default function SignupPage() {
                     first_name: formData.firstName,
                     last_name: formData.lastName,
                     company_name: formData.company
-                }
+                },
+                emailRedirectTo: `${window.location.origin}/auth/callback?next=/onboarding`
             }
         })
 
@@ -57,10 +59,42 @@ export default function SignupPage() {
             setError(error.message)
             setLoading(false)
         } else {
-            // Success - user is automatically logged in
-            router.push('/onboarding')
-            router.refresh()
+            // Check if session exists (auto-confirmed) or not (email confirmation required)
+            if (data.session) {
+                router.push('/onboarding')
+                router.refresh()
+            } else {
+                setSuccess(true)
+                setLoading(false)
+            }
         }
+    }
+
+    if (success) {
+        return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/30 backdrop-blur-md p-4 animate-in fade-in zoom-in duration-300">
+                <Card className="w-full max-w-md">
+                    <CardHeader className="text-center">
+                        <div className="flex justify-center mb-4">
+                            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-green-600">
+                                <Mail className="h-6 w-6" />
+                            </div>
+                        </div>
+                        <CardTitle className="text-2xl font-bold">Vérifiez vos emails</CardTitle>
+                        <CardDescription>
+                            Un lien de confirmation a été envoyé à <strong>{formData.email}</strong>.
+                            <br />
+                            Cliquez sur le lien pour activer votre compte.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardFooter className="flex justify-center">
+                        <Button variant="outline" onClick={() => router.push('/login')}>
+                            Retour à la connexion
+                        </Button>
+                    </CardFooter>
+                </Card>
+            </div>
+        )
     }
 
     return (

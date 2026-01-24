@@ -10,12 +10,17 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Plan required' }, { status: 400 })
         }
 
-        const supabase = await createClient()
-        const { data: { user } } = await supabase.auth.getUser()
+        console.log('[Onboarding] Starting plan selection:', plan)
 
-        if (!user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        const supabase = await createClient()
+        const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+        if (authError || !user) {
+            console.error('[Onboarding] Auth error:', authError)
+            return NextResponse.json({ error: 'User not authenticated' }, { status: 401 })
         }
+
+        console.log('[Onboarding] User authenticated:', user.id)
 
         // Define limits based on plan
         let limits = {
@@ -42,7 +47,10 @@ export async function POST(request: Request) {
                 end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
             }, { onConflict: 'user_id' })
 
-        if (subError) throw subError
+        if (subError) {
+            console.error('[Onboarding] Subscription error:', subError)
+            throw new Error(`Erreur lors de la création de l'abonnement: ${subError.message}`)
+        }
 
         // 2. Create/Update Quotas
         const { error: quotaError } = await supabase
@@ -55,11 +63,15 @@ export async function POST(request: Request) {
                 reset_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
             }, { onConflict: 'user_id' })
 
-        if (quotaError) throw quotaError
+        if (quotaError) {
+            console.error('[Onboarding] Quota error:', quotaError)
+            throw new Error(`Erreur lors de la création des quotas: ${quotaError.message}`)
+        }
 
+        console.log('[Onboarding] Success for user:', user.id)
         return NextResponse.json({ success: true })
     } catch (error: any) {
         console.error('Error in onboarding API:', error)
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        return NextResponse.json({ error: error.message || 'Une erreur inconnue est survenue' }, { status: 500 })
     }
 }

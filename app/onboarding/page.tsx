@@ -1,42 +1,54 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Check, Loader2, Rocket, Zap, Building } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { createClient } from "@/lib/supabase/client"
+import { toast } from "sonner"
 
 export default function OnboardingPage() {
     const router = useRouter()
     const [loading, setLoading] = useState<string | null>(null)
+    const [initialCheckDone, setInitialCheckDone] = useState(false)
 
-    const handleSelectPlan = async (plan: string) => {
-        setLoading(plan)
-        try {
+    // Verify user is authenticated on mount
+    useEffect(() => {
+        const checkUser = async () => {
             const supabase = createClient()
             const { data: { user } } = await supabase.auth.getUser()
-
             if (!user) {
-                console.error("User not found")
-                return
+                router.push('/login')
             }
+            setInitialCheckDone(true)
+        }
+        checkUser()
+    }, [router])
 
-            // Create subscription and quotas via API route or directly (if policies allow)
-            // For security, it's better to use an API route or a Postgres function. 
-            // Here we'll use a fetch to a new API endpoint we'll create.
-            const res = await fetch('/api/onboarding/complete', {
+    const handleSelectPlan = async (plan: string) => {
+        if (loading) return
+        setLoading(plan)
+
+        try {
+            const response = await fetch('/api/onboarding/complete', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ plan })
             })
 
-            if (!res.ok) throw new Error("Failed to select plan")
+            const data = await response.json()
 
+            if (!response.ok) {
+                throw new Error(data.error || "Une erreur est survenue")
+            }
+
+            toast.success("Forfait activé avec succès !")
             router.push('/dashboard')
             router.refresh()
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error selecting plan:", error)
+            toast.error(error.message || "Impossible d'activer ce forfait. Veuillez réessayer.")
             setLoading(null)
         }
     }
@@ -72,9 +84,17 @@ export default function OnboardingPage() {
         }
     ]
 
+    if (!initialCheckDone) {
+        return (
+            <div className="min-h-screen bg-muted/30 flex items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+        )
+    }
+
     return (
         <div className="min-h-screen bg-muted/30 flex flex-col items-center justify-center p-4">
-            <div className="max-w-5xl w-full space-y-8">
+            <div className="max-w-5xl w-full space-y-8 animate-in fade-in zoom-in duration-500">
                 <div className="text-center space-y-3">
                     <h1 className="text-4xl font-bold tracking-tight">Choisissez votre forfait</h1>
                     <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
@@ -136,7 +156,13 @@ export default function OnboardingPage() {
                 </div>
 
                 <div className="text-center">
-                    <Button variant="ghost" className="text-muted-foreground" onClick={() => handleSelectPlan('starter')}>
+                    <Button
+                        variant="ghost"
+                        className="text-muted-foreground"
+                        onClick={() => handleSelectPlan('starter')}
+                        disabled={loading !== null}
+                    >
+                        {loading === 'starter' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         Continuer avec l'essai gratuit (5 jours)
                     </Button>
                 </div>
