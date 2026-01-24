@@ -50,7 +50,7 @@ export function Sidebar() {
                     setQuotas({
                         scraps: { used: quotaData.scraps_used, total: quotaData.scraps_limit },
                         deepSearch: { used: quotaData.deep_search_used, total: quotaData.deep_search_limit },
-                        coldEmails: { used: quotaData.emails_used, total: quotaData.emails_limit }
+                        coldEmails: { used: quotaData.cold_emails_used, total: quotaData.cold_emails_limit }
                     })
                 }
             }

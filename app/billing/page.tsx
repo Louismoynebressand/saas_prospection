@@ -34,9 +34,23 @@ export default function BillingPage() {
         fetchSubscription()
     }, [])
 
-    const handleUpgrade = (planName: string) => {
-        // Implement Stripe redirect here later
-        alert(`Redirection vers la passerelle de paiement pour ${planName}`)
+    const handleUpgrade = async (planId: string) => {
+        setLoading(true)
+        try {
+            const response = await fetch('/api/onboarding/complete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ plan: planId })
+            })
+
+            if (!response.ok) throw new Error("Erreur lors du changement de forfait")
+
+            window.location.reload()
+        } catch (error) {
+            console.error(error)
+            alert("Erreur lors du changement de forfait")
+            setLoading(false)
+        }
     }
 
     const plans = [
@@ -106,8 +120,8 @@ export default function BillingPage() {
                                 <h3 className="text-xl font-bold capitalize">{activePlanId}</h3>
                             </div>
                             <p className="text-sm text-muted-foreground">
-                                {currentPlan?.end_date ? (
-                                    <>Prochain renouvellement le <strong>{format(new Date(currentPlan.end_date), 'dd/MM/yyyy')}</strong></>
+                                {currentPlan?.current_period_end ? (
+                                    <>Prochain renouvellement le <strong>{format(new Date(currentPlan.current_period_end), 'dd/MM/yyyy')}</strong></>
                                 ) : "Aucun abonnement actif"}
                             </p>
                         </div>
@@ -168,7 +182,7 @@ export default function BillingPage() {
                                     <Button
                                         className="w-full"
                                         variant={plan.popular ? "default" : "outline"}
-                                        onClick={() => handleUpgrade(plan.name)}
+                                        onClick={() => handleUpgrade(plan.id)}
                                     >
                                         Passer à ce plan
                                     </Button>

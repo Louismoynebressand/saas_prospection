@@ -59,10 +59,9 @@ export async function POST(request: Request) {
             .from('subscriptions')
             .upsert({
                 user_id: user.id,
-                plan: plan, // We keep the slug 'starter'/'pro'/'enterprise'
+                plan: plan,
                 status: 'active',
                 current_period_start: new Date().toISOString(),
-                // End date is 1 month from now
                 current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
             }, { onConflict: 'user_id' })
 
@@ -78,9 +77,10 @@ export async function POST(request: Request) {
                 user_id: user.id,
                 scraps_limit: limits.scraps,
                 deep_search_limit: limits.deep_search,
-                emails_limit: limits.emails,
+                cold_emails_limit: limits.emails,
                 check_email_limit: limits.check_emails,
-                reset_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+                period_start: new Date().toISOString(),
+                period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
             }, { onConflict: 'user_id' })
 
         if (quotaError) {
