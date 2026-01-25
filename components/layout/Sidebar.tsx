@@ -54,6 +54,14 @@ export function Sidebar() {
                         coldEmails: { used: quotaData.cold_emails_used, total: quotaData.cold_emails_limit },
                         checkEmails: { used: quotaData.check_email_used, total: quotaData.check_email_limit }
                     })
+                } else {
+                    // Fallback to zeros to avoid infinite loading
+                    setQuotas({
+                        scraps: { used: 0, total: 20 }, // Default values or fetch from plans? For now 0 to show UI.
+                        deepSearch: { used: 0, total: 5 },
+                        coldEmails: { used: 0, total: 20 },
+                        checkEmails: { used: 0, total: 20 }
+                    })
                 }
             }
             setLoadingProfile(false)
@@ -66,7 +74,7 @@ export function Sidebar() {
         { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
         { name: "Historique", href: "/searches", icon: List },
         { name: "Prospects", href: "/prospects", icon: Users },
-        { name: "Mails", href: "/emails", icon: Mail },
+        { name: "Prospection Mail", href: "/emails", icon: Mail },
         { name: "Vérificateur Emails", href: "/email-verifier", icon: ShieldCheck },
     ]
 
