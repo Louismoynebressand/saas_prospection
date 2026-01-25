@@ -26,6 +26,7 @@ export default function EmailVerifierPage() {
     const [history, setHistory] = useState<JobHistory[]>([])
     const [results, setResults] = useState<any[]>([])
     const [currentJobId, setCurrentJobId] = useState<string | null>(null)
+    const [filterText, setFilterText] = useState("")
 
     // Parse emails in real-time or just before submit
     useEffect(() => {
@@ -79,11 +80,36 @@ export default function EmailVerifierPage() {
         if (data) setHistory(data)
     }
 
+    const loadJobDetails = async (jobId: string) => {
+        setLoading(true)
+        setCurrentJobId(jobId)
+        setFilterText("")
+
+        try {
+            const supabase = createClient()
+            const { data, error } = await supabase
+                .from('email_verification_results')
+                .select('*')
+                .eq('id_job', jobId)
+                .order('created_at', { ascending: true })
+
+            if (error) throw error
+            setResults(data || [])
+            toast.success("Détails chargés")
+        } catch (e) {
+            console.error(e)
+            toast.error("Impossible de charger le détail")
+        } finally {
+            setLoading(false)
+        }
+    }
+
     const handleVerify = async () => {
         if (parsedEmails.length === 0) return
         setLoading(true)
         setResults([])
         setCurrentJobId(null)
+        setFilterText("")
 
         try {
             const response = await fetch('/api/email-verifier/check', {
@@ -103,9 +129,6 @@ export default function EmailVerifierPage() {
 
             // Refresh history immediately to show "pending" job
             loadHistory()
-            // We keep loading state true until we have results or user navigates away? 
-            // Or we just show "Live Results" section.
-            // Let's stop main loading spinner but keep the channel open.
             setLoading(false)
 
         } catch (error: any) {
@@ -114,6 +137,11 @@ export default function EmailVerifierPage() {
             setLoading(false)
         }
     }
+
+    const filteredResults = results.filter(r =>
+        r.email_checked.toLowerCase().includes(filterText.toLowerCase()) ||
+        (r.status && r.status.toLowerCase().includes(filterText.toLowerCase()))
+    )
 
     return (
         <div className="space-y-6">
@@ -125,7 +153,7 @@ export default function EmailVerifierPage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Left Column: Input & Results */}
+                {/* Left Column */}
                 <div className="md:col-span-2 space-y-6">
                     <Card>
                         <CardHeader>
@@ -140,7 +168,7 @@ export default function EmailVerifierPage() {
                                 className="min-h-[150px] font-mono"
                                 value={input}
                                 onChange={(e) => setInput(e.target.value)}
-                                disabled={loading || !!currentJobId} // Disable while processing
+                                disabled={loading || !!currentJobId}
                             />
                             <div className="flex items-center justify-between text-sm text-muted-foreground">
                                 <span>{parsedEmails.length} email(s) détecté(s)</span>
@@ -153,7 +181,7 @@ export default function EmailVerifierPage() {
                         </CardContent>
                         <CardFooter>
                             {currentJobId ? (
-                                <Button className="w-full" variant="secondary" onClick={() => { setCurrentJobId(null); setInput(""); setResults([]) }}>
+                                <Button className="w-full" variant="secondary" onClick={() => { setCurrentJobId(null); setInput(""); setResults([]); setFilterText("") }}>
                                     Nouvelle vérification
                                 </Button>
                             ) : (
@@ -178,24 +206,35 @@ export default function EmailVerifierPage() {
                         </CardFooter>
                     </Card>
 
-                    {/* Live Results Area */}
+                    {/* Results Area */}
                     {(currentJobId || results.length > 0) && (
                         <Card className="border-primary/20">
                             <CardHeader className="pb-3 border-b">
-                                <CardTitle className="flex items-center justify-between text-base">
-                                    <div className="flex items-center gap-2">
-                                        <ShieldCheck className="h-5 w-5 text-primary" />
-                                        Résultats en direct
-                                    </div>
-                                    <Badge variant="outline" className="font-mono">
-                                        {results.length} / {parsedEmails.length} traité(s)
-                                    </Badge>
-                                </CardTitle>
+                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                    <CardTitle className="flex items-center gap-2 text-base">
+                                        <div className="flex items-center gap-2">
+                                            <ShieldCheck className="h-5 w-5 text-primary" />
+                                            Résultats
+                                        </div>
+                                        <Badge variant="outline" className="font-mono ml-2">
+                                            {results.length} traité(s)
+                                        </Badge>
+                                    </CardTitle>
+
+                                    {/* Filter Input */}
+                                    <input
+                                        type="text"
+                                        placeholder="Filtrer par email..."
+                                        className="text-sm border rounded px-3 py-1 bg-background"
+                                        value={filterText}
+                                        onChange={(e) => setFilterText(e.target.value)}
+                                    />
+                                </div>
                             </CardHeader>
                             <CardContent className="p-0">
                                 <div className="max-h-[400px] overflow-y-auto">
                                     <table className="w-full text-sm text-left">
-                                        <thead className="text-xs text-muted-foreground bg-muted/50 uppercase sticky top-0">
+                                        <thead className="text-xs text-muted-foreground bg-muted/50 uppercase sticky top-0 z-10">
                                             <tr>
                                                 <th className="px-4 py-3 font-medium">Email</th>
                                                 <th className="px-4 py-3 font-medium text-center">Statut</th>
@@ -203,15 +242,15 @@ export default function EmailVerifierPage() {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {results.length === 0 && (
+                                            {results.length === 0 && loading && (
                                                 <tr>
                                                     <td colSpan={3} className="px-4 py-8 text-center text-muted-foreground">
                                                         <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 opacity-50" />
-                                                        Attente des résultats depuis le serveur...
+                                                        Chargement...
                                                     </td>
                                                 </tr>
                                             )}
-                                            {results.map((res) => (
+                                            {filteredResults.map((res) => (
                                                 <tr key={res.id} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
                                                     <td className="px-4 py-3 font-mono text-xs">{res.email_checked}</td>
                                                     <td className="px-4 py-3 text-center">
@@ -226,6 +265,13 @@ export default function EmailVerifierPage() {
                                                     </td>
                                                 </tr>
                                             ))}
+                                            {filteredResults.length === 0 && results.length > 0 && (
+                                                <tr>
+                                                    <td colSpan={3} className="px-4 py-8 text-center text-muted-foreground">
+                                                        Aucun résultat pour "{filterText}"
+                                                    </td>
+                                                </tr>
+                                            )}
                                         </tbody>
                                     </table>
                                 </div>
@@ -249,7 +295,11 @@ export default function EmailVerifierPage() {
                                     <p className="text-sm text-muted-foreground text-center py-4">Aucun historique récent</p>
                                 ) : (
                                     history.map((job) => (
-                                        <div key={job.id} className="flex items-start justify-between border-b pb-3 last:border-0">
+                                        <div
+                                            key={job.id}
+                                            className="flex items-start justify-between border-b pb-3 last:border-0 cursor-pointer hover:bg-muted/50 p-2 rounded transition-colors"
+                                            onClick={() => loadJobDetails(job.id)}
+                                        >
                                             <div>
                                                 <div className="font-medium text-sm">
                                                     {job.total_emails} email{job.total_emails > 1 ? 's' : ''}
