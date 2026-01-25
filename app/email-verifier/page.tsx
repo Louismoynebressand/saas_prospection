@@ -22,9 +22,10 @@ interface JobHistory {
 export default function EmailVerifierPage() {
     const [input, setInput] = useState("")
     const [loading, setLoading] = useState(false)
-    const [consoleOutput, setConsoleOutput] = useState<string | null>(null)
     const [parsedEmails, setParsedEmails] = useState<string[]>([])
     const [history, setHistory] = useState<JobHistory[]>([])
+    const [results, setResults] = useState<any[]>([])
+    const [currentJobId, setCurrentJobId] = useState<string | null>(null)
 
     // Parse emails in real-time or just before submit
     useEffect(() => {
@@ -41,6 +42,32 @@ export default function EmailVerifierPage() {
         loadHistory()
     }, [])
 
+    // Realtime subscription for results
+    useEffect(() => {
+        if (!currentJobId) return
+
+        const supabase = createClient()
+        const channel = supabase
+            .channel(`job-${currentJobId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'email_verification_results',
+                    filter: `id_job=eq.${currentJobId}`
+                },
+                (payload) => {
+                    setResults(prev => [...prev, payload.new])
+                }
+            )
+            .subscribe()
+
+        return () => {
+            supabase.removeChannel(channel)
+        }
+    }, [currentJobId])
+
     const loadHistory = async () => {
         const supabase = createClient()
         const { data } = await supabase
@@ -55,7 +82,8 @@ export default function EmailVerifierPage() {
     const handleVerify = async () => {
         if (parsedEmails.length === 0) return
         setLoading(true)
-        setConsoleOutput(null)
+        setResults([])
+        setCurrentJobId(null)
 
         try {
             const response = await fetch('/api/email-verifier/check', {
@@ -70,16 +98,19 @@ export default function EmailVerifierPage() {
                 throw new Error(data.error || "Erreur lors de la vérification")
             }
 
-            setConsoleOutput(JSON.stringify(data.webhookResponse || { message: "Succès" }, null, 2))
-            toast.success("Vérification lancée avec succès !")
+            toast.success(`Vérification lancée pour ${parsedEmails.length} emails`)
+            setCurrentJobId(data.jobId)
 
-            // Refresh history
+            // Refresh history immediately to show "pending" job
             loadHistory()
+            // We keep loading state true until we have results or user navigates away? 
+            // Or we just show "Live Results" section.
+            // Let's stop main loading spinner but keep the channel open.
+            setLoading(false)
+
         } catch (error: any) {
             console.error("Verification error:", error)
-            setConsoleOutput(`Error: ${error.message}`)
-            toast.error("Erreur lors du lancement de la vérification")
-        } finally {
+            toast.error(error.message)
             setLoading(false)
         }
     }
@@ -94,66 +125,113 @@ export default function EmailVerifierPage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Left Column: Input */}
+                {/* Left Column: Input & Results */}
                 <div className="md:col-span-2 space-y-6">
                     <Card>
                         <CardHeader>
                             <CardTitle>Adresses à vérifier</CardTitle>
                             <CardDescription>
-                                Copiez-collez vos emails ci-dessous (séparés par des espaces, virgules ou sauts de ligne).
+                                Copiez-collez vos emails ci-dessous. Doublons supprimés automatiquement.
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <Textarea
                                 placeholder="louis@outlook.fr&#10;contact@entreprise.com&#10;..."
-                                className="min-h-[200px] font-mono"
+                                className="min-h-[150px] font-mono"
                                 value={input}
                                 onChange={(e) => setInput(e.target.value)}
+                                disabled={loading || !!currentJobId} // Disable while processing
                             />
                             <div className="flex items-center justify-between text-sm text-muted-foreground">
                                 <span>{parsedEmails.length} email(s) détecté(s)</span>
                                 {parsedEmails.length > 0 && (
                                     <span className={parsedEmails.length > 100 ? "text-orange-500" : "text-green-500"}>
-                                        {parsedEmails.length > 100 ? "Attention : gros volume" : "Prêt à vérifier"}
+                                        {parsedEmails.length > 100 ? "Volume important" : "Prêt"}
                                     </span>
                                 )}
                             </div>
                         </CardContent>
                         <CardFooter>
-                            <Button
-                                onClick={handleVerify}
-                                disabled={loading || parsedEmails.length === 0}
-                                className="w-full sm:w-auto"
-                            >
-                                {loading ? (
-                                    <>
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        Vérification en cours...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Play className="mr-2 h-4 w-4" />
-                                        Lancer le test
-                                    </>
-                                )}
-                            </Button>
+                            {currentJobId ? (
+                                <Button className="w-full" variant="secondary" onClick={() => { setCurrentJobId(null); setInput(""); setResults([]) }}>
+                                    Nouvelle vérification
+                                </Button>
+                            ) : (
+                                <Button
+                                    onClick={handleVerify}
+                                    disabled={loading || parsedEmails.length === 0}
+                                    className="w-full sm:w-auto"
+                                >
+                                    {loading ? (
+                                        <>
+                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                            Lancement...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Play className="mr-2 h-4 w-4" />
+                                            Lancer le test ({parsedEmails.length} crédits)
+                                        </>
+                                    )}
+                                </Button>
+                            )}
                         </CardFooter>
                     </Card>
 
-                    {/* Console Output */}
-                    <Card className="bg-slate-950 text-slate-50 border-slate-800">
-                        <CardHeader className="pb-3 border-b border-slate-800">
-                            <CardTitle className="text-sm font-mono flex items-center gap-2">
-                                <Terminal className="h-4 w-4" />
-                                Console
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="pt-4">
-                            <pre className="font-mono text-xs overflow-auto max-h-[300px] whitespace-pre-wrap">
-                                {consoleOutput || "// Les résultats s'afficheront ici..."}
-                            </pre>
-                        </CardContent>
-                    </Card>
+                    {/* Live Results Area */}
+                    {(currentJobId || results.length > 0) && (
+                        <Card className="border-primary/20">
+                            <CardHeader className="pb-3 border-b">
+                                <CardTitle className="flex items-center justify-between text-base">
+                                    <div className="flex items-center gap-2">
+                                        <ShieldCheck className="h-5 w-5 text-primary" />
+                                        Résultats en direct
+                                    </div>
+                                    <Badge variant="outline" className="font-mono">
+                                        {results.length} / {parsedEmails.length} traité(s)
+                                    </Badge>
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-0">
+                                <div className="max-h-[400px] overflow-y-auto">
+                                    <table className="w-full text-sm text-left">
+                                        <thead className="text-xs text-muted-foreground bg-muted/50 uppercase sticky top-0">
+                                            <tr>
+                                                <th className="px-4 py-3 font-medium">Email</th>
+                                                <th className="px-4 py-3 font-medium text-center">Statut</th>
+                                                <th className="px-4 py-3 font-medium text-right">Détails</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {results.length === 0 && (
+                                                <tr>
+                                                    <td colSpan={3} className="px-4 py-8 text-center text-muted-foreground">
+                                                        <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 opacity-50" />
+                                                        Attente des résultats depuis le serveur...
+                                                    </td>
+                                                </tr>
+                                            )}
+                                            {results.map((res) => (
+                                                <tr key={res.id} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
+                                                    <td className="px-4 py-3 font-mono text-xs">{res.email_checked}</td>
+                                                    <td className="px-4 py-3 text-center">
+                                                        {res.is_valid ? (
+                                                            <Badge className="bg-green-600 hover:bg-green-700">Valide</Badge>
+                                                        ) : (
+                                                            <Badge variant="destructive">Invalide</Badge>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right text-xs text-muted-foreground">
+                                                        {res.status || '-'}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
                 </div>
 
                 {/* Right Column: History */}

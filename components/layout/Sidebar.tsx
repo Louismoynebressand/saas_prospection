@@ -22,6 +22,7 @@ export function Sidebar() {
         scraps: { used: number; total: number }
         deepSearch: { used: number; total: number }
         coldEmails: { used: number; total: number }
+        checkEmails: { used: number; total: number }
     } | null>(null)
 
     useEffect(() => {
@@ -50,7 +51,8 @@ export function Sidebar() {
                     setQuotas({
                         scraps: { used: quotaData.scraps_used, total: quotaData.scraps_limit },
                         deepSearch: { used: quotaData.deep_search_used, total: quotaData.deep_search_limit },
-                        coldEmails: { used: quotaData.cold_emails_used, total: quotaData.cold_emails_limit }
+                        coldEmails: { used: quotaData.cold_emails_used, total: quotaData.cold_emails_limit },
+                        checkEmails: { used: quotaData.check_email_used, total: quotaData.check_email_limit }
                     })
                 }
             }
@@ -143,6 +145,14 @@ export function Sidebar() {
                                     <span className="font-medium">{quotas.coldEmails.used}/{quotas.coldEmails.total}</span>
                                 </div>
                                 <Progress value={(quotas.coldEmails.used / quotas.coldEmails.total) * 100} className="h-1.5" />
+                            </div>
+
+                            <div className="space-y-2">
+                                <div className="flex justify-between text-xs">
+                                    <span className="text-muted-foreground">Check Emails</span>
+                                    <span className="font-medium">{quotas.checkEmails.used}/{quotas.checkEmails.total}</span>
+                                </div>
+                                <Progress value={(quotas.checkEmails.used / quotas.checkEmails.total) * 100} className="h-1.5" />
                             </div>
                         </>
                     ) : (
