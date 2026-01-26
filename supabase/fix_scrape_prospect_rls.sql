@@ -21,7 +21,7 @@ using (
     or
     id_jobs in (
         select id_jobs from public.scrape_jobs
-        where id_user = auth.uid()
+        where id_user = auth.uid()::text
     )
 );
 
@@ -36,7 +36,7 @@ with check (
     or
     id_jobs in (
         select id_jobs from public.scrape_jobs
-        where id_user = auth.uid()
+        where id_user = auth.uid()::text
     )
 );
 
@@ -51,7 +51,7 @@ using (
     or
     id_jobs in (
         select id_jobs from public.scrape_jobs
-        where id_user = auth.uid()
+        where id_user = auth.uid()::text
     )
 );
 
@@ -66,7 +66,7 @@ using (
     or
     id_jobs in (
         select id_jobs from public.scrape_jobs
-        where id_user = auth.uid()
+        where id_user = auth.uid()::text
     )
 );
 
