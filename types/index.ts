@@ -69,3 +69,57 @@ export interface WebhookPayload {
         searchId: number;
     };
 }
+
+export interface Campaign {
+    id: string;
+    user_id: string;
+    nom_campagne: string;
+    is_active: boolean;
+    is_default: boolean;
+    nom_entreprise_client?: string;
+    site_web_client?: string;
+    phrase_positionnement_client?: string;
+    offre_principale_client?: string;
+    promesse_principale?: string;
+    benefices_secondaires?: string[];
+    service_a_vendre?: string;
+    type_de_prospect_vise?: string;
+    themes_de_douleurs_autorises?: string[];
+    mots_interdits?: string[];
+    ton_souhaite?: string;
+    vouvoiement?: boolean;
+    chiffres_autorises?: string[];
+    contraintes?: {
+        sans_signature?: boolean;
+        sans_liens?: boolean;
+        min_mots?: number;
+        max_mots?: number;
+        max_faits_specifiques?: number;
+    };
+    created_at: string;
+    updated_at: string;
+}
+
+export interface ColdEmailJob {
+    id: string;
+    user_id: string;
+    campaign_id: string;
+    status: 'queued' | 'running' | 'completed' | 'failed';
+    prospect_ids: string[];
+    error_message?: string;
+    started_at?: string;
+    completed_at?: string;
+    created_at: string;
+}
+
+export interface ColdEmailGeneration {
+    id: string;
+    job_id: string;
+    user_id: string;
+    campaign_id: string;
+    prospect_id: string;
+    subject?: string;
+    message: string;
+    model_meta?: any;
+    created_at: string;
+}

@@ -25,6 +25,34 @@ export function Sidebar() {
         checkEmails: { used: number; total: number }
     } | null>(null)
 
+    const fetchQuotas = async (userId: string) => {
+        const supabase = createClient()
+        // Fetch Quotas
+        const { data: quotaData, error } = await supabase
+            .from('quotas')
+            .select('*')
+            .eq('user_id', userId)
+            .single()
+
+        if (quotaData) {
+            setQuotas({
+                scraps: { used: quotaData.scraps_used, total: quotaData.scraps_limit },
+                deepSearch: { used: quotaData.deep_search_used, total: quotaData.deep_search_limit },
+                coldEmails: { used: quotaData.cold_emails_used, total: quotaData.cold_emails_limit || 20 },
+                checkEmails: { used: quotaData.check_email_used, total: quotaData.check_email_limit }
+            })
+        } else {
+            console.log("No quota data found or error", error)
+            // Fallback to zeros to avoid infinite loading
+            setQuotas({
+                scraps: { used: 0, total: 20 },
+                deepSearch: { used: 0, total: 5 },
+                coldEmails: { used: 0, total: 20 },
+                checkEmails: { used: 0, total: 20 }
+            })
+        }
+    }
+
     useEffect(() => {
         const fetchData = async () => {
             const supabase = createClient()
@@ -40,34 +68,38 @@ export function Sidebar() {
 
                 if (profile) setUserProfile(profile)
 
-                // Fetch Quotas
-                const { data: quotaData } = await supabase
-                    .from('quotas')
-                    .select('*')
-                    .eq('user_id', user.id)
-                    .single()
-
-                if (quotaData) {
-                    setQuotas({
-                        scraps: { used: quotaData.scraps_used, total: quotaData.scraps_limit },
-                        deepSearch: { used: quotaData.deep_search_used, total: quotaData.deep_search_limit },
-                        coldEmails: { used: quotaData.cold_emails_used, total: quotaData.cold_emails_limit },
-                        checkEmails: { used: quotaData.check_email_used, total: quotaData.check_email_limit }
-                    })
-                } else {
-                    // Fallback to zeros to avoid infinite loading
-                    setQuotas({
-                        scraps: { used: 0, total: 20 }, // Default values or fetch from plans? For now 0 to show UI.
-                        deepSearch: { used: 0, total: 5 },
-                        coldEmails: { used: 0, total: 20 },
-                        checkEmails: { used: 0, total: 20 }
-                    })
-                }
+                // Fetch Quotas immediately
+                await fetchQuotas(user.id)
             }
             setLoadingProfile(false)
         }
 
         fetchData()
+
+        // Listen to quota changes in realtime
+        const supabase = createClient()
+        const channel = supabase
+            .channel('quotas-sidebar-changes')
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'quotas'
+                },
+                async (payload: any) => {
+                    // Refresh if we have a user
+                    const { data: { user } } = await supabase.auth.getUser()
+                    if (user) {
+                        fetchQuotas(user.id)
+                    }
+                }
+            )
+            .subscribe()
+
+        return () => {
+            supabase.removeChannel(channel)
+        }
     }, [])
 
     const navigation = [
