@@ -2,11 +2,12 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Search, MapPin, Send, Sparkles } from "lucide-react"
+import { Search, MapPin, Send, Sparkles, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { createClient } from "@/lib/supabase/client"
+import { toast } from "sonner"
 
 export function LaunchSearchForm() {
     const router = useRouter()
@@ -49,31 +50,101 @@ export function LaunchSearchForm() {
         setLoading(true)
 
         try {
-            // Get authenticated user
             const supabase = createClient()
+
+            // 1. Get authenticated user
             const { data: { user } } = await supabase.auth.getUser()
 
             if (!user) {
-                alert('Vous devez être connecté pour lancer une recherche')
+                toast.error("Authentification requise", {
+                    description: "Vous devez être connecté pour lancer une recherche"
+                })
                 setLoading(false)
                 return
             }
 
-            // 1. Geocode the city to get coordinates
+            // 2. Check quotas before proceeding
+            const { data: hasQuota, error: quotaCheckError } = await supabase
+                .rpc('check_quota', {
+                    p_user_id: user.id,
+                    p_quota_type: 'scraps'
+                })
+
+            if (quotaCheckError) {
+                console.error("Quota check error:", quotaCheckError)
+                toast.error("Erreur de vérification", {
+                    description: "Impossible de vérifier vos quotas"
+                })
+                setLoading(false)
+                return
+            }
+
+            if (!hasQuota) {
+                toast.error("Quota insuffisant", {
+                    description: "Vous avez atteint votre limite mensuelle de recherches. Passez à un plan supérieur."
+                })
+                setLoading(false)
+                return
+            }
+
+            // 3. Geocode the city to get coordinates
             const coords = await geocodeCity(formData.city)
 
-            // 2. Build precise Google Maps URL with coordinates
+            // 4. Build precise Google Maps URL with coordinates
             let mapsUrl: string
             if (coords) {
-                // Format: https://www.google.com/maps/search/query/@lat,lon,14z/data=...
-                // The zoom level (14z) is appropriate for city-level view
                 mapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(formData.query)}/@${coords.lat},${coords.lon},14z/data=!3m1!1e3?entry=ttu`
             } else {
-                // Fallback: use text-based search with explicit location
                 mapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(formData.query + " " + formData.city + ", France")}`
             }
 
-            // 3. Prepare Webhook Payload
+            // 5. Create job in Supabase FIRST (UI is source of truth)
+            const { data: newJob, error: jobError } = await supabase
+                .from('scrape_jobs')
+                .insert({
+                    id_user: user.id,
+                    statut: 'queued',
+                    request_search: JSON.stringify(formData.query),
+                    request_url: mapsUrl,
+                    resuest_ville: formData.city,
+                    request_count: formData.maxResults,
+                    localisation: coords ? { lat: coords.lat, lng: coords.lon } : null,
+                    deepscan: formData.deepScan,
+                    enrichie_emails: formData.enrichEmails,
+                    Estimate_coast: null
+                })
+                .select()
+                .single()
+
+            if (jobError) {
+                console.error("Job creation error:", jobError)
+                toast.error("Impossible de créer la recherche", {
+                    description: jobError.message
+                })
+                setLoading(false)
+                return
+            }
+
+            // 6. Decrement quotas
+            const { error: quotaError } = await supabase.rpc('decrement_quota', {
+                p_user_id: user.id,
+                p_quota_type: 'scraps'
+            })
+
+            if (quotaError) {
+                console.error("Quota decrement error:", quotaError)
+                // Non-blocking: job is created, quota error is logged but doesn't stop flow
+            }
+
+            // 7. If deep scan, decrement deep_search quota
+            if (formData.deepScan) {
+                await supabase.rpc('decrement_quota', {
+                    p_user_id: user.id,
+                    p_quota_type: 'deep_search'
+                })
+            }
+
+            // 8. Prepare Webhook Payload
             const payload = {
                 job: {
                     source: "google_maps",
@@ -91,31 +162,44 @@ export function LaunchSearchForm() {
                     }
                 },
                 actor: { userId: user.id, sessionId: null },
-                meta: {}
+                meta: { searchId: newJob.id_jobs } // ← NEW: Pass id_jobs to n8n
             }
 
             const webhookUrl = process.env.NEXT_PUBLIC_SCRAPE_WEBHOOK_URL
-            if (!webhookUrl) throw new Error("Webhook URL non configurée")
-
-            // 4. Trigger Webhook
-            const res = await fetch(webhookUrl, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
-            })
-
-            if (!res.ok) {
-                const errText = await res.text()
-                throw new Error(`Webhook Error: ${res.status} - ${errText}`)
+            if (!webhookUrl) {
+                console.error("Webhook URL not configured")
+                toast.warning("Recherche créée", {
+                    description: "Le scraping démarrera manuellement (webhook non configuré)"
+                })
+            } else {
+                // 9. Trigger Webhook (non-blocking, fire and forget)
+                fetch(webhookUrl, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload),
+                }).catch(async (err) => {
+                    console.error("Webhook error:", err)
+                    // Update job status to error if webhook fails
+                    await supabase
+                        .from('scrape_jobs')
+                        .update({ statut: 'error' })
+                        .eq('id_jobs', newJob.id_jobs)
+                })
             }
 
-            // 5. Success -> Redirect to History
-            router.push(`/searches`)
+            // 10. Success -> Redirect to job detail page
+            toast.success("Recherche lancée !", {
+                description: "Le scraping est en cours. Les résultats apparaîtront dans quelques instants."
+            })
+
+            router.push(`/searches/${newJob.id_jobs}`)
             router.refresh()
 
         } catch (err: any) {
-            console.error(err)
-            alert(err.message || "Erreur lors du lancement")
+            console.error("Unexpected error:", err)
+            toast.error("Erreur inattendue", {
+                description: err.message || "Une erreur est survenue lors du lancement"
+            })
         } finally {
             setLoading(false)
         }
@@ -146,6 +230,7 @@ export function LaunchSearchForm() {
                                     value={formData.query}
                                     onChange={(e) => setFormData({ ...formData, query: e.target.value })}
                                     required
+                                    disabled={loading}
                                 />
                             </div>
                         </div>
@@ -159,6 +244,7 @@ export function LaunchSearchForm() {
                                     value={formData.city}
                                     onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                                     required
+                                    disabled={loading}
                                 />
                             </div>
                         </div>
@@ -172,6 +258,7 @@ export function LaunchSearchForm() {
                             max={50}
                             value={formData.maxResults}
                             onChange={(e) => setFormData({ ...formData, maxResults: parseInt(e.target.value) })}
+                            disabled={loading}
                         />
                     </div>
 
@@ -182,6 +269,7 @@ export function LaunchSearchForm() {
                                 className="accent-primary h-4 w-4 rounded border-gray-300"
                                 checked={formData.deepScan}
                                 onChange={(e) => setFormData({ ...formData, deepScan: e.target.checked })}
+                                disabled={loading}
                             />
                             Deep Scan (Site web)
                         </label>
@@ -191,14 +279,24 @@ export function LaunchSearchForm() {
                                 className="accent-primary h-4 w-4 rounded border-gray-300"
                                 checked={formData.enrichEmails}
                                 onChange={(e) => setFormData({ ...formData, enrichEmails: e.target.checked })}
+                                disabled={loading}
                             />
                             Enrichir Emails
                         </label>
                     </div>
                 </CardContent>
                 <CardFooter>
-                    <Button type="submit" className="w-full bg-primary hover:bg-primary/90 shadow-lg shadow-primary/25" disabled={loading}>
-                        {loading ? "Lancement..." : (
+                    <Button
+                        type="submit"
+                        className="w-full bg-primary hover:bg-primary/90 shadow-lg shadow-primary/25"
+                        disabled={loading}
+                    >
+                        {loading ? (
+                            <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Création en cours...
+                            </>
+                        ) : (
                             <>
                                 <Send className="mr-2 h-4 w-4" /> Lancer la recherche
                             </>

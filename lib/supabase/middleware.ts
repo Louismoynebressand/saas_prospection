@@ -1,7 +1,21 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+// ⚠️ DEVELOPMENT ONLY: Set to true to bypass auth for local testing
+// ⚠️ IMPORTANT: Set back to false before deploying to production!
+const DEV_BYPASS_AUTH = true
+
 export async function updateSession(request: NextRequest) {
+    // DEV MODE: Skip all auth checks if bypass is enabled
+    if (DEV_BYPASS_AUTH && process.env.NODE_ENV === 'development') {
+        console.log('🔓 [DEV MODE] Auth bypass enabled - skipping authentication')
+        return NextResponse.next({
+            request: {
+                headers: request.headers,
+            },
+        })
+    }
+
     let response = NextResponse.next({
         request: {
             headers: request.headers,
@@ -58,7 +72,7 @@ export async function updateSession(request: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
 
     // Protected routes
-    const protectedPaths = ['/dashboard', '/searches', '/prospects', '/emails', '/settings', '/billing']
+    const protectedPaths = ['/dashboard', '/recherche-prospect', '/searches', '/prospects', '/emails', '/email-verifier', '/settings', '/billing']
     const isProtectedRoute = protectedPaths.some(path => request.nextUrl.pathname.startsWith(path))
 
     // Redirect to login if accessing protected route without auth

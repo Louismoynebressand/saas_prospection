@@ -103,7 +103,8 @@ export function Sidebar() {
     }, [])
 
     const navigation = [
-        { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+        { name: "Tableau de bord", href: "/dashboard", icon: LayoutDashboard },
+        { name: "Recherche Prospect", href: "/recherche-prospect", icon: Search },
         { name: "Historique", href: "/searches", icon: List },
         { name: "Prospects", href: "/prospects", icon: Users },
         { name: "Prospection Mail", href: "/emails", icon: Mail },
@@ -124,7 +125,7 @@ export function Sidebar() {
                 </div>
 
                 <Button className="w-full gap-2 mb-6" size="lg" asChild>
-                    <Link href="/dashboard">
+                    <Link href="/recherche-prospect">
                         <Search className="h-4 w-4" />
                         Nouvelle recherche
                     </Link>
