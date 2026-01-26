@@ -131,26 +131,8 @@ export function LaunchSearchForm() {
                 return
             }
 
-            // 6. Decrement quotas
-            const { error: quotaError } = await supabase.rpc('decrement_quota', {
-                p_user_id: user.id,
-                p_quota_type: 'scraps'
-            })
 
-            if (quotaError) {
-                console.error("Quota decrement error:", quotaError)
-                // Non-blocking: job is created, quota error is logged but doesn't stop flow
-            }
-
-            // 7. If deep scan, decrement deep_search quota
-            if (formData.deepScan) {
-                await supabase.rpc('decrement_quota', {
-                    p_user_id: user.id,
-                    p_quota_type: 'deep_search'
-                })
-            }
-
-            // 8. Prepare Webhook Payload
+            // 6. Prepare Webhook Payload
             const payload = {
                 job: {
                     source: "google_maps",

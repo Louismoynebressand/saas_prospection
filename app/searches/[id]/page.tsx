@@ -24,12 +24,14 @@ export default function SearchDetailsPage() {
     const pollInterval = useRef<NodeJS.Timeout | null>(null)
 
     const fetchSearch = async () => {
+        console.log('[DEBUG] Fetching search with id:', id, 'type:', typeof id)
         const { data: searchData, error } = await supabase
             .from('scrape_jobs')
             .select('*')
             .eq('id_jobs', id)
             .single()
 
+        console.log('[DEBUG] Search result:', { searchData, error })
         if (searchData) setSearch(searchData as ScrapeJob)
         setLoading(false)
     }

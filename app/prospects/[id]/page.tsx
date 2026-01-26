@@ -130,12 +130,14 @@ export default function ProspectPage() {
 
     const fetchProspectData = async (targetId: string) => {
         setLoading(true)
+        console.log('[DEBUG] Fetching prospect with id:', targetId, 'type:', typeof targetId)
         const { data, error } = await supabase
             .from('scrape_prospect')
             .select('*')
             .eq('id_prospect', targetId)
             .single()
 
+        console.log('[DEBUG] Prospect result:', { data, error })
         if (data) {
             setProspect(data as ScrapeProspect)
             setScrapped(safeParse(data.data_scrapping))
