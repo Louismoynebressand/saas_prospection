@@ -116,7 +116,8 @@ export function LaunchSearchForm() {
                     localisation: coords ? { lat: coords.lat, lng: coords.lon } : null,
                     deepscan: formData.deepScan,
                     enrichie_emails: formData.enrichEmails,
-                    Estimate_coast: null
+                    Estimate_coast: null,
+                    debug_id: debugId
                 })
                 .select()
                 .single()

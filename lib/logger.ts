@@ -4,8 +4,8 @@
  */
 
 export interface LogContext {
-    debugId?: string
-    userId?: string
+    debugId?: string | null
+    userId?: string | null
     jobId?: number
     duration?: number
     [key: string]: any

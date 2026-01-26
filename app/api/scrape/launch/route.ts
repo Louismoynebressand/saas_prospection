@@ -40,7 +40,7 @@ const launchSchema = z.object({
 
 export async function POST(request: NextRequest) {
     const startTime = Date.now()
-    let debugId: string | null = null
+    let debugId: string | undefined = undefined
 
     try {
         // Parse and validate payload
@@ -119,11 +119,11 @@ export async function POST(request: NextRequest) {
         // Try to update job status to error if we have debugId
         if (debugId) {
             try {
-                const supabase = createClient()
+                const supabase = await createClient()
                 const { error: updateError } = await supabase
                     .from('scrape_jobs')
                     .update({ statut: 'error' })
-                    .eq('id_jobs', debugId)
+                    .eq('debug_id', debugId)
 
                 if (updateError) {
                     logError('Failed to update job status to error', updateError, { debugId })
