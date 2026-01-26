@@ -26,24 +26,47 @@ export function Sidebar() {
     } | null>(null)
 
     const fetchQuotas = async (userId: string) => {
-        const supabase = createClient()
-        // Fetch Quotas
-        const { data: quotaData, error } = await supabase
-            .from('quotas')
-            .select('*')
-            .eq('user_id', userId)
-            .single()
+        try {
+            const supabase = createClient()
+            // Fetch Quotas
+            const { data: quotaData, error } = await supabase
+                .from('quotas')
+                .select('*')
+                .eq('user_id', userId)
+                .single()
 
-        if (quotaData) {
-            setQuotas({
-                scraps: { used: quotaData.scraps_used, total: quotaData.scraps_limit },
-                deepSearch: { used: quotaData.deep_search_used, total: quotaData.deep_search_limit },
-                coldEmails: { used: quotaData.cold_emails_used, total: quotaData.cold_emails_limit || 20 },
-                checkEmails: { used: quotaData.check_email_used, total: quotaData.check_email_limit }
-            })
-        } else {
-            console.log("No quota data found or error", error)
-            // Fallback to zeros to avoid infinite loading
+            if (error) {
+                console.error("Error fetching quotas:", error)
+                // Set default quotas immediately to exit loading state
+                setQuotas({
+                    scraps: { used: 0, total: 20 },
+                    deepSearch: { used: 0, total: 5 },
+                    coldEmails: { used: 0, total: 20 },
+                    checkEmails: { used: 0, total: 20 }
+                })
+                return
+            }
+
+            if (quotaData) {
+                setQuotas({
+                    scraps: { used: quotaData.scraps_used || 0, total: quotaData.scraps_limit || 20 },
+                    deepSearch: { used: quotaData.deep_search_used || 0, total: quotaData.deep_search_limit || 5 },
+                    coldEmails: { used: quotaData.cold_emails_used || 0, total: quotaData.cold_emails_limit || 20 },
+                    checkEmails: { used: quotaData.check_email_used || 0, total: quotaData.check_email_limit || 20 }
+                })
+            } else {
+                // No data returned - set defaults
+                console.warn("No quota data found for user, using defaults")
+                setQuotas({
+                    scraps: { used: 0, total: 20 },
+                    deepSearch: { used: 0, total: 5 },
+                    coldEmails: { used: 0, total: 20 },
+                    checkEmails: { used: 0, total: 20 }
+                })
+            }
+        } catch (err) {
+            console.error("Exception fetching quotas:", err)
+            // Always set default quotas to prevent infinite loading
             setQuotas({
                 scraps: { used: 0, total: 20 },
                 deepSearch: { used: 0, total: 5 },
