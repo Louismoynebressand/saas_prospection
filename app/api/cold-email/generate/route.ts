@@ -1,12 +1,12 @@
 
-import { createClient } from "@/lib/supabase"
+import { createClient } from "@/lib/supabase/server"
 import { NextRequest, NextResponse } from "next/server"
 
 const WEBHOOK_URL = process.env.N8N_WEBHOOK_COLD_EMAIL || process.env.NEXT_PUBLIC_N8N_WEBHOOK_COLD_EMAIL_URL
 
 export async function POST(req: NextRequest) {
     try {
-        const supabase = createClient()
+        const supabase = await createClient()
         const body = await req.json()
         const { campaignId, prospectIds, userId } = body
 

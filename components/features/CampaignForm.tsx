@@ -28,20 +28,19 @@ import { Badge } from "@/components/ui/badge"
 
 const campaignSchema = z.object({
     nom_campagne: z.string().min(2, "Le nom est trop court"),
-    nom_entreprise_client: z.string().optional(),
-    site_web_client: z.string().url().optional().or(z.literal("")),
-    phrase_positionnement_client: z.string().optional(),
-    offre_principale_client: z.string().optional(),
-    promesse_principale: z.string().optional(),
-    service_a_vendre: z.string().optional(),
-    type_de_prospect_vise: z.string().optional(),
-    ton_souhaite: z.string().optional(),
-    vouvoiement: z.boolean().default(true),
-    // Arrays embedded as strings for simplicity in form, processed later
-    benefices_secondaires: z.string().optional(),
-    themes_de_douleurs_autorises: z.string().optional(),
-    mots_interdits: z.string().optional(),
-    chiffres_autorises: z.string().optional(),
+    nom_entreprise_client: z.string(),
+    site_web_client: z.string(),
+    phrase_positionnement_client: z.string(),
+    offre_principale_client: z.string(),
+    promesse_principale: z.string(),
+    service_a_vendre: z.string(),
+    type_de_prospect_vise: z.string(),
+    ton_souhaite: z.string(),
+    vouvoiement: z.boolean(),
+    benefices_secondaires: z.string(),
+    themes_de_douleurs_autorises: z.string(),
+    mots_interdits: z.string(),
+    chiffres_autorises: z.string(),
 })
 
 type CampaignFormValues = z.infer<typeof campaignSchema>
@@ -62,7 +61,19 @@ export function CampaignForm({ open, onOpenChange, campaignId, onSuccess }: Camp
         resolver: zodResolver(campaignSchema),
         defaultValues: {
             nom_campagne: "",
-            vouvoiement: true
+            nom_entreprise_client: "",
+            site_web_client: "",
+            phrase_positionnement_client: "",
+            offre_principale_client: "",
+            promesse_principale: "",
+            service_a_vendre: "",
+            type_de_prospect_vise: "",
+            ton_souhaite: "professionnel",
+            vouvoiement: true,
+            benefices_secondaires: "",
+            themes_de_douleurs_autorises: "",
+            mots_interdits: "",
+            chiffres_autorises: "",
         }
     })
 
