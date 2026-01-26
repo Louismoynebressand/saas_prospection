@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { ProspectListTable } from "@/components/features/ProspectListTable"
+import { JobStepper } from "@/components/features/JobStepper"
 import { Skeleton } from "@/components/ui/skeleton"
 
 export default function SearchDetailsPage() {
@@ -114,36 +115,8 @@ export default function SearchDetailsPage() {
                 </div>
             </div>
 
-            {/* Loading State Alerts */}
-            {search.statut?.toLowerCase() === 'queued' && (
-                <Alert className="border-blue-200 bg-blue-50">
-                    <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-                    <AlertTitle>En file d'attente</AlertTitle>
-                    <AlertDescription>
-                        Votre recherche va démarrer dans quelques instants. Le système prépare le scraping...
-                    </AlertDescription>
-                </Alert>
-            )}
-
-            {search.statut?.toLowerCase() === 'running' && (
-                <Alert className="border-purple-200 bg-purple-50">
-                    <Loader2 className="h-4 w-4 animate-spin text-purple-600" />
-                    <AlertTitle>Scrapping en cours</AlertTitle>
-                    <AlertDescription>
-                        Nous collectons les données sur Google Maps. Cela peut prendre 2-5 minutes selon le volume.
-                        Les résultats apparaîtront automatiquement ci-dessous.
-                    </AlertDescription>
-                </Alert>
-            )}
-
-            {search.statut?.toLowerCase() === 'error' && (
-                <Alert variant="destructive">
-                    <AlertTitle>Erreur lors du scraping</AlertTitle>
-                    <AlertDescription>
-                        Une erreur est survenue pendant la collecte des données. Veuillez réessayer ou contacter le support.
-                    </AlertDescription>
-                </Alert>
-            )}
+            {/* Job Progress Stepper */}
+            <JobStepper job={search} />
 
             <div className="grid gap-4 md:grid-cols-2">
                 <Card>

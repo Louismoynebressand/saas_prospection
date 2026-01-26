@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Search, MapPin, Send, Sparkles, Loader2 } from "lucide-react"
+import { v4 as uuidv4 } from 'uuid'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -48,6 +49,10 @@ export function LaunchSearchForm() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         setLoading(true)
+
+        // Generate unique debug ID for tracking
+        const debugId = uuidv4()
+        console.log(`[Client] Launching scrape job (debugId: ${debugId})`)
 
         try {
             const supabase = createClient()
@@ -162,43 +167,59 @@ export function LaunchSearchForm() {
                     }
                 },
                 actor: { userId: user.id, sessionId: null },
-                meta: { searchId: newJob.id_jobs } // ← NEW: Pass id_jobs to n8n
+                meta: {
+                    searchId: newJob.id_jobs,
+                    debugId // Pass debugId for tracking
+                }
             }
 
-            const webhookUrl = process.env.NEXT_PUBLIC_SCRAPE_WEBHOOK_URL
-            if (!webhookUrl) {
-                console.error("Webhook URL not configured")
-                toast.warning("Recherche créée", {
-                    description: "Le scraping démarrera manuellement (webhook non configuré)"
+            // 9. Call server-side API proxy (not direct webhook)
+            try {
+                const apiResponse = await fetch('/api/scrape/launch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        jobId: newJob.id_jobs,
+                        debugId,
+                        payload
+                    })
                 })
-            } else {
-                // 9. Trigger Webhook (non-blocking, fire and forget)
-                fetch(webhookUrl, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(payload),
-                }).catch(async (err) => {
-                    console.error("Webhook error:", err)
-                    // Update job status to error if webhook fails
-                    await supabase
-                        .from('scrape_jobs')
-                        .update({ statut: 'error' })
-                        .eq('id_jobs', newJob.id_jobs)
+
+                const result = await apiResponse.json()
+
+                if (!result.ok) {
+                    throw new Error(result.error || 'Unknown API error')
+                }
+
+                console.log(`[Client] Job launched successfully (duration: ${result.duration}ms)`)
+
+            } catch (apiError: any) {
+                console.error(`[Client] API call failed (debugId: ${debugId}):`, apiError)
+                // Don't block user - job is created, show warning
+                toast.warning("Recherche créée", {
+                    description: "Le scraping démarrera dans quelques instants. Erreur temporaire de communication."
                 })
             }
 
             // 10. Success -> Redirect to job detail page
             toast.success("Recherche lancée !", {
-                description: "Le scraping est en cours. Les résultats apparaîtront dans quelques instants."
+                description: `Le scraping est en cours. ID: ${debugId.slice(0, 8)}`
             })
 
             router.push(`/searches/${newJob.id_jobs}`)
             router.refresh()
 
         } catch (err: any) {
-            console.error("Unexpected error:", err)
+            console.error(`[Client] Unexpected error (debugId: ${debugId}):`, err)
             toast.error("Erreur inattendue", {
-                description: err.message || "Une erreur est survenue lors du lancement"
+                description: (
+                    <div>
+                        <p>{err.message || "Une erreur est survenue lors du lancement"}</p>
+                        <p className="text-xs mt-1 opacity-70">
+                            ID de debug: {debugId.slice(0, 8)}
+                        </p>
+                    </div>
+                )
             })
         } finally {
             setLoading(false)

@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client"
 import { KPIWidget } from "@/components/dashboard/KPIWidget"
 import { QuickActions } from "@/components/dashboard/QuickActions"
 import { ActivityFeed } from "@/components/dashboard/ActivityFeed"
+import { LastJobWidget } from "@/components/dashboard/LastJobWidget"
 import { Users, Search, Mail, ShieldCheck, Sparkles } from "lucide-react"
 
 interface DashboardStats {
@@ -226,13 +227,13 @@ export default function DashboardPage() {
                 />
             </div>
 
-            {/* Activity Feed */}
+            {/* Activity Feed & Last Job */}
             <div className="grid gap-6 lg:grid-cols-3">
-                <ActivityFeed />
-
-                {/* Quick Insights Placeholder */}
-                <div className="col-span-full lg:col-span-3 lg:hidden">
-                    {/* Mobile: Activity feed takes full width */}
+                <div className="lg:col-span-2">
+                    <ActivityFeed />
+                </div>
+                <div>
+                    <LastJobWidget />
                 </div>
             </div>
 
