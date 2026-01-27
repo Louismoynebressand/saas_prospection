@@ -55,8 +55,8 @@ export async function POST(request: NextRequest) {
             userId: validated.payload.actor.userId
         })
 
-        // Get webhook URL from server env (NOT public)
-        const webhookUrl = process.env.SCRAPE_WEBHOOK_URL
+        // Get webhook URL from server env (checking both secure and public for compatibility)
+        const webhookUrl = process.env.SCRAPE_WEBHOOK_URL || process.env.NEXT_PUBLIC_SCRAPE_WEBHOOK_URL
         if (!webhookUrl) {
             throw new Error('SCRAPE_WEBHOOK_URL not configured on server')
         }
