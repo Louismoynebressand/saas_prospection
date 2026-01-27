@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Loader2, Plus, MoreHorizontal, Eye, Trash2, Edit2, Zap } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { CreateCampaignWizard } from "./CreateCampaignWizard"
 import { CampaignForm } from "./CampaignForm"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
@@ -17,6 +18,7 @@ export function CampaignList() {
     const [campaigns, setCampaigns] = useState<Campaign[]>([])
     const [loading, setLoading] = useState(true)
     const [isFormOpen, setIsFormOpen] = useState(false)
+    const [isWizardOpen, setIsWizardOpen] = useState(false)
     const [editingId, setEditingId] = useState<string | null>(null)
 
     const fetchCampaigns = async () => {
@@ -61,7 +63,7 @@ export function CampaignList() {
 
     const handleCreate = () => {
         setEditingId(null)
-        setIsFormOpen(true)
+        setIsWizardOpen(true)
     }
 
     const toggleActive = async (id: string, currentState: boolean, e: React.MouseEvent) => {
@@ -148,6 +150,14 @@ export function CampaignList() {
                 onOpenChange={setIsFormOpen}
                 campaignId={editingId}
                 onSuccess={fetchCampaigns}
+            />
+
+            <CreateCampaignWizard
+                open={isWizardOpen}
+                onOpenChange={setIsWizardOpen}
+                onSuccess={() => {
+                    fetchCampaigns()
+                }}
             />
         </div>
     )
