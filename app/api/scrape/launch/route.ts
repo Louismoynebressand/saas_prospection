@@ -4,11 +4,11 @@ import { createClient } from '@/lib/supabase/server'
 import { logInfo, logError } from '@/lib/logger'
 
 const launchSchema = z.object({
-    jobId: z.string(), // Changed to string UUID
+    jobId: z.union([z.string(), z.number()]),
     debugId: z.string().uuid(),
     payload: z.object({
         job: z.object({
-            id: z.string(), // Changed to string UUID
+            id: z.union([z.string(), z.number()]),
             source: z.string(),
             mapsUrl: z.string(),
             query: z.string(),
@@ -33,7 +33,7 @@ const launchSchema = z.object({
             sessionId: z.string().nullable()
         }),
         meta: z.object({
-            searchId: z.string(), // Changed to string UUID
+            searchId: z.union([z.number(), z.string()]),
             debugId: z.string().uuid()
         })
     })

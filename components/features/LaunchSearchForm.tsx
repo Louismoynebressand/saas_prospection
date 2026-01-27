@@ -137,7 +137,7 @@ export function LaunchSearchForm() {
             // 6. Prepare Webhook Payload
             const payload = {
                 job: {
-                    id: newJob.id, // Corrected: Use UUID from DB
+                    id: newJob.id_jobs || newJob.id, // Handle both cases (int vs uuid)
                     source: "google_maps",
                     mapsUrl: mapsUrl,
                     query: formData.query,
@@ -154,7 +154,7 @@ export function LaunchSearchForm() {
                 },
                 actor: { userId: user.id, sessionId: null },
                 meta: {
-                    searchId: newJob.id, // Corrected
+                    searchId: newJob.id_jobs || newJob.id,
                     debugId // Pass debugId for tracking
                 }
             }
@@ -165,7 +165,7 @@ export function LaunchSearchForm() {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        jobId: newJob.id, // Corrected
+                        jobId: newJob.id_jobs || newJob.id,
                         debugId,
                         payload
                     })
@@ -193,7 +193,7 @@ export function LaunchSearchForm() {
                 description: "Le scraping va démarrer..."
             })
 
-            setActiveJobId(newJob.id)
+            setActiveJobId(newJob.id_jobs || newJob.id)
 
         } catch (err: any) {
             console.error(`[Client] Unexpected error (debugId: ${debugId}):`, err)
