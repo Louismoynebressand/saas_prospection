@@ -45,23 +45,42 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
 
         setAiLoading(true)
         try {
-            // TODO: Replace with real n8n webhook call later
-            // Simulating AI delay
-            await new Promise(resolve => setTimeout(resolve, 2000))
+            // Call our internal API proxy which calls n8n
+            const response = await fetch('/api/campaigns/analyze', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    website: formData.my_website,
+                    company: formData.my_company_name
+                })
+            })
 
-            // Mock Response from AI
+            if (!response.ok) throw new Error("Erreur lors de l'analyse")
+
+            const data = await response.json()
+
+            // Map n8n response fields to our form
+            // Ensure pain_points is a string for the Textarea (join if array)
+            let formattedPainPoints = ""
+            if (Array.isArray(data.pain_points)) {
+                formattedPainPoints = data.pain_points.map((p: string) => `- ${p}`).join('\n')
+            } else if (typeof data.pain_points === 'string') {
+                formattedPainPoints = data.pain_points
+            }
+
             setFormData(prev => ({
                 ...prev,
-                pitch: "Leader en solutions de prospection automatisée pour les agences digitales.",
-                main_offer: "Notre plateforme permet de scraper Google Maps, enrichir les emails et générer des messages ultra-personnalisés en 1 clic.",
-                pain_points: "- Perte de temps sur la recherche de leads\n- Données de contact obsolètes\n- Taux de réponse faible aux emails génériques"
+                pitch: data.pitch || "",
+                main_offer: data.main_offer || "",
+                pain_points: formattedPainPoints
             }))
 
             toast.success("Analyse terminée ! Données pré-remplies.")
             setStep('strategy')
 
         } catch (error) {
-            toast.error("Erreur lors de l'analyse IA")
+            console.error(error)
+            toast.error("Erreur lors de l'analyse IA. Vérifiez le site web.")
         } finally {
             setAiLoading(false)
         }
