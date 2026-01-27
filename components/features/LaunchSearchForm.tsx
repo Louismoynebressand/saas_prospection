@@ -178,6 +178,7 @@ export function LaunchSearchForm() {
                 }
 
                 console.log(`[Client] Job launched successfully (duration: ${result.duration}ms)`)
+                // toast.success("Debug: API Webhook OK") // Uncomment for debug
 
             } catch (apiError: any) {
                 console.error(`[Client] API call failed (debugId: ${debugId}):`, apiError)

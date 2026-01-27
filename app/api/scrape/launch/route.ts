@@ -62,6 +62,8 @@ export async function POST(request: NextRequest) {
         }
 
         // Call n8n webhook with timeout
+        console.log(`[API] calling webhook: ${webhookUrl}`); // DEBUG LOG
+
         const controller = new AbortController()
         const timeoutId = setTimeout(() => controller.abort(), 30000) // 30s max
 
@@ -78,8 +80,11 @@ export async function POST(request: NextRequest) {
 
             clearTimeout(timeoutId)
 
+            console.log(`[API] webhook response: ${webhookResponse.status}`); // DEBUG LOG
+
             if (!webhookResponse.ok) {
                 const errorText = await webhookResponse.text()
+                console.error(`[API] webhook error body: ${errorText}`); // DEBUG LOG
                 throw new Error(`Webhook returned ${webhookResponse.status}: ${errorText}`)
             }
 
