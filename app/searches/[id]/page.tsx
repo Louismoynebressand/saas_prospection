@@ -29,10 +29,19 @@ export default function SearchDetailsPage() {
             .from('scrape_jobs')
             .select('*')
             .eq('id_jobs', id)
-            .single()
+            .maybeSingle()
 
         console.log('[DEBUG] Search result:', { searchData, error })
-        if (searchData) setSearch(searchData as ScrapeJob)
+
+        if (error) {
+            console.error("Error fetching search:", error)
+        }
+
+        if (searchData) {
+            setSearch(searchData as ScrapeJob)
+        } else {
+            console.warn("No search found with ID:", id)
+        }
         setLoading(false)
     }
 

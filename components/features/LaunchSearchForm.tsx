@@ -9,10 +9,12 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
+import { ScrapingProgressWidget } from "./ScrapingProgressWidget"
 
 export function LaunchSearchForm() {
     const router = useRouter()
     const [loading, setLoading] = useState(false)
+    const [activeJobId, setActiveJobId] = useState<string | number | null>(null)
     const [formData, setFormData] = useState({
         query: "",
         city: "",
@@ -135,6 +137,7 @@ export function LaunchSearchForm() {
             // 6. Prepare Webhook Payload
             const payload = {
                 job: {
+                    id: newJob.id_jobs, // Ajout de l'ID officiel du job (pour mise à jour status)
                     source: "google_maps",
                     mapsUrl: mapsUrl,
                     query: formData.query,
@@ -184,13 +187,12 @@ export function LaunchSearchForm() {
                 })
             }
 
-            // 10. Success -> Redirect to job detail page
-            toast.success("Recherche lancée !", {
-                description: `Le scraping est en cours. ID: ${debugId.slice(0, 8)}`
+            // 10. Success -> Switch to Progress Widget
+            toast.success("Recherche initialisée !", {
+                description: "Le scraping va démarrer..."
             })
 
-            router.push(`/searches/${newJob.id_jobs}`)
-            router.refresh()
+            setActiveJobId(newJob.id_jobs)
 
         } catch (err: any) {
             console.error(`[Client] Unexpected error (debugId: ${debugId}):`, err)
@@ -204,9 +206,17 @@ export function LaunchSearchForm() {
                     </div>
                 )
             })
-        } finally {
             setLoading(false)
         }
+    }
+
+    if (activeJobId) {
+        return (
+            <ScrapingProgressWidget
+                jobId={activeJobId}
+                maxResults={formData.maxResults}
+            />
+        )
     }
 
     return (
@@ -298,7 +308,7 @@ export function LaunchSearchForm() {
                         {loading ? (
                             <>
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Création en cours...
+                                Initialisation...
                             </>
                         ) : (
                             <>

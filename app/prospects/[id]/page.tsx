@@ -135,9 +135,14 @@ export default function ProspectPage() {
             .from('scrape_prospect')
             .select('*')
             .eq('id_prospect', targetId)
-            .single()
+            .maybeSingle()
 
         console.log('[DEBUG] Prospect result:', { data, error })
+
+        if (error) {
+            console.error("Error fetching prospect:", error)
+        }
+
         if (data) {
             setProspect(data as ScrapeProspect)
             setScrapped(safeParse(data.data_scrapping))
