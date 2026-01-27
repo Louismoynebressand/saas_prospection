@@ -24,6 +24,8 @@ import { Loader2, Sparkles } from "lucide-react"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 
+import { CreateCampaignWizard } from "@/components/features/CreateCampaignWizard"
+
 interface EmailGenerationModalProps {
     open: boolean
     onOpenChange: (open: boolean) => void
@@ -36,6 +38,7 @@ export function EmailGenerationModal({ open, onOpenChange, prospect, onSuccess }
     const [selectedCampaignId, setSelectedCampaignId] = useState<string>("")
     const [loading, setLoading] = useState(false)
     const [loadingCampaigns, setLoadingCampaigns] = useState(false)
+    const [showWizard, setShowWizard] = useState(false)
     const router = useRouter()
 
     useEffect(() => {
@@ -136,10 +139,14 @@ export function EmailGenerationModal({ open, onOpenChange, prospect, onSuccess }
                                     <Loader2 className="mr-1 h-3 w-3 animate-spin cancel-drag" /> Chargement...
                                 </div>
                             ) : campaigns.length === 0 ? (
-                                <div className="text-sm text-muted-foreground border rounded-md p-3 bg-muted/50 text-center">
-                                    Aucune campagne active.
-                                    <Button variant="link" className="h-auto p-0 ml-1 text-primary" onClick={() => router.push('/emails')}>
-                                        En créer une
+                                <div className="text-sm text-muted-foreground border rounded-md p-4 bg-muted/50 text-center flex flex-col items-center gap-2">
+                                    <p>Vous n'avez pas encore de campagne active.</p>
+                                    <Button
+                                        variant="default"
+                                        size="sm"
+                                        onClick={() => setShowWizard(true)}
+                                    >
+                                        Créer ma première campagne
                                     </Button>
                                 </div>
                             ) : (
@@ -159,6 +166,15 @@ export function EmailGenerationModal({ open, onOpenChange, prospect, onSuccess }
                         </div>
                     </div>
                 )}
+
+                <CreateCampaignWizard
+                    open={showWizard}
+                    onOpenChange={setShowWizard}
+                    onSuccess={(newId) => {
+                        fetchCampaigns()
+                        setSelectedCampaignId(newId)
+                    }}
+                />
 
                 <DialogFooter>
                     <Button variant="outline" onClick={() => onOpenChange(false)}>Annuler</Button>
