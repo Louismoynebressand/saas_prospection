@@ -6,7 +6,7 @@
 export interface LogContext {
     debugId?: string | null
     userId?: string | null
-    jobId?: number
+    jobId?: string | number
     duration?: number
     [key: string]: any
 }
