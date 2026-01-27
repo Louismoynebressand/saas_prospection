@@ -11,4 +11,3 @@ create policy "Users can insert their own quotas"
   on public.quotas
   for insert
   with check (auth.uid() = user_id);
-
