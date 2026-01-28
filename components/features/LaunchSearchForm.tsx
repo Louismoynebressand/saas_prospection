@@ -2,9 +2,13 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Search, MapPin, Send, Sparkles, Loader2 } from "lucide-react"
+import { Search, MapPin, Rocket, Sparkles, Loader2, Zap } from "lucide-react"
+import { motion } from "framer-motion"
+import confetti from "canvas-confetti"
 import { v4 as uuidv4 } from 'uuid'
 import { Button } from "@/components/ui/button"
+import { AIButton } from "@/components/ui/ai-button"
+import { AIBadge } from "@/components/ui/ai-badge"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { createClient } from "@/lib/supabase/client"
@@ -23,7 +27,6 @@ export function LaunchSearchForm() {
         enrichEmails: true,
     })
 
-    // Geocoding helper using Nominatim (OpenStreetMap free API)
     const geocodeCity = async (city: string): Promise<{ lat: number; lon: number } | null> => {
         try {
             const response = await fetch(
@@ -52,14 +55,11 @@ export function LaunchSearchForm() {
         e.preventDefault()
         setLoading(true)
 
-        // Generate unique debug ID for tracking
         const debugId = uuidv4()
         console.log(`[Client] Launching scrape job (debugId: ${debugId})`)
 
         try {
             const supabase = createClient()
-
-            // 1. Get authenticated user
             const { data: { user } } = await supabase.auth.getUser()
 
             if (!user) {
@@ -70,7 +70,6 @@ export function LaunchSearchForm() {
                 return
             }
 
-            // 2. Check quotas before proceeding
             const { data: hasQuota, error: quotaCheckError } = await supabase
                 .rpc('check_quota', {
                     p_user_id: user.id,
@@ -94,10 +93,8 @@ export function LaunchSearchForm() {
                 return
             }
 
-            // 3. Geocode the city to get coordinates
             const coords = await geocodeCity(formData.city)
 
-            // 4. Build precise Google Maps URL with coordinates
             let mapsUrl: string
             if (coords) {
                 mapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(formData.query)}/@${coords.lat},${coords.lon},14z/data=!3m1!1e3?entry=ttu`
@@ -105,7 +102,6 @@ export function LaunchSearchForm() {
                 mapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(formData.query + " " + formData.city + ", France")}`
             }
 
-            // 5. Create job in Supabase FIRST (UI is source of truth)
             const { data: newJob, error: jobError } = await supabase
                 .from('scrape_jobs')
                 .insert({
@@ -133,11 +129,9 @@ export function LaunchSearchForm() {
                 return
             }
 
-
-            // 6. Prepare Webhook Payload
             const payload = {
                 job: {
-                    id: newJob.id_jobs || newJob.id, // Handle both cases (int vs uuid)
+                    id: newJob.id_jobs || newJob.id,
                     source: "google_maps",
                     mapsUrl: mapsUrl,
                     query: formData.query,
@@ -155,11 +149,10 @@ export function LaunchSearchForm() {
                 actor: { userId: user.id, sessionId: null },
                 meta: {
                     searchId: newJob.id_jobs || newJob.id,
-                    debugId // Pass debugId for tracking
+                    debugId
                 }
             }
 
-            // 9. Call server-side API proxy (not direct webhook)
             try {
                 const apiResponse = await fetch('/api/scrape/launch', {
                     method: 'POST',
@@ -178,19 +171,25 @@ export function LaunchSearchForm() {
                 }
 
                 console.log(`[Client] Job launched successfully (duration: ${result.duration}ms)`)
-                // toast.success("Debug: API Webhook OK") // Uncomment for debug
 
             } catch (apiError: any) {
                 console.error(`[Client] API call failed (debugId: ${debugId}):`, apiError)
-                // Don't block user - job is created, show warning
                 toast.warning("Recherche créée", {
                     description: "Le scraping démarrera dans quelques instants. Erreur temporaire de communication."
                 })
             }
 
-            // 10. Success -> Switch to Progress Widget
-            toast.success("Recherche initialisée !", {
-                description: "Le scraping va démarrer..."
+            // Success confetti! 🎉
+            confetti({
+                particleCount: 60,
+                angle: 60,
+                spread: 55,
+                origin: { x: 0.5, y: 0.7 },
+                colors: ['#667eea', '#764ba2', '#4facfe']
+            })
+
+            toast.success("🚀 Recherche lancée !", {
+                description: "L'IA va analyser les données et enrichir vos prospects..."
             })
 
             setActiveJobId(newJob.id_jobs || newJob.id)
@@ -221,104 +220,179 @@ export function LaunchSearchForm() {
     }
 
     return (
-        <Card className="w-full relative overflow-hidden border-primary/20 bg-gradient-to-br from-card to-secondary/30">
-            <div className="absolute top-0 right-0 p-32 bg-primary/5 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
-            <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                    <Sparkles className="h-5 w-5 text-primary" />
-                    Nouvelle Recherche
-                </CardTitle>
-                <CardDescription>
-                    Lancez une prospection ciblée via Google Maps
-                </CardDescription>
-            </CardHeader>
-            <form onSubmit={handleSubmit}>
-                <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium">Activité / Keyword</label>
-                            <div className="relative">
-                                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                                <Input
-                                    placeholder="ex: Agence Immobilière"
-                                    className="pl-9"
-                                    value={formData.query}
-                                    onChange={(e) => setFormData({ ...formData, query: e.target.value })}
-                                    required
-                                    disabled={loading}
-                                />
-                            </div>
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium">Ville</label>
-                            <div className="relative">
-                                <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                                <Input
-                                    placeholder="ex: Paris, Lyon..."
-                                    className="pl-9"
-                                    value={formData.city}
-                                    onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                                    required
-                                    disabled={loading}
-                                />
-                            </div>
-                        </div>
-                    </div>
+        <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+        >
+            <Card className="w-full relative overflow-hidden border-2 border-primary/20 bg-gradient-to-br from-white via-indigo-50/30 to-purple-50/30 shadow-xl">
+                {/* Animated background orbs */}
+                <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-indigo-400/20 to-purple-400/20 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none animate-pulse" />
+                <div className="absolute bottom-0 left-0 w-64 h-64 bg-gradient-to-tr from-blue-400/20 to-cyan-400/20 rounded-full blur-3xl -ml-32 -mb-32 pointer-events-none animate-pulse" style={{ animationDelay: '1s' }} />
 
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium">Nombre de résultats max</label>
-                        <Input
-                            type="number"
-                            min={1}
-                            max={50}
-                            value={formData.maxResults}
-                            onChange={(e) => setFormData({ ...formData, maxResults: parseInt(e.target.value) })}
-                            disabled={loading}
-                        />
+                <CardHeader className="relative z-10">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <CardTitle className="flex items-center gap-3 text-2xl">
+                                <motion.div
+                                    animate={{ rotate: [0, 360] }}
+                                    transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+                                >
+                                    <Sparkles className="h-6 w-6 text-indigo-600" />
+                                </motion.div>
+                                Nouvelle Recherche
+                            </CardTitle>
+                            <CardDescription className="text-base mt-1">
+                                Lancez une prospection ciblée enrichie par l'IA
+                            </CardDescription>
+                        </div>
+                        <AIBadge>Deep Search</AIBadge>
                     </div>
+                </CardHeader>
 
-                    <div className="flex items-center gap-4 py-2">
-                        <label className="flex items-center gap-2 text-sm cursor-pointer">
-                            <input
-                                type="checkbox"
-                                className="accent-primary h-4 w-4 rounded border-gray-300"
-                                checked={formData.deepScan}
-                                onChange={(e) => setFormData({ ...formData, deepScan: e.target.checked })}
+                <form onSubmit={handleSubmit}>
+                    <CardContent className="space-y-5 relative z-10">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <motion.div
+                                initial={{ opacity: 0, x: -20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ delay: 0.1 }}
+                                className="space-y-2"
+                            >
+                                <label className="text-sm font-semibold flex items-center gap-2">
+                                    <Search className="w-4 h-4 text-indigo-600" />
+                                    Activité / Keyword
+                                </label>
+                                <div className="relative group">
+                                    <Search className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground group-focus-within:text-indigo-600 transition-colors" />
+                                    <Input
+                                        placeholder="ex: Agence Immobilière"
+                                        className="pl-10 h-12 border-2 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all"
+                                        value={formData.query}
+                                        onChange={(e) => setFormData({ ...formData, query: e.target.value })}
+                                        required
+                                        disabled={loading}
+                                    />
+                                </div>
+                            </motion.div>
+
+                            <motion.div
+                                initial={{ opacity: 0, x: 20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ delay: 0.2 }}
+                                className="space-y-2"
+                            >
+                                <label className="text-sm font-semibold flex items-center gap-2">
+                                    <MapPin className="w-4 h-4 text-indigo-600" />
+                                    Ville
+                                </label>
+                                <div className="relative group">
+                                    <MapPin className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground group-focus-within:text-indigo-600 transition-colors" />
+                                    <Input
+                                        placeholder="ex: Paris, Lyon..."
+                                        className="pl-10 h-12 border-2 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all"
+                                        value={formData.city}
+                                        onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                                        required
+                                        disabled={loading}
+                                    />
+                                </div>
+                            </motion.div>
+                        </div>
+
+                        <motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.3 }}
+                            className="space-y-2"
+                        >
+                            <label className="text-sm font-semibold">Nombre de résultats max</label>
+                            <Input
+                                type="number"
+                                min={1}
+                                max={50}
+                                className="h-12 border-2 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all"
+                                value={formData.maxResults}
+                                onChange={(e) => setFormData({ ...formData, maxResults: parseInt(e.target.value) })}
                                 disabled={loading}
                             />
-                            Deep Scan (Site web)
-                        </label>
-                        <label className="flex items-center gap-2 text-sm cursor-pointer">
-                            <input
-                                type="checkbox"
-                                className="accent-primary h-4 w-4 rounded border-gray-300"
-                                checked={formData.enrichEmails}
-                                onChange={(e) => setFormData({ ...formData, enrichEmails: e.target.checked })}
+                        </motion.div>
+
+                        <motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.4 }}
+                            className="flex flex-col sm:flex-row items-start sm:items-center gap-4 py-3 px-4 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border border-indigo-200"
+                        >
+                            <label className="flex items-center gap-3 text-sm font-medium cursor-pointer group">
+                                <input
+                                    type="checkbox"
+                                    className="accent-indigo-600 h-5 w-5 rounded border-gray-300 cursor-pointer"
+                                    checked={formData.deepScan}
+                                    onChange={(e) => setFormData({ ...formData, deepScan: e.target.checked })}
+                                    disabled={loading}
+                                />
+                                <span className="flex items-center gap-2">
+                                    <Zap className="w-4 h-4 text-indigo-600" />
+                                    Deep Scan (Site web + IA)
+                                </span>
+                            </label>
+                            <label className="flex items-center gap-3 text-sm font-medium cursor-pointer group">
+                                <input
+                                    type="checkbox"
+                                    className="accent-indigo-600 h-5 w-5 rounded border-gray-300 cursor-pointer"
+                                    checked={formData.enrichEmails}
+                                    onChange={(e) => setFormData({ ...formData, enrichEmails: e.target.checked })}
+                                    disabled={loading}
+                                />
+                                <span className="flex items-center gap-2">
+                                    <Sparkles className="w-4 h-4 text-indigo-600" />
+                                    Enrichir Emails
+                                </span>
+                            </label>
+                        </motion.div>
+
+                        {/* Info card */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.5 }}
+                            className="bg-gradient-to-br from-blue-50 to-cyan-50 border-2 border-blue-200 rounded-xl p-4 text-sm"
+                        >
+                            <p className="text-blue-900 font-semibold mb-1">✨ Deep Search IA activé</p>
+                            <p className="text-blue-700 text-xs leading-relaxed">
+                                L'IA va scraper Google Maps, analyser les sites web, enrichir les emails et extraire des insights pour une prospection ultra-personnalisée.
+                            </p>
+                        </motion.div>
+                    </CardContent>
+
+                    <CardFooter className="relative z-10">
+                        <div className="w-full group">
+                            <AIButton
+                                type="submit"
                                 disabled={loading}
-                            />
-                            Enrichir Emails
-                        </label>
-                    </div>
-                </CardContent>
-                <CardFooter>
-                    <Button
-                        type="submit"
-                        className="w-full bg-primary hover:bg-primary/90 shadow-lg shadow-primary/25"
-                        disabled={loading}
-                    >
-                        {loading ? (
-                            <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Initialisation...
-                            </>
-                        ) : (
-                            <>
-                                <Send className="mr-2 h-4 w-4" /> Lancer la recherche
-                            </>
-                        )}
-                    </Button>
-                </CardFooter>
-            </form>
-        </Card>
+                                loading={loading}
+                                className="w-full h-14 text-lg relative overflow-hidden"
+                                variant="primary"
+                            >
+                                {loading ? (
+                                    "Lancement en cours..."
+                                ) : (
+                                    <>
+                                        <motion.div
+                                            className="flex items-center gap-2"
+                                            whileHover={{ scale: 1.05 }}
+                                        >
+                                            <Rocket className="w-5 h-5" />
+                                            <span>Lancer la recherche</span>
+                                        </motion.div>
+                                    </>
+                                )}
+                            </AIButton>
+                        </div>
+                    </CardFooter>
+                </form>
+            </Card>
+        </motion.div>
     )
 }
