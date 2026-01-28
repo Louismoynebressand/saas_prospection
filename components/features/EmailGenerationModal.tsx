@@ -157,7 +157,7 @@ export function EmailGenerationModal({ open, onOpenChange, prospect, onSuccess }
                                     <SelectContent>
                                         {campaigns.map((camp) => (
                                             <SelectItem key={camp.id} value={camp.id}>
-                                                {camp.nom_campagne}
+                                                {camp.campaign_name}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
