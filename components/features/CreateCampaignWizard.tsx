@@ -14,6 +14,50 @@ import { Loader2, Sparkles, ArrowRight, ArrowLeft, CheckCircle2, Globe, Building
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 
+// --- HELPER COMPONENTS (DEFINED OUTSIDE TO PREVENT RE-RENDERS) ---
+
+const FieldWithTooltip = ({ label, tooltip, required = false, children }: { label: string, tooltip: string, required?: boolean, children: React.ReactNode }) => (
+    <div className="space-y-2">
+        <div className="flex items-center gap-2">
+            <Label className="text-sm font-medium">{label} {required && <span className="text-red-500">*</span>}</Label>
+            <TooltipProvider delayDuration={0}>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Info className="w-4 h-4 text-muted-foreground hover:text-primary cursor-help transition-colors" />
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="max-w-[250px] bg-popover text-sm">
+                        <p>{tooltip}</p>
+                    </TooltipContent>
+                </Tooltip>
+            </TooltipProvider>
+        </div>
+        {children}
+    </div>
+)
+
+const AILoadingOverlay = () => (
+    <div className="absolute inset-0 bg-white/95 backdrop-blur-sm z-50 flex flex-col items-center justify-center p-8 rounded-lg">
+        <div className="relative">
+            <div className="w-20 h-20 rounded-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 animate-spin" style={{
+                clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)',
+                animationDuration: '2s'
+            }}></div>
+            <Brain className="w-10 h-10 text-indigo-600 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 animate-pulse" />
+        </div>
+        <h3 className="mt-6 text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+            ✨ IA en action
+        </h3>
+        <p className="mt-2 text-sm text-muted-foreground text-center max-w-md">
+            L'intelligence artificielle analyse les données de votre site web et créée une stratégie marketing personnalisée...
+        </p>
+        <div className="mt-4 flex gap-1">
+            <span className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+            <span className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+            <span className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+        </div>
+    </div>
+)
+
 interface CreateCampaignWizardProps {
     open: boolean
     onOpenChange: (open: boolean) => void
@@ -283,50 +327,6 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
             setLoading(false)
         }
     }
-
-    // --- HELPER COMPONENT ---
-    const FieldWithTooltip = ({ label, tooltip, required = false, children }: { label: string, tooltip: string, required?: boolean, children: React.ReactNode }) => (
-        <div className="space-y-2">
-            <div className="flex items-center gap-2">
-                <Label className="text-sm font-medium">{label} {required && <span className="text-red-500">*</span>}</Label>
-                <TooltipProvider delayDuration={0}>
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <Info className="w-4 h-4 text-muted-foreground hover:text-primary cursor-help transition-colors" />
-                        </TooltipTrigger>
-                        <TooltipContent side="right" className="max-w-[250px] bg-popover text-sm">
-                            <p>{tooltip}</p>
-                        </TooltipContent>
-                    </Tooltip>
-                </TooltipProvider>
-            </div>
-            {children}
-        </div>
-    )
-
-    // --- LOADING OVERLAY ---
-    const AILoadingOverlay = () => (
-        <div className="absolute inset-0 bg-white/95 backdrop-blur-sm z-50 flex flex-col items-center justify-center p-8 rounded-lg">
-            <div className="relative">
-                <div className="w-20 h-20 rounded-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 animate-spin" style={{
-                    clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)',
-                    animationDuration: '2s'
-                }}></div>
-                <Brain className="w-10 h-10 text-indigo-600 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 animate-pulse" />
-            </div>
-            <h3 className="mt-6 text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                ✨ IA en action
-            </h3>
-            <p className="mt-2 text-sm text-muted-foreground text-center max-w-md">
-                L'intelligence artificielle analyse les données de votre site web et créée une stratégie marketing personnalisée...
-            </p>
-            <div className="mt-4 flex gap-1">
-                <span className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                <span className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                <span className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
-            </div>
-        </div>
-    )
 
     // --- STEPS RENDER ---
 
