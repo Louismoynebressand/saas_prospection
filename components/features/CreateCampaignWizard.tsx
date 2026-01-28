@@ -93,6 +93,7 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
         target_audience: "",
         target_sectors: [] as string[],
         target_company_size: "",
+        target_job_titles: [] as string[],
 
         // Step 4: Signature & Constraints
         signature_name: "",
@@ -141,6 +142,7 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
 
             const data = await response.json()
 
+            // Format arrays
             let formattedPainPoints = ""
             if (Array.isArray(data.pain_points)) {
                 formattedPainPoints = data.pain_points.map((p: string) => `- ${p}`).join('\n')
@@ -148,12 +150,44 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
                 formattedPainPoints = data.pain_points
             }
 
+            let formattedJobTitles = ""
+            if (Array.isArray(data.target_job_titles)) {
+                formattedJobTitles = data.target_job_titles.join(', ')
+            } else if (typeof data.target_job_titles === 'string') {
+                formattedJobTitles = data.target_job_titles
+            }
+
+            // Map ALL fields from webhook response
             setFormData(prev => ({
                 ...prev,
+                // Step 1: Identité
                 pitch: data.pitch || prev.pitch,
                 main_offer: data.main_offer || prev.main_offer,
                 pain_points: formattedPainPoints || prev.pain_points,
-                main_promise: data.main_promise || prev.main_promise
+                main_promise: data.main_promise || prev.main_promise,
+
+                // Step 2: Positionnement  
+                secondary_benefits: data.secondary_benefits || prev.secondary_benefits,
+
+
+                // Step 3: Ciblage
+                objective: data.objective || prev.objective,
+                target_audience: data.target_audience || prev.target_audience,
+                target_sectors: data.target_sectors || prev.target_sectors,
+                target_company_size: data.target_company_size || prev.target_company_size,
+                target_job_titles: Array.isArray(data.target_job_titles) ? data.target_job_titles : (data.target_job_titles ? [data.target_job_titles] : prev.target_job_titles),
+
+                // Step 4: Signature & Params
+                signature_name: data.signature_name || prev.signature_name,
+                signature_title: data.signature_title || prev.signature_title,
+                signature_company: data.signature_company || prev.signature_company,
+                signature_phone: data.signature_phone || prev.signature_phone,
+                signature_email: data.signature_email || prev.signature_email,
+                signature_ps: data.signature_ps || prev.signature_ps,
+                desired_tone: data.desired_tone || prev.desired_tone,
+                formal: data.formal !== undefined ? data.formal : prev.formal,
+                email_length: data.email_length || prev.email_length,
+                language: data.language || prev.language,
             }))
 
             toast.success("✨ Analyse terminée ! Données pré-remplies.")
@@ -313,6 +347,7 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
                 target_audience: "",
                 target_sectors: [],
                 target_company_size: "",
+                target_job_titles: [],
                 signature_name: "",
                 signature_title: "",
                 signature_company: "",
