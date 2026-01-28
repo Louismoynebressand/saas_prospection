@@ -5,7 +5,7 @@ import { Loader2, Sparkles } from "lucide-react"
 import { Button, ButtonProps } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
-interface AIButtonProps extends ButtonProps {
+interface AIButtonProps extends Omit<ButtonProps, "variant"> {
     loading?: boolean
     variant?: "primary" | "secondary" | "success"
     children: React.ReactNode
