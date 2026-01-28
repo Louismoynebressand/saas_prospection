@@ -108,7 +108,7 @@ export function CampaignList() {
                             <CardHeader className="pb-3 relative">
                                 <div className="flex justify-between items-start">
                                     <Badge variant={camp.is_active ? "default" : "secondary"} className={camp.is_active ? "bg-green-600" : ""}>
-                                        {camp.is_active ? "Active" : "Inacive"}
+                                        {camp.is_active ? "Active" : "Inactive"}
                                     </Badge>
                                     <DropdownMenu>
                                         <DropdownMenuTrigger asChild>
@@ -129,14 +129,14 @@ export function CampaignList() {
                                         </DropdownMenuContent>
                                     </DropdownMenu>
                                 </div>
-                                <CardTitle className="line-clamp-1 text-base mt-2">{camp.nom_campagne}</CardTitle>
+                                <CardTitle className="line-clamp-1 text-base mt-2">{camp.campaign_name}</CardTitle>
                                 <CardDescription className="line-clamp-1">
-                                    {camp.service_a_vendre || "Service non spécifié"}
+                                    {camp.main_offer || camp.service_to_sell || "Service non spécifié"}
                                 </CardDescription>
                             </CardHeader>
                             <CardContent>
                                 <div className="text-xs text-muted-foreground flex flex-col gap-1">
-                                    <span>Target: {camp.type_de_prospect_vise || "Non défini"}</span>
+                                    <span>Target: {camp.target_audience || "Non défini"}</span>
                                     <span>Modifié le {format(new Date(camp.updated_at), "d MMM yyyy", { locale: fr })}</span>
                                 </div>
                             </CardContent>

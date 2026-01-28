@@ -73,29 +73,63 @@ export interface WebhookPayload {
 export interface Campaign {
     id: string;
     user_id: string;
-    nom_campagne: string;
+
+    // Basic Info (Step 1)
+    campaign_name: string;
+    my_company_name?: string;
+    my_website?: string;
+
+    // Positioning & Offer (Step 2)
+    pitch?: string;
+    main_offer?: string;
+    pain_points?: string[];
+    main_promise?: string;
+    secondary_benefits?: any; // jsonb
+    service_to_sell?: string;
+
+    // Targeting & Proof (Step 3)
+    objective?: 'BOOK_MEETING' | 'DEMO' | 'FREE_TRIAL' | 'QUOTE' | 'DISCOUNT' | 'CALLBACK' | 'DOWNLOAD' | 'WEBINAR';
+    target_audience?: string;
+    target_sectors?: any; // jsonb
+    target_company_size?: string;
+    target_job_titles?: any; // jsonb
+
+    // Nice-to-have fields
+    differentiators?: any; // jsonb
+    proof_points?: any; // jsonb
+    case_studies?: any; // jsonb
+    objection_handling?: any; // jsonb
+    guarantees?: string;
+    pricing_hint?: string;
+    call_to_action?: string;
+
+    // Signature (Step 4)
+    signature_name?: string;
+    signature_title?: string;
+    signature_company?: string;
+    signature_phone?: string;
+    signature_email?: string;
+    signature_ps?: string;
+
+    // Email Parameters
+    desired_tone?: string;
+    formal?: boolean;
+    email_length?: 'CONCISE' | 'STANDARD' | 'DETAILED';
+    personalization_level?: 'LOW' | 'MEDIUM' | 'HIGH';
+    language?: 'fr' | 'en';
+
+    // Legacy/Optional fields
+    allowed_pain_themes?: any; // jsonb
+    forbidden_words?: any; // jsonb
+    allowed_metrics?: any; // jsonb
+    constraints?: any; // jsonb
+
+    // Status & Metadata
     is_active: boolean;
-    is_default: boolean;
-    nom_entreprise_client?: string;
-    site_web_client?: string;
-    phrase_positionnement_client?: string;
-    offre_principale_client?: string;
-    promesse_principale?: string;
-    benefices_secondaires?: string[];
-    service_a_vendre?: string;
-    type_de_prospect_vise?: string;
-    themes_de_douleurs_autorises?: string[];
-    mots_interdits?: string[];
-    ton_souhaite?: string;
-    vouvoiement?: boolean;
-    chiffres_autorises?: string[];
-    contraintes?: {
-        sans_signature?: boolean;
-        sans_liens?: boolean;
-        min_mots?: number;
-        max_mots?: number;
-        max_faits_specifiques?: number;
-    };
+    is_default?: boolean;
+    status?: 'DRAFT' | 'ACTIVE' | 'PAUSED' | 'ARCHIVED';
+    version?: number;
+    last_used_at?: string;
     created_at: string;
     updated_at: string;
 }
