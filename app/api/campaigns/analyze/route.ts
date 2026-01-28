@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 export async function POST(req: Request) {
     try {
-        const { website, company } = await req.json();
+        const { website, company, siren } = await req.json();
 
         if (!website) {
             return NextResponse.json(
@@ -21,7 +21,8 @@ export async function POST(req: Request) {
             },
             body: JSON.stringify({
                 website,
-                company
+                company,
+                siren
             }),
         });
 
