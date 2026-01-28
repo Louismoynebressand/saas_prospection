@@ -65,17 +65,9 @@ export default function RechercheProspectPage() {
                     <LaunchSearchForm />
                 </div>
                 <div className="col-span-3">
-                    {/* Recent Activity or Quick Tips placeholder */}
-                    <Card className="h-full">
-                        <CardHeader>
-                            <CardTitle>Activité Récente</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-sm text-muted-foreground text-center py-8">
-                                Aucune activité récente.
-                            </div>
-                        </CardContent>
-                    </Card>
+                    <div className="col-span-3">
+                        <ActivityFeed />
+                    </div>
                 </div>
             </div>
         </div>
