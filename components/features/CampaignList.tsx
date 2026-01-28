@@ -3,10 +3,12 @@
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Campaign } from "@/types"
+import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/button"
+import { AIBadge } from "@/components/ui/ai-badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, Plus, MoreHorizontal, Eye, Trash2, Edit2, Zap } from "lucide-react"
+import { Loader2, Plus, MoreHorizontal, Eye, Trash2, Edit2, Zap, Sparkles } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { CreateCampaignWizard } from "./CreateCampaignWizard"
 import { CampaignForm } from "./CampaignForm"
@@ -70,78 +72,153 @@ export function CampaignList() {
         e.stopPropagation()
         const supabase = createClient()
         await supabase.from('cold_email_campaigns').update({ is_active: !currentState }).eq('id', id)
-        fetchCampaigns() // Optimistic update would be better but simple reload works
+        fetchCampaigns()
     }
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
+            <motion.div
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex items-center justify-between"
+            >
                 <div>
-                    <h2 className="text-xl font-bold">Vos Campagnes</h2>
-                    <p className="text-sm text-muted-foreground">Profils de prospection configurés</p>
+                    <h2 className="text-2xl font-bold flex items-center gap-2">
+                        <Sparkles className="w-6 h-6 text-indigo-600" />
+                        Vos Campagnes
+                    </h2>
+                    <p className="text-sm text-muted-foreground mt-1">Profils de prospection IA configurés</p>
                 </div>
-                <Button onClick={handleCreate}>
+                <Button onClick={handleCreate} className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700">
                     <Plus className="mr-2 h-4 w-4" />
                     Créer une campagne
                 </Button>
-            </div>
+            </motion.div>
 
             {loading ? (
                 <div className="flex justify-center py-10">
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
             ) : campaigns.length === 0 ? (
-                <Card className="border-dashed">
-                    <CardContent className="flex flex-col items-center justify-center py-10 text-center">
-                        <Zap className="h-10 w-10 text-muted-foreground mb-4 opacity-20" />
-                        <h3 className="font-semibold mb-1">Aucune campagne</h3>
-                        <p className="text-sm text-muted-foreground max-w-sm mb-4">
-                            Créez votre premier profil de prospection pour générer des emails ultra-personnalisés.
-                        </p>
-                        <Button variant="outline" onClick={handleCreate}>Commencer</Button>
-                    </CardContent>
-                </Card>
+                <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                >
+                    <Card className="border-2 border-dashed">
+                        <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+                            <div className="w-16 h-16 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-full flex items-center justify-center mb-4">
+                                <Zap className="h-8 w-8 text-indigo-600" />
+                            </div>
+                            <h3 className="font-semibold text-lg mb-2">Aucune campagne</h3>
+                            <p className="text-sm text-muted-foreground max-w-sm mb-4">
+                                Créez votre premier profil de prospection pour générer des emails ultra-personnalisés avec l'IA.
+                            </p>
+                            <Button variant="default" onClick={handleCreate} className="bg-gradient-to-r from-indigo-600 to-purple-600">
+                                <Plus className="mr-2 h-4 w-4" />
+                                Commencer
+                            </Button>
+                        </CardContent>
+                    </Card>
+                </motion.div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {campaigns.map((camp) => (
-                        <Card key={camp.id} className="group hover:border-primary/50 transition-colors cursor-pointer" onClick={(e) => handleEdit(camp.id, e)}>
-                            <CardHeader className="pb-3 relative">
-                                <div className="flex justify-between items-start">
-                                    <Badge variant={camp.is_active ? "default" : "secondary"} className={camp.is_active ? "bg-green-600" : ""}>
-                                        {camp.is_active ? "Active" : "Inactive"}
-                                    </Badge>
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                            <Button variant="ghost" size="icon" className="h-8 w-8 -mt-1 -mr-2">
-                                                <MoreHorizontal className="h-4 w-4" />
-                                            </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end">
-                                            <DropdownMenuItem onClick={(e) => handleEdit(camp.id, e)}>
-                                                <Edit2 className="mr-2 h-4 w-4" /> Modifier
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem onClick={(e) => toggleActive(camp.id, camp.is_active, e)}>
-                                                <Zap className="mr-2 h-4 w-4" /> {camp.is_active ? "Désactiver" : "Activer"}
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem className="text-red-600" onClick={(e) => handleDelete(camp.id, e)}>
-                                                <Trash2 className="mr-2 h-4 w-4" /> Supprimer
-                                            </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
-                                </div>
-                                <CardTitle className="line-clamp-1 text-base mt-2">{camp.campaign_name}</CardTitle>
-                                <CardDescription className="line-clamp-1">
-                                    {camp.main_offer || camp.service_to_sell || "Service non spécifié"}
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-xs text-muted-foreground flex flex-col gap-1">
-                                    <span>Target: {camp.target_audience || "Non défini"}</span>
-                                    <span>Modifié le {format(new Date(camp.updated_at), "d MMM yyyy", { locale: fr })}</span>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    ))}
+                    <AnimatePresence>
+                        {campaigns.map((camp, index) => (
+                            <motion.div
+                                key={camp.id}
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95 }}
+                                transition={{ delay: index * 0.05 }}
+                            >
+                                <Card
+                                    className="group relative overflow-hidden cursor-pointer
+                                               border-2 hover:border-indigo-400 
+                                               transition-all duration-300
+                                               hover:shadow-xl hover:shadow-indigo-200/50
+                                               hover:-translate-y-1"
+                                    onClick={(e) => handleEdit(camp.id, e)}
+                                >
+                                    {/* Gradient overlay on hover */}
+                                    <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/0 to-purple-500/0 
+                                                    group-hover:from-indigo-500/5 group-hover:to-purple-500/5 
+                                                    transition-all duration-300 pointer-events-none" />
+
+                                    <CardHeader className="pb-3 relative z-10">
+                                        <div className="flex justify-between items-start">
+                                            <motion.div
+                                                whileHover={{ scale: 1.05 }}
+                                                whileTap={{ scale: 0.95 }}
+                                            >
+                                                <Badge
+                                                    variant={camp.is_active ? "default" : "secondary"}
+                                                    className={`${camp.is_active
+                                                        ? "bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
+                                                        : "bg-gray-400"
+                                                        } transition-all`}
+                                                >
+                                                    {camp.is_active ? "✓ Active" : "⏸ Inactive"}
+                                                </Badge>
+                                            </motion.div>
+
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-8 w-8 -mt-1 -mr-2 hover:bg-indigo-100 transition-colors"
+                                                    >
+                                                        <MoreHorizontal className="h-4 w-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuItem onClick={(e) => handleEdit(camp.id, e)}>
+                                                        <Edit2 className="mr-2 h-4 w-4" /> Modifier
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={(e) => toggleActive(camp.id, camp.is_active, e)}>
+                                                        <Zap className="mr-2 h-4 w-4" /> {camp.is_active ? "Désactiver" : "Activer"}
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem className="text-red-600" onClick={(e) => handleDelete(camp.id, e)}>
+                                                        <Trash2 className="mr-2 h-4 w-4" /> Supprimer
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </div>
+
+                                        <CardTitle className="line-clamp-1 text-lg mt-3 group-hover:text-indigo-600 transition-colors">
+                                            {camp.campaign_name}
+                                        </CardTitle>
+                                        <CardDescription className="line-clamp-2 text-sm">
+                                            {camp.main_offer || camp.service_to_sell || "Service non spécifié"}
+                                        </CardDescription>
+                                    </CardHeader>
+
+                                    <CardContent className="relative z-10">
+                                        <div className="space-y-2">
+                                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                                <div className="w-2 h-2 bg-indigo-400 rounded-full" />
+                                                <span className="font-medium">Target:</span>
+                                                <span className="line-clamp-1">{camp.target_audience || "Non défini"}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                                <div className="w-2 h-2 bg-purple-400 rounded-full" />
+                                                <span>Modifié le {format(new Date(camp.updated_at), "d MMM yyyy", { locale: fr })}</span>
+                                            </div>
+                                        </div>
+
+                                        {/* AI Badge at bottom if applicable */}
+                                        <div className="mt-4 pt-3 border-t border-gray-200">
+                                            <AIBadge animated={false}>AI-Powered</AIBadge>
+                                        </div>
+                                    </CardContent>
+
+                                    {/* Bottom gradient line */}
+                                    <div className="h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 
+                                                    opacity-0 group-hover:opacity-100 transition-opacity" />
+                                </Card>
+                            </motion.div>
+                        ))}
+                    </AnimatePresence>
                 </div>
             )}
 

@@ -3,12 +3,15 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
+import { motion } from "framer-motion"
+import CountUp from "react-countup"
+import confetti from "canvas-confetti"
 import { Button } from "@/components/ui/button"
+import { AIBadge } from "@/components/ui/ai-badge"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
-import { Loader2, CheckCircle2, Search, Mail, Eye, ArrowRight } from "lucide-react"
+import { Loader2, CheckCircle2, Search, Mail, Eye, ArrowRight, Sparkles } from "lucide-react"
 import { toast } from "sonner"
-import { motion, AnimatePresence } from "framer-motion"
 
 interface ScrapingProgressWidgetProps {
     jobId: string | number
@@ -24,16 +27,13 @@ export function ScrapingProgressWidget({ jobId, maxResults, onComplete }: Scrapi
     const [deepSearchCount, setDeepSearchCount] = useState(0)
     const [progress, setProgress] = useState(0)
     const [hasStarted, setHasStarted] = useState(false)
+    const [confettiTriggered, setConfettiTriggered] = useState(false)
 
-    // Calculate stats from a list of prospects
     const calculateStats = (prospects: any[]) => {
         setProspectCount(prospects.length)
 
         const emails = prospects.filter(p => {
-            // Check boolean flag first, then fallback to JSON data
             if (p.email_adresse_verified === true) return true;
-
-            // Check raw scraping data
             if (p.data_scrapping) {
                 try {
                     const data = typeof p.data_scrapping === 'string' ? JSON.parse(p.data_scrapping) : p.data_scrapping;
@@ -63,11 +63,9 @@ export function ScrapingProgressWidget({ jobId, maxResults, onComplete }: Scrapi
         if (prospects) calculateStats(prospects)
     }
 
-    // Initial Load
     useEffect(() => {
         let mounted = true
         const start = async () => {
-            // 1. Check Job Status
             const { data: job } = await supabase.from('scrape_jobs').select('statut').eq('id_jobs', jobId).single()
             if (job && mounted) {
                 console.log("[Widget] Initial Job Status:", job.statut)
@@ -76,41 +74,37 @@ export function ScrapingProgressWidget({ jobId, maxResults, onComplete }: Scrapi
                 } else if (job.statut === 'error') {
                     setStatus('error')
                 } else {
-                    // 'queued' or 'running'
                     setStatus(job.statut)
                     if (job.statut !== 'initializing') setHasStarted(true)
                 }
             }
-            // 2. Load Stats
             if (mounted) await fetchStats()
         }
         start()
         return () => { mounted = false }
     }, [jobId])
 
-    // Realtime Subscriptions
     useEffect(() => {
-        // Job Status Subscription
         const jobSub = supabase.channel(`job_${jobId}`)
             .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'scrape_jobs', filter: `id_jobs=eq.${jobId}` }, (payload) => {
                 const s = payload.new.statut
                 console.log("[Widget] Realtime Job Update:", s)
                 if (['done', 'ALLfinish'].includes(s)) {
-                    setStatus('completed'); setProgress(100); if (onComplete) onComplete();
+                    setStatus('completed')
+                    setProgress(100)
+                    if (onComplete) onComplete()
                 } else if (s === 'running') {
-                    setStatus('running'); setHasStarted(true);
+                    setStatus('running')
+                    setHasStarted(true)
                 } else if (s === 'error') {
-                    setStatus('error'); toast.error("Erreur de scraping");
+                    setStatus('error')
+                    toast.error("Erreur de scraping")
                 }
             })
             .subscribe()
 
-        // Prospect Data Subscription (Insert & Update)
         const prospectSub = supabase.channel(`prospects_${jobId}`)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'scrape_prospect', filter: `id_jobs=eq.${jobId}` }, () => {
-                // Optimization: Instead of full fetch on every event, we could increment. 
-                // But full fetch ensures consistency for counters (Emails/Deep) which might toggle.
-                // Given max 50 items, strict fetch is better for accuracy than buggy optimistic updates.
                 if (!hasStarted) setHasStarted(true)
                 if (status === 'queued') setStatus('running')
                 fetchStats()
@@ -120,111 +114,187 @@ export function ScrapingProgressWidget({ jobId, maxResults, onComplete }: Scrapi
         return () => { supabase.removeChannel(jobSub); supabase.removeChannel(prospectSub) }
     }, [jobId, hasStarted, status])
 
-    // Progress Bar Logic
     useEffect(() => {
-        if (status === 'completed') setProgress(100)
-        else setProgress(Math.min(Math.round((prospectCount / maxResults) * 100), 98))
-    }, [prospectCount, maxResults, status])
+        if (status === 'completed') {
+            setProgress(100)
+            // Trigger confetti on completion (only once)
+            if (!confettiTriggered) {
+                confetti({
+                    particleCount: 100,
+                    spread: 70,
+                    origin: { y: 0.6 },
+                    colors: ['#22c55e', '#10b981', '#4ade80']
+                })
+                setConfettiTriggered(true)
+            }
+        } else {
+            setProgress(Math.min(Math.round((prospectCount / maxResults) * 100), 98))
+        }
+    }, [prospectCount, maxResults, status, confettiTriggered])
 
     const handleViewDetails = () => router.push(`/searches/${jobId}`)
 
     const getStatusText = () => {
         if (status === 'initializing' && !hasStarted) return "Initialisation..."
         if (status === 'queued') return "En attente de prise en charge..."
-        if (status === 'running') return `Scraping en cours (${Math.round(progress)}%)`
-        if (status === 'completed') return "Scraping terminé !"
+        if (status === 'running') return `Scraping en cours`
+        if (status === 'completed') return "✨ Scraping terminé !"
         if (status === 'error') return "Erreur survenue"
         return "Chargement..."
     }
 
     return (
-        <Card className="w-full border-primary/20 bg-card/50 backdrop-blur-sm relative overflow-hidden">
-            {status === 'running' && (
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-primary to-transparent animate-shimmer" />
-            )}
-            <CardHeader className="pb-2">
-                <CardTitle className="flex items-center gap-2 text-lg">
-                    {['initializing', 'queued', 'running'].includes(status) && status !== 'completed' && (
-                        <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                    )}
-                    {status === 'completed' && <CheckCircle2 className="h-5 w-5 text-green-500" />}
+        <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+        >
+            <Card className="w-full relative overflow-hidden border-2 
+                           border-primary/20 bg-gradient-to-br from-white via-blue-50/30 to-indigo-50/30 
+                           shadow-xl hover:shadow-2xl transition-shadow">
+                {/* Animated shimmer on top */}
+                {status === 'running' && (
+                    <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r 
+                                    from-transparent via-indigo-500 to-transparent 
+                                    animate-shimmer opacity-75" />
+                )}
 
-                    <motion.span
-                        key={status} // Key change triggers animation
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="truncate"
-                    >
-                        {getStatusText()}
-                    </motion.span>
-                </CardTitle>
-                <CardDescription>
-                    {status === 'queued' ? "Votre recherche est dans la file d'attente." :
-                        status === 'initializing' ? "Connexion au serveur..." :
-                            "Récupération et enrichissement des données en temps réel."}
-                </CardDescription>
-            </CardHeader>
+                {/* Success pulse */}
+                {status === 'completed' && (
+                    <motion.div
+                        initial={{ scale: 1, opacity: 0.5 }}
+                        animate={{ scale: 1.05, opacity: 0 }}
+                        transition={{ duration: 1.5, repeat: 2 }}
+                        className="absolute inset-0 bg-gradient-to-br from-green-400/20 to-emerald-400/20 rounded-lg pointer-events-none"
+                    />
+                )}
 
-            <CardContent className="space-y-6">
-                {/* Animated Progress Bar */}
-                <div className="space-y-1">
-                    <Progress value={progress} className="h-2 transition-all duration-500 ease-out" />
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>{prospectCount} / {maxResults} attendus</span>
-                        <span>{progress}%</span>
+                <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                        <CardTitle className="flex items-center gap-2 text-xl">
+                            {['initializing', 'queued', 'running'].includes(status) && status !== 'completed' && (
+                                <Loader2 className="h-5 w-5 animate-spin text-indigo-600" />
+                            )}
+                            {status === 'completed' && <CheckCircle2 className="h-5 w-5 text-green-500" />}
+
+                            <motion.span
+                                key={status}
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="truncate"
+                            >
+                                {getStatusText()}
+                            </motion.span>
+                        </CardTitle>
+
+                        <AIBadge>Deep Search</AIBadge>
                     </div>
-                </div>
+                    <CardDescription className="text-base">
+                        {status === 'queued' ? "Votre recherche est dans la file d'attente." :
+                            status === 'initializing' ? "Connexion au serveur..." :
+                                status === 'completed' ? "🎉 Données enrichies et prêtes !" :
+                                    "Récupération et enrichissement des données en temps réel."}
+                    </CardDescription>
+                </CardHeader>
 
-                {/* Animated Counters */}
-                <div className="grid grid-cols-3 gap-2">
-                    <StatBox
-                        icon={Search}
-                        value={prospectCount}
-                        label="Prospects"
-                        color="text-primary"
-                    />
-                    <StatBox
-                        icon={Mail}
-                        value={emailCount}
-                        label="Emails"
-                        color="text-blue-500"
-                    />
-                    <StatBox
-                        icon={Eye}
-                        value={deepSearchCount}
-                        label="Enrichis"
-                        color="text-purple-500"
-                    />
-                </div>
-            </CardContent>
+                <CardContent className="space-y-6">
+                    {/* Gradient Progress Bar */}
+                    <div className="space-y-2">
+                        <div className="relative h-3 bg-gray-200 rounded-full overflow-hidden">
+                            <motion.div
+                                className="absolute inset-y-0 left-0 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 
+                                           rounded-full shadow-lg shadow-indigo-300/50"
+                                initial={{ width: 0 }}
+                                animate={{ width: `${progress}%` }}
+                                transition={{ duration: 0.5, ease: "easeOut" }}
+                            />
+                            {status === 'running' && (
+                                <motion.div
+                                    className="absolute inset-y-0 w-20 bg-white/40 blur-sm"
+                                    animate={{ x: ['-100%', '500%'] }}
+                                    transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                                />
+                            )}
+                        </div>
+                        <div className="flex justify-between text-xs text-muted-foreground font-medium">
+                            <span>{prospectCount} / {maxResults} prospects</span>
+                            <span className="text-indigo-600 font-bold">{progress}%</span>
+                        </div>
+                    </div>
 
-            <CardFooter>
-                <Button
-                    className="w-full transition-all duration-300"
-                    variant={status === 'completed' ? "default" : "secondary"}
-                    onClick={handleViewDetails}
-                >
-                    Voir les résultats <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-            </CardFooter>
-        </Card>
+                    {/* Animated Stats with CountUp */}
+                    <div className="grid grid-cols-3 gap-3">
+                        <StatBox
+                            icon={Search}
+                            value={prospectCount}
+                            label="Prospects"
+                            gradient="from-blue-500 to-indigo-600"
+                        />
+                        <StatBox
+                            icon={Mail}
+                            value={emailCount}
+                            label="Emails"
+                            gradient="from-cyan-500 to-blue-600"
+                        />
+                        <StatBox
+                            icon={Eye}
+                            value={deepSearchCount}
+                            label="Enrichis"
+                            gradient="from-purple-500 to-pink-600"
+                        />
+                    </div>
+                </CardContent>
+
+                <CardFooter>
+                    <Button
+                        className={`w-full h-12 transition-all duration-300 ${status === 'completed'
+                            ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700'
+                            : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700'
+                            }`}
+                        onClick={handleViewDetails}
+                    >
+                        {status === 'completed' ? (
+                            <>
+                                <Sparkles className="mr-2 h-5 w-5" />
+                                Voir les résultats
+                            </>
+                        ) : (
+                            <>
+                                Voir les résultats
+                                <ArrowRight className="ml-2 h-4 w-4" />
+                            </>
+                        )}
+                    </Button>
+                </CardFooter>
+            </Card>
+        </motion.div>
     )
 }
 
-// Sub-component for animated numbers
-function StatBox({ icon: Icon, value, label, color }: { icon: any, value: number, label: string, color: string }) {
+// Enhanced StatBox with gradient and CountUp
+function StatBox({ icon: Icon, value, label, gradient }: { icon: any, value: number, label: string, gradient: string }) {
     return (
-        <div className="flex flex-col items-center justify-center p-3 rounded-lg bg-background/50 border transition-colors duration-300 hover:bg-background/80">
-            <Icon className={`h-4 w-4 mb-2 ${color}`} />
+        <motion.div
+            whileHover={{ scale: 1.05, y: -2 }}
+            className="relative flex flex-col items-center justify-center p-4 rounded-xl 
+                       bg-white border-2 border-gray-200 
+                       hover:border-indigo-300 hover:shadow-lg 
+                       transition-all duration-300 overflow-hidden group"
+        >
+            {/* Gradient background on hover */}
+            <div className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-0 
+                           group-hover:opacity-10 transition-opacity`} />
+
+            <Icon className={`h-5 w-5 mb-2 bg-gradient-to-r ${gradient} bg-clip-text text-transparent`} />
             <motion.span
-                key={value} // Trigger animation on value change
-                initial={{ scale: 0.8, opacity: 0 }}
+                key={value}
+                initial={{ scale: 0.5, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
-                className="text-2xl font-bold"
+                className={`text-3xl font-bold bg-gradient-to-r ${gradient} bg-clip-text text-transparent`}
             >
-                {value}
+                <CountUp end={value} duration={0.8} />
             </motion.span>
-            <span className="text-xs text-muted-foreground text-center">{label}</span>
-        </div>
+            <span className="text-xs text-muted-foreground font-medium mt-1">{label}</span>
+        </motion.div>
     )
 }
