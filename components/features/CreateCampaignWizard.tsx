@@ -224,6 +224,7 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
             target_audience: formData.target_audience,
             target_sectors: formData.target_sectors,
             target_company_size: formData.target_company_size,
+            target_job_titles: formData.target_job_titles,
             signature_name: formData.signature_name,
             signature_title: formData.signature_title,
             signature_company: formData.signature_company,
