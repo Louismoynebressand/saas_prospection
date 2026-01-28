@@ -365,8 +365,8 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
                 </FieldWithTooltip>
 
                 <FieldWithTooltip
-                    label="Numéro SIREN (optionnel)"
-                    tooltip="Votre SIREN aide l'IA à trouver des infos précises (non stocké)"
+                    label="Numéro SIREN (recommandé)"
+                    tooltip="Fortement recommandé : permet à l'IA d'identifier précisément votre entreprise pour des résultats bien supérieurs (non stocké)."
                 >
                     <Input
                         placeholder="ex: 123 456 789"
@@ -687,8 +687,8 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
                         {Object.entries(stepConfig).map(([key, config], index) => (
                             <div key={key} className="flex items-center gap-2">
                                 <span className={`px-3 py-1.5 rounded-full transition-all ${step === key
-                                        ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold shadow-lg"
-                                        : "bg-white text-muted-foreground border"
+                                    ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold shadow-lg"
+                                    : "bg-white text-muted-foreground border"
                                     }`}>
                                     {config.title}
                                 </span>
