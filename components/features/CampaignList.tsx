@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Campaign } from "@/types"
 import { motion, AnimatePresence } from "framer-motion"
@@ -57,10 +58,15 @@ export function CampaignList() {
         }
     }
 
+    const router = useRouter()
+
     const handleEdit = (id: string, e: React.MouseEvent) => {
         e.stopPropagation()
-        setEditingId(id)
-        setIsFormOpen(true)
+        router.push(`/campaigns/${id}?tab=configuration`)
+    }
+
+    const handleViewCampaign = (id: string) => {
+        router.push(`/campaigns/${id}`)
     }
 
     const handleCreate = () => {
@@ -137,7 +143,7 @@ export function CampaignList() {
                                                transition-all duration-300
                                                hover:shadow-xl hover:shadow-indigo-200/50
                                                hover:-translate-y-1"
-                                    onClick={(e) => handleEdit(camp.id, e)}
+                                    onClick={() => handleViewCampaign(camp.id)}
                                 >
                                     {/* Gradient overlay on hover */}
                                     <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/0 to-purple-500/0 
