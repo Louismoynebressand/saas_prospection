@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 export async function POST(req: Request) {
     try {
-        const { website, company, siren } = await req.json();
+        const { website, company, siren, userId } = await req.json();
 
         if (!website) {
             return NextResponse.json(
@@ -22,7 +22,8 @@ export async function POST(req: Request) {
             body: JSON.stringify({
                 website,
                 company,
-                siren
+                siren,
+                userId  // Added for n8n to fetch user info (first_name, last_name, phone, etc.)
             }),
         });
 

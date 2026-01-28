@@ -17,7 +17,8 @@ export default function SignupPage() {
         confirmPassword: "",
         firstName: "",
         lastName: "",
-        company: ""
+        company: "",
+        phone: ""
     })
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
@@ -49,7 +50,8 @@ export default function SignupPage() {
                 data: {
                     first_name: formData.firstName,
                     last_name: formData.lastName,
-                    company_name: formData.company
+                    company_name: formData.company,
+                    phone: formData.phone
                 },
                 emailRedirectTo: `${window.location.origin}/auth/callback?next=/onboarding`
             }
@@ -168,6 +170,20 @@ export default function SignupPage() {
                                     disabled={loading}
                                 />
                             </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label htmlFor="phone" className="text-sm font-medium">
+                                Téléphone
+                            </label>
+                            <Input
+                                id="phone"
+                                type="tel"
+                                placeholder="+33 6 12 34 56 78"
+                                value={formData.phone}
+                                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                                disabled={loading}
+                            />
                         </div>
 
                         <div className="space-y-2">

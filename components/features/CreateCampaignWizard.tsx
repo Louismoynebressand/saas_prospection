@@ -122,13 +122,18 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
 
         setAiLoading(true)
         try {
+            // Get user ID for n8n to access user metadata
+            const supabase = createClient()
+            const { data: { user } } = await supabase.auth.getUser()
+
             const response = await fetch('/api/campaigns/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     website: formData.my_website,
                     company: formData.my_company_name,
-                    siren: formData.siren
+                    siren: formData.siren,
+                    userId: user?.id  // Send user ID to n8n
                 })
             })
 
