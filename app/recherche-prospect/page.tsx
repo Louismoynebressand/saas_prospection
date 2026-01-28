@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/client"
 import { LaunchSearchForm } from "@/components/features/LaunchSearchForm"
 import { DashboardStats } from "@/components/features/DashboardStats"
+import { ActivityFeed } from "@/components/dashboard/ActivityFeed"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useEffect, useState } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"

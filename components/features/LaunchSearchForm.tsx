@@ -224,11 +224,25 @@ export function LaunchSearchForm() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4 }}
+            className="w-full relative group"
         >
-            <Card className="w-full relative overflow-hidden border-2 border-primary/20 bg-gradient-to-br from-white via-indigo-50/30 to-purple-50/30 shadow-xl">
-                {/* Animated background orbs */}
-                <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-indigo-400/20 to-purple-400/20 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none animate-pulse" />
-                <div className="absolute bottom-0 left-0 w-64 h-64 bg-gradient-to-tr from-blue-400/20 to-cyan-400/20 rounded-full blur-3xl -ml-32 -mb-32 pointer-events-none animate-pulse" style={{ animationDelay: '1s' }} />
+            {/* Rotating Glow Border */}
+            <div className="absolute -inset-[2px] rounded-xl overflow-hidden pointer-events-none">
+                <motion.div
+                    className="absolute inset-[-200%] bg-[conic-gradient(from_0deg,transparent_0deg,transparent_90deg,#6366f1_180deg,#a855f7_270deg,transparent_360deg)] opacity-40 will-change-transform"
+                    animate={{ rotate: 360 }}
+                    transition={{
+                        duration: 8,
+                        ease: "linear",
+                        repeat: Infinity
+                    }}
+                />
+            </div>
+
+            {/* Secondary subtle glow */}
+            <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/10 to-purple-500/10 blur-xl transform scale-95 -z-10 rounded-xl" />
+
+            <Card className="w-full relative overflow-hidden border bg-white/95 backdrop-blur-sm shadow-xl">
 
                 <CardHeader className="relative z-10">
                     <div className="flex items-center justify-between">
