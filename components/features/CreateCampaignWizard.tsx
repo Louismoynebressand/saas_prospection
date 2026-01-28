@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { Loader2, Sparkles, ArrowRight, ArrowLeft, CheckCircle2, Globe, Building2, Target, Award, Pen, Info, Zap } from "lucide-react"
+import { Loader2, Sparkles, ArrowRight, ArrowLeft, CheckCircle2, Globe, Building2, Target, Award, Pen, Info, Zap, Brain } from "lucide-react"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 
@@ -40,7 +40,7 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
         // Step 2: Positioning & Offer
         pitch: "",
         main_offer: "",
-        pain_points: "", // stored as string in textarea, converted to array on save
+        pain_points: "",
         main_promise: "",
         secondary_benefits: [] as string[],
 
@@ -63,6 +63,11 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
         language: "fr" as "fr" | "en",
     })
 
+    // FIX: Use callback to update form data properly
+    const updateFormData = useCallback((field: string, value: any) => {
+        setFormData(prev => ({ ...prev, [field]: value }))
+    }, [])
+
     // --- ACTIONS ---
 
     const handleAiAnalyze = async () => {
@@ -73,14 +78,13 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
 
         setAiLoading(true)
         try {
-            // Call our internal API proxy which calls n8n
             const response = await fetch('/api/campaigns/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     website: formData.my_website,
                     company: formData.my_company_name,
-                    siren: formData.siren // Include SIREN for better analysis
+                    siren: formData.siren
                 })
             })
 
@@ -88,7 +92,6 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
 
             const data = await response.json()
 
-            // Map n8n response fields to our form
             let formattedPainPoints = ""
             if (Array.isArray(data.pain_points)) {
                 formattedPainPoints = data.pain_points.map((p: string) => `- ${p}`).join('\n')
@@ -98,10 +101,10 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
 
             setFormData(prev => ({
                 ...prev,
-                pitch: data.pitch || "",
-                main_offer: data.main_offer || "",
-                pain_points: formattedPainPoints,
-                main_promise: data.main_promise || ""
+                pitch: data.pitch || prev.pitch,
+                main_offer: data.main_offer || prev.main_offer,
+                pain_points: formattedPainPoints || prev.pain_points,
+                main_promise: data.main_promise || prev.main_promise
             }))
 
             toast.success("✨ Analyse terminée ! Données pré-remplies.")
@@ -119,7 +122,6 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) throw new Error("Non connecté")
 
-        // Convert pain_points string to array
         const painPointsArray = formData.pain_points
             .split('\n')
             .filter(line => line.trim() !== '')
@@ -130,7 +132,6 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
             campaign_name: formData.campaign_name,
             my_company_name: formData.my_company_name,
             my_website: formData.my_website,
-            // NOTE: siren is NOT saved in database (just for AI analysis)
             pitch: formData.pitch,
             main_offer: formData.main_offer,
             pain_points: painPointsArray,
@@ -155,7 +156,6 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
         }
 
         if (campaignId) {
-            // UPDATE existing campaign
             const { error } = await supabase
                 .from('cold_email_campaigns')
                 .update(campaignData)
@@ -163,7 +163,6 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
 
             if (error) throw error
         } else {
-            // INSERT new campaign
             const { data, error } = await supabase
                 .from('cold_email_campaigns')
                 .insert(campaignData)
@@ -179,7 +178,6 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
         try {
             setLoading(true)
 
-            // Step 1: Create campaign + lance l'IA automatiquement si site web rempli
             if (step === 'identity') {
                 if (!formData.campaign_name) {
                     toast.error("Le nom de la campagne est requis")
@@ -189,9 +187,11 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
                 await saveCampaign()
                 toast.success("✅ Campagne créée !")
 
-                // Auto-trigger AI analysis if website is filled
+                // Auto-trigger AI if website filled
                 if (formData.my_website) {
+                    setLoading(false)
                     await handleAiAnalyze()
+                    setLoading(true)
                 }
 
                 setStep('positioning')
@@ -212,12 +212,31 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
         }
     }
 
+    const handleSkipAI = async () => {
+        try {
+            setLoading(true)
+
+            if (!formData.campaign_name) {
+                toast.error("Le nom de la campagne est requis")
+                return
+            }
+
+            await saveCampaign()
+            toast.success("✅ Campagne créée !")
+            setStep('positioning')
+        } catch (error: any) {
+            console.error(error)
+            toast.error("Erreur: " + error.message)
+        } finally {
+            setLoading(false)
+        }
+    }
+
     const handleFinish = async () => {
         try {
             setLoading(true)
             await saveCampaign()
 
-            // Mark as ACTIVE
             const supabase = createClient()
             await supabase
                 .from('cold_email_campaigns')
@@ -228,7 +247,7 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
             if (onSuccess && campaignId) onSuccess(campaignId)
             onOpenChange(false)
 
-            // Reset form
+            // Reset
             setStep('identity')
             setCampaignId(null)
             setFormData({
@@ -265,7 +284,7 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
         }
     }
 
-    // --- HELPER COMPONENT: Field with Tooltip ---
+    // --- HELPER COMPONENT ---
     const FieldWithTooltip = ({ label, tooltip, required = false, children }: { label: string, tooltip: string, required?: boolean, children: React.ReactNode }) => (
         <div className="space-y-2">
             <div className="flex items-center gap-2">
@@ -285,10 +304,36 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
         </div>
     )
 
+    // --- LOADING OVERLAY ---
+    const AILoadingOverlay = () => (
+        <div className="absolute inset-0 bg-white/95 backdrop-blur-sm z-50 flex flex-col items-center justify-center p-8 rounded-lg">
+            <div className="relative">
+                <div className="w-20 h-20 rounded-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 animate-spin" style={{
+                    clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)',
+                    animationDuration: '2s'
+                }}></div>
+                <Brain className="w-10 h-10 text-indigo-600 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 animate-pulse" />
+            </div>
+            <h3 className="mt-6 text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                ✨ IA en action
+            </h3>
+            <p className="mt-2 text-sm text-muted-foreground text-center max-w-md">
+                L'intelligence artificielle analyse les données de votre site web et créée une stratégie marketing personnalisée...
+            </p>
+            <div className="mt-4 flex gap-1">
+                <span className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                <span className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                <span className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+            </div>
+        </div>
+    )
+
     // --- STEPS RENDER ---
 
     const renderIdentityStep = () => (
-        <div className="space-y-5 py-6">
+        <div className="space-y-5 py-6 relative">
+            {aiLoading && <AILoadingOverlay />}
+
             <FieldWithTooltip
                 label="Nom de la Campagne"
                 tooltip="Donnez un nom unique à cette campagne pour la retrouver facilement (ex: 'Prospection Q1 2024')"
@@ -297,7 +342,7 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
                 <Input
                     placeholder="ex: Prospection Agences Immo - Q1 2024"
                     value={formData.campaign_name}
-                    onChange={(e) => setFormData({ ...formData, campaign_name: e.target.value })}
+                    onChange={(e) => updateFormData('campaign_name', e.target.value)}
                     className="h-11 border-2 focus:border-primary transition-all"
                 />
             </FieldWithTooltip>
@@ -305,7 +350,7 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FieldWithTooltip
                     label="Votre Entreprise"
-                    tooltip="Le nom officiel de votre société (tel qu'il apparaît sur vos documents légaux)"
+                    tooltip="Le nom officiel de votre société"
                     required
                 >
                     <div className="relative">
@@ -314,19 +359,19 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
                             className="pl-10 h-11 border-2 focus:border-primary transition-all"
                             placeholder="ex: SuperProspect"
                             value={formData.my_company_name}
-                            onChange={(e) => setFormData({ ...formData, my_company_name: e.target.value })}
+                            onChange={(e) => updateFormData('my_company_name', e.target.value)}
                         />
                     </div>
                 </FieldWithTooltip>
 
                 <FieldWithTooltip
                     label="Numéro SIREN (optionnel)"
-                    tooltip="Votre SIREN aide l'IA à trouver des infos précises sur votre entreprise (non stocké, uniquement pour l'analyse)"
+                    tooltip="Votre SIREN aide l'IA à trouver des infos précises (non stocké)"
                 >
                     <Input
                         placeholder="ex: 123 456 789"
                         value={formData.siren}
-                        onChange={(e) => setFormData({ ...formData, siren: e.target.value })}
+                        onChange={(e) => updateFormData('siren', e.target.value)}
                         className="h-11 border-2 focus:border-primary transition-all font-mono"
                         maxLength={9}
                     />
@@ -334,8 +379,8 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
             </div>
 
             <FieldWithTooltip
-                label="Votre  Site Web"
-                tooltip="L'URL de votre site web officiel - l'IA l'analysera pour extraire votre proposition de valeur"
+                label="Votre Site Web"
+                tooltip="L'URL de votre site web - l'IA l'analysera"
                 required
             >
                 <div className="relative">
@@ -344,7 +389,7 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
                         className="pl-10 h-11 border-2 focus:border-primary transition-all"
                         placeholder="https://superprospect.io"
                         value={formData.my_website}
-                        onChange={(e) => setFormData({ ...formData, my_website: e.target.value })}
+                        onChange={(e) => updateFormData('my_website', e.target.value)}
                     />
                 </div>
             </FieldWithTooltip>
@@ -360,7 +405,7 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
                     </div>
                 </div>
                 <p className="text-sm text-blue-800 leading-relaxed">
-                    Notre IA analyse votre site web et votre SIREN pour <strong>pré-remplir automatiquement</strong> votre stratégie marketing, votre offre, et vos points de douleur.
+                    Notre IA analyse votre site web et votre SIREN pour <strong>pré-remplir automatiquement</strong> votre stratégie marketing.
                 </p>
                 <div className="flex items-center gap-2 pt-2">
                     <Zap className="w-4 h-4 text-amber-600" />
@@ -374,13 +419,13 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
         <div className="space-y-5 py-6">
             <FieldWithTooltip
                 label="Pitch (Positionnement)"
-                tooltip="Résumez votre proposition de valeur en 1-2 phrases claires (idéalement format: 'Nous aidons [cible] à [bénéfice] grâce à [méthode]')"
+                tooltip="Résumez votre proposition de valeur en 1-2 phrases"
                 required
             >
                 <Textarea
                     placeholder="Nous aidons les [cible] à [bénéfice] grâce à [méthode]."
                     value={formData.pitch}
-                    onChange={(e) => setFormData({ ...formData, pitch: e.target.value })}
+                    onChange={(e) => updateFormData('pitch', e.target.value)}
                     rows={3}
                     className="border-2 focus:border-primary transition-all resize-none"
                 />
@@ -388,13 +433,13 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
 
             <FieldWithTooltip
                 label="Offre Principale"
-                tooltip="Décrivez votre offre phare en détail : qu'est-ce que vous vendez exactement ? Quels sont les bénéfices concrets ?"
+                tooltip="Décrivez votre offre phare en détail"
                 required
             >
                 <Textarea
-                    placeholder="Outil d'automatisation de prospection B2B avec email finder intégré, enrichissement automatique et séquences personnalisées..."
+                    placeholder="Outil d'automatisation de prospection B2B..."
                     value={formData.main_offer}
-                    onChange={(e) => setFormData({ ...formData, main_offer: e.target.value })}
+                    onChange={(e) => updateFormData('main_offer', e.target.value)}
                     rows={4}
                     className="border-2 focus:border-primary transition-all resize-none"
                 />
@@ -402,26 +447,25 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
 
             <FieldWithTooltip
                 label="Pain Points (Douleurs)"
-                tooltip="Listez les problèmes que vos prospects rencontrent (que votre offre résout). Un point par ligne, commencez par un tiret."
+                tooltip="Listez les problèmes que vos prospects rencontrent"
             >
                 <Textarea
-                    placeholder="- Trop de temps perdu en prospection manuelle&#10;- Taux de réponse email faible (moins de 2%)&#10;- Manque de données de contact qualifiées&#10;- Difficile de personnaliser les emails à grande échelle"
+                    placeholder="- Trop de temps perdu en prospection manuelle&#10;- Taux de réponse email faible"
                     value={formData.pain_points}
-                    onChange={(e) => setFormData({ ...formData, pain_points: e.target.value })}
+                    onChange={(e) => updateFormData('pain_points', e.target.value)}
                     rows={5}
                     className="font-mono text-sm border-2 focus:border-primary transition-all resize-none"
                 />
-                <p className="text-xs text-muted-foreground mt-1">💡 Un point par ligne (optionnel mais fortement recommandé pour de meilleurs emails).</p>
             </FieldWithTooltip>
 
             <FieldWithTooltip
                 label="Promesse Principale"
-                tooltip="Quelle est votre promesse chiffrée ou résultat garanti ? (ex: '+40% de RDV', 'ROI x3 en 90j', 'Setup en 5min')"
+                tooltip="Votre promesse chiffrée (ex: '+40% de RDV')"
             >
                 <Input
                     placeholder="ex: +40% de RDV qualifiés en 30 jours"
                     value={formData.main_promise}
-                    onChange={(e) => setFormData({ ...formData, main_promise: e.target.value })}
+                    onChange={(e) => updateFormData('main_promise', e.target.value)}
                     className="h-11 border-2 focus:border-primary transition-all"
                 />
             </FieldWithTooltip>
@@ -432,10 +476,10 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
         <div className="space-y-5 py-6">
             <FieldWithTooltip
                 label="Objectif de Campagne"
-                tooltip="Quelle action souhaitez-vous que vos prospects effectuent après avoir lu l'email ?"
+                tooltip="Quelle action souhaitez-vous que vos prospects effectuent ?"
                 required
             >
-                <Select value={formData.objective} onValueChange={(value: any) => setFormData({ ...formData, objective: value })}>
+                <Select value={formData.objective} onValueChange={(value: any) => updateFormData('objective', value)}>
                     <SelectTrigger className="h-11 border-2">
                         <SelectValue />
                     </SelectTrigger>
@@ -453,12 +497,12 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
 
             <FieldWithTooltip
                 label="Audience Cible (ICP)"
-                tooltip="Décrivez votre client idéal : rôle, secteur, taille d'entreprise, problématiques (ex: 'CEO de PME SaaS B2B entre 10 et 50 employés')"
+                tooltip="Décrivez votre client idéal"
             >
                 <Textarea
-                    placeholder="ex: CEO de PME SaaS B2B entre 10 et 50 employés cherchant à scaler leurs ventes"
+                    placeholder="ex: CEO de PME SaaS B2B entre 10 et 50 employés"
                     value={formData.target_audience}
-                    onChange={(e) => setFormData({ ...formData, target_audience: e.target.value })}
+                    onChange={(e) => updateFormData('target_audience', e.target.value)}
                     rows={3}
                     className="border-2 focus:border-primary transition-all resize-none"
                 />
@@ -467,15 +511,12 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FieldWithTooltip
                     label="Secteurs Visés"
-                    tooltip="Industries ou secteurs que vous ciblez (séparez par des virgules)"
+                    tooltip="Industries que vous ciblez (séparez par virgules)"
                 >
                     <Input
-                        placeholder="SaaS, E-commerce, Agences, Conseil..."
+                        placeholder="SaaS, E-commerce, Agences..."
                         value={formData.target_sectors.join(', ')}
-                        onChange={(e) => setFormData({
-                            ...formData,
-                            target_sectors: e.target.value.split(',').map(s => s.trim()).filter(Boolean)
-                        })}
+                        onChange={(e) => updateFormData('target_sectors', e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
                         className="h-11 border-2 focus:border-primary transition-all"
                     />
                 </FieldWithTooltip>
@@ -484,16 +525,16 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
                     label="Taille Entreprise"
                     tooltip="Nombre d'employés de vos prospects cibles"
                 >
-                    <Select value={formData.target_company_size} onValueChange={(value) => setFormData({ ...formData, target_company_size: value })}>
+                    <Select value={formData.target_company_size} onValueChange={(value) => updateFormData('target_company_size', value)}>
                         <SelectTrigger className="h-11 border-2">
                             <SelectValue placeholder="Choisir..." />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="1-10">1-10 employés (TPE)</SelectItem>
-                            <SelectItem value="11-50">11-50 employés (PME)</SelectItem>
-                            <SelectItem value="51-200">51-200 employés (ETI)</SelectItem>
+                            <SelectItem value="1-10">1-10 employés</SelectItem>
+                            <SelectItem value="11-50">11-50 employés</SelectItem>
+                            <SelectItem value="51-200">51-200 employés</SelectItem>
                             <SelectItem value="201-500">201-500 employés</SelectItem>
-                            <SelectItem value="500+">500+ employés (Grande entreprise)</SelectItem>
+                            <SelectItem value="500+">500+ employés</SelectItem>
                         </SelectContent>
                     </Select>
                 </FieldWithTooltip>
@@ -510,89 +551,67 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
                 </h4>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FieldWithTooltip
-                        label="Nom"
-                        tooltip="Prénom et nom de la personne qui signe l'email"
-                        required
-                    >
+                    <FieldWithTooltip label="Nom" tooltip="Prénom et nom" required>
                         <Input
                             placeholder="Jean Dupont"
                             value={formData.signature_name}
-                            onChange={(e) => setFormData({ ...formData, signature_name: e.target.value })}
+                            onChange={(e) => updateFormData('signature_name', e.target.value)}
                             className="h-10 border-2"
                         />
                     </FieldWithTooltip>
 
-                    <FieldWithTooltip
-                        label="Titre / Fonction"
-                        tooltip="Votre rôle dans l'entreprise (ex: CEO, Sales Director...)"
-                    >
+                    <FieldWithTooltip label="Titre" tooltip="Votre rôle">
                         <Input
                             placeholder="CEO & Founder"
                             value={formData.signature_title}
-                            onChange={(e) => setFormData({ ...formData, signature_title: e.target.value })}
+                            onChange={(e) => updateFormData('signature_title', e.target.value)}
                             className="h-10 border-2"
                         />
                     </FieldWithTooltip>
                 </div>
 
-                <FieldWithTooltip
-                    label="Société"
-                    tooltip="Nom de votre entreprise dans la signature"
-                >
+                <FieldWithTooltip label="Société" tooltip="Nom de votre entreprise">
                     <Input
                         placeholder="SuperProspect"
                         value={formData.signature_company}
-                        onChange={(e) => setFormData({ ...formData, signature_company: e.target.value })}
+                        onChange={(e) => updateFormData('signature_company', e.target.value)}
                         className="h-10 border-2"
                     />
                 </FieldWithTooltip>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FieldWithTooltip
-                        label="Téléphone"
-                        tooltip="Numéro de téléphone professionnel"
-                    >
+                    <FieldWithTooltip label="Téléphone" tooltip="Numéro professionnel">
                         <Input
                             placeholder="+33 6 12 34 56 78"
                             value={formData.signature_phone}
-                            onChange={(e) => setFormData({ ...formData, signature_phone: e.target.value })}
+                            onChange={(e) => updateFormData('signature_phone', e.target.value)}
                             className="h-10 border-2"
                         />
                     </FieldWithTooltip>
 
-                    <FieldWithTooltip
-                        label="Email"
-                        tooltip="Adresse email professionnelle"
-                    >
+                    <FieldWithTooltip label="Email" tooltip="Email professionnel">
                         <Input
                             placeholder="jean@superprospect.io"
                             value={formData.signature_email}
-                            onChange={(e) => setFormData({ ...formData, signature_email: e.target.value })}
+                            onChange={(e) => updateFormData('signature_email', e.target.value)}
                             className="h-10 border-2"
                         />
                     </FieldWithTooltip>
                 </div>
 
-                <FieldWithTooltip
-                    label="PS (Post-Scriptum)"
-                    tooltip="Message bonus à la fin (optionnel mais très efficace pour attirer l'attention)"
-                >
+                <FieldWithTooltip label="PS" tooltip="Message bonus (optionnel mais efficace)">
                     <Textarea
-                        placeholder="Ex: PS : On offre 50% de réduction aux 10 premiers inscrits ce mois-ci."
+                        placeholder="PS : On offre 50% de réduction..."
                         value={formData.signature_ps}
-                        onChange={(e) => setFormData({ ...formData, signature_ps: e.target.value })}
+                        onChange={(e) => updateFormData('signature_ps', e.target.value)}
                         rows={2}
                         className="border-2 resize-none"
                     />
                 </FieldWithTooltip>
             </div>
 
-            <FieldWithTooltip
-                label="Tonalité de l'email"
-                tooltip="Le style d'écriture général de vos emails"
-            >
-                <Select value={formData.desired_tone} onValueChange={(value) => setFormData({ ...formData, desired_tone: value })}>
+            <FieldWithTooltip label="Tonalité" tooltip="Style d'écriture">
+                <Select value={formData.desired_tone} onValueChange={(value) => updateFormData('desired_tone', value)}>
                     <SelectTrigger className="h-11 border-2">
                         <SelectValue />
                     </SelectTrigger>
@@ -606,27 +625,21 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
             </FieldWithTooltip>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FieldWithTooltip
-                    label="Longueur de l'email"
-                    tooltip="Emails courts = plus de lecture. Emails longs = plus de détails."
-                >
-                    <Select value={formData.email_length} onValueChange={(value: any) => setFormData({ ...formData, email_length: value })}>
+                <FieldWithTooltip label="Longueur" tooltip="Courts = plus de lecture">
+                    <Select value={formData.email_length} onValueChange={(value: any) => updateFormData('email_length', value)}>
                         <SelectTrigger className="h-11 border-2">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="CONCISE">📝 Concis (100-150 mots)</SelectItem>
-                            <SelectItem value="STANDARD">📄 Standard (150-220 mots)</SelectItem>
-                            <SelectItem value="DETAILED">📚 Détaillé (220-300 mots)</SelectItem>
+                            <SelectItem value="CONCISE">📝 Concis</SelectItem>
+                            <SelectItem value="STANDARD">📄 Standard</SelectItem>
+                            <SelectItem value="DETAILED">📚 Détaillé</SelectItem>
                         </SelectContent>
                     </Select>
                 </FieldWithTooltip>
 
-                <FieldWithTooltip
-                    label="Langue"
-                    tooltip="Langue de rédaction des emails générés"
-                >
-                    <Select value={formData.language} onValueChange={(value: any) => setFormData({ ...formData, language: value })}>
+                <FieldWithTooltip label="Langue" tooltip="Langue de rédaction">
+                    <Select value={formData.language} onValueChange={(value: any) => updateFormData('language', value)}>
                         <SelectTrigger className="h-11 border-2">
                             <SelectValue />
                         </SelectTrigger>
@@ -638,28 +651,16 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
                 </FieldWithTooltip>
             </div>
 
-            <div className="flex items-center space-x-3 py-3 px-4 bg-slate-50 rounded-lg border-2 border-slate-200">
+            <div className="flex items-center space-x-3 py-3 px-4 bg-slate-50 rounded-lg border-2">
                 <Checkbox
                     id="formal"
                     checked={formData.formal}
-                    onCheckedChange={(checked) => setFormData({ ...formData, formal: checked as boolean })}
+                    onCheckedChange={(checked) => updateFormData('formal', checked)}
                     className="border-2"
                 />
-                <div className="flex items-center gap-2">
-                    <label htmlFor="formal" className="text-sm font-medium cursor-pointer">
-                        Utiliser le vouvoiement
-                    </label>
-                    <TooltipProvider delayDuration={0}>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Info className="w-4 h-4 text-muted-foreground hover:text-primary cursor-help" />
-                            </TooltipTrigger>
-                            <TooltipContent side="right" className="max-w-[250px]">
-                                <p>Utiliser "vous" au lieu de "tu" pour un ton plus formel et professionnel</p>
-                            </TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
-                </div>
+                <label htmlFor="formal" className="text-sm font-medium cursor-pointer">
+                    Utiliser le vouvoiement
+                </label>
             </div>
         </div>
     )
@@ -679,11 +680,10 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
                         Nouvelle Campagne Cold Email
                     </DialogTitle>
                     <DialogDescription className="text-base">
-                        Configurez votre campagne en 4 étapes simples et générez des emails ultra-personnalisés.
+                        Configurez votre campagne en 4 étapes simples.
                     </DialogDescription>
 
-                    {/* Stepper Indicator */}
-                    <div className="flex items-center gap-2 mt-6 text-xs font-medium text-muted-foreground flex-wrap bg-gradient-to-r from-slate-50 to-gray-50 p-3 rounded-lg border">
+                    <div className="flex items-center gap-2 mt-6 text-xs font-medium flex-wrap bg-gradient-to-r from-slate-50 to-gray-50 p-3 rounded-lg border">
                         {Object.entries(stepConfig).map(([key, config], index) => (
                             <div key={key} className="flex items-center gap-2">
                                 <span className={`px-3 py-1.5 rounded-full transition-all ${step === key
@@ -722,9 +722,19 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
                     )}
 
                     {step === 'identity' && (
-                        <Button variant="outline" onClick={() => onOpenChange(false)} className="border-2">
-                            Annuler
-                        </Button>
+                        <>
+                            <Button variant="outline" onClick={() => onOpenChange(false)} className="border-2">
+                                Annuler
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                onClick={handleSkipAI}
+                                disabled={loading || aiLoading}
+                                className="text-muted-foreground hover:text-foreground"
+                            >
+                                Passer sans IA
+                            </Button>
+                        </>
                     )}
 
                     {step !== 'signature' ? (
