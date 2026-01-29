@@ -5,58 +5,29 @@ type FetchOptions = RequestInit & {
 }
 
 export const authenticatedFetch = async (url: string, options: FetchOptions = {}) => {
-    // Use the singleton client to avoid "split-brain" and lock contention
-    const supabase = createClient()
+    // 🔐 NO-LOCK FETCH STRATEGY
+    // We rely purely on Browser Cookies for authentication.
+    // We DO NOT call supabase.auth.getSession() to avoid "Navigator Lock" contention.
 
     console.log(`🚀 [AuthenticatedFetch] Requesting: ${url}`)
 
-    // 1. Get the current session token (non-forcing)
-    console.log('🔐 [AuthenticatedFetch] Getting session...')
-    const { data: { session } } = await supabase.auth.getSession()
-    console.log(`🔑 [AuthenticatedFetch] Session retrieved (Token: ${session?.access_token ? 'Yes' : 'No'})`)
-
-    const headers = new Headers(options.headers)
-    if (session?.access_token) {
-        headers.set('Authorization', `Bearer ${session.access_token}`)
-    }
-
-    // 2. Execute Fetch with Error Handling
+    // 1. Execute Fetch (Cookies are sent automatically by browser)
     let response
     try {
-        console.log('📡 [AuthenticatedFetch] Executing fetch...')
-        response = await fetch(url, { ...options, headers })
+        response = await fetch(url, options)
         console.log(`✅ [AuthenticatedFetch] Response received (Status: ${response.status})`)
     } catch (error: any) {
-        console.error('🔥 [AuthenticatedFetch] Network/Abort Error:', error)
+        console.error('🔥 [AuthenticatedFetch] Network Error:', error)
         throw error
     }
 
-    // 3. The Anti-Freeze Interceptor
+    // 2. Simple 401 Handling (Redirect Only)
+    // If we get 401, it means Cookies are invalid/expired.
+    // We do NOT attempt to refresh token here to avoid Lock Contention.
+    // We simply redirect to login.
     if (response.status === 401) {
-        console.error('🛑 [Global 401 Interceptor] Triggered. Initiating Recovery.')
-
-        // Attempt to refresh the session manually
-        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession()
-
-        if (refreshError || !refreshData.session) {
-            // If refresh fails, the session is dead.
-            // Force a hard navigation to login to clear all memory state.
-            console.error('💀 [Global 401 Interceptor] Refresh Failed -> Force Login.')
-            window.location.href = '/login?reason=session_expired'
-            return response // Return original response (caller should prevent further action)
-        }
-
-        // If refresh succeeded, retry the request with the new token
-        console.log('✅ [Global 401 Interceptor] Refresh Success -> Retrying Request.')
-        headers.set('Authorization', `Bearer ${refreshData.session.access_token}`)
-
-        // Retry the original fetch
-        try {
-            response = await fetch(url, { ...options, headers })
-        } catch (retryError) {
-            console.error('🔥 [Global 401 Interceptor] Retry Failed:', retryError)
-            throw retryError
-        }
+        console.error('🛑 [Global 401 Interceptor] Unauthorized. Redirecting to Login.')
+        window.location.href = '/login?reason=session_expired'
     }
 
     return response
