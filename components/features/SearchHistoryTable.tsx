@@ -32,7 +32,14 @@ export function SearchHistoryTable({ limit }: { limit?: number }) {
 
             let query = supabase
                 .from('scrape_jobs')
-                .select('*')
+                .select(`
+                    id_jobs,
+                    id_user,
+                    request_search,
+                    resuest_ville,
+                    statut,
+                    created_at
+                `)
                 .eq('id_user', user.id)
                 .order('created_at', { ascending: false })
 

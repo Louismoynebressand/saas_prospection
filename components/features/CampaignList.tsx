@@ -31,7 +31,16 @@ export function CampaignList() {
         if (user) {
             const { data } = await supabase
                 .from('cold_email_campaigns')
-                .select('*')
+                .select(`
+                    id,
+                    user_id,
+                    name,
+                    campaign_name,
+                    is_active,
+                    created_at,
+                    updated_at,
+                    status
+                `)
                 .eq('user_id', user.id)
                 .order('created_at', { ascending: false })
 

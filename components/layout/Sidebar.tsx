@@ -46,7 +46,17 @@ export function Sidebar() {
             // Fetch Quotas
             const { data: quotaData, error } = await supabase
                 .from('quotas')
-                .select('*')
+                .select(`
+                    user_id,
+                    scraps_used,
+                    scraps_limit,
+                    deep_search_used,
+                    deep_search_limit,
+                    cold_emails_used,
+                    cold_emails_limit,
+                    check_email_used,
+                    check_email_limit
+                `)
                 .eq('user_id', userId)
                 .single()
 

@@ -40,7 +40,19 @@ export function CampaignEmailsList({ campaignId }: CampaignEmailsListProps) {
             const supabase = createClient()
             const { data, error } = await supabase
                 .from('email_generations')
-                .select('*')
+                .select(`
+                    id,
+                    id_campaign,
+                    id_prospect,
+                    subject,
+                    body,
+                    status,
+                    sent_at,
+                    opened_at,
+                    clicked_at,
+                    replied_at,
+                    created_at
+                `)
                 .eq('id_campaign', campaignId)
                 .order('created_at', { ascending: false })
 

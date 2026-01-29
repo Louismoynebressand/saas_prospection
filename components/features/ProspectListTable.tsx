@@ -85,7 +85,19 @@ export function ProspectListTable({ searchId, autoRefresh }: { searchId: string,
         try {
             const { data, error } = await supabase
                 .from('scrape_prospect')
-                .select('*')
+                .select(`
+                    id_prospect,
+                    id_jobs,
+                    id_user,
+                    email,
+                    phone,
+                    ville,
+                    secteur,
+                    created_at,
+                    email_adresse_verified,
+                    data_scrapping,
+                    deep_search
+                `)
                 .eq('id_jobs', searchId)
                 .order('created_at', { ascending: false })
 
