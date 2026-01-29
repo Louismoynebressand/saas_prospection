@@ -1,25 +1,35 @@
-import { createBrowserClient } from '@supabase/ssr'
-
-const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+import { createClient } from '@/lib/supabase/client'
 
 type FetchOptions = RequestInit & {
     headers?: Record<string, string>
 }
 
 export const authenticatedFetch = async (url: string, options: FetchOptions = {}) => {
+    // Use the singleton client to avoid "split-brain" and lock contention
+    const supabase = createClient()
+
+    console.log(`🚀 [AuthenticatedFetch] Requesting: ${url}`)
+
     // 1. Get the current session token (non-forcing)
+    console.log('🔐 [AuthenticatedFetch] Getting session...')
     const { data: { session } } = await supabase.auth.getSession()
+    console.log(`🔑 [AuthenticatedFetch] Session retrieved (Token: ${session?.access_token ? 'Yes' : 'No'})`)
 
     const headers = new Headers(options.headers)
     if (session?.access_token) {
         headers.set('Authorization', `Bearer ${session.access_token}`)
     }
 
-    // 2. Execute Fetch
-    let response = await fetch(url, { ...options, headers })
+    // 2. Execute Fetch with Error Handling
+    let response
+    try {
+        console.log('📡 [AuthenticatedFetch] Executing fetch...')
+        response = await fetch(url, { ...options, headers })
+        console.log(`✅ [AuthenticatedFetch] Response received (Status: ${response.status})`)
+    } catch (error: any) {
+        console.error('🔥 [AuthenticatedFetch] Network/Abort Error:', error)
+        throw error
+    }
 
     // 3. The Anti-Freeze Interceptor
     if (response.status === 401) {
@@ -41,7 +51,12 @@ export const authenticatedFetch = async (url: string, options: FetchOptions = {}
         headers.set('Authorization', `Bearer ${refreshData.session.access_token}`)
 
         // Retry the original fetch
-        response = await fetch(url, { ...options, headers })
+        try {
+            response = await fetch(url, { ...options, headers })
+        } catch (retryError) {
+            console.error('🔥 [Global 401 Interceptor] Retry Failed:', retryError)
+            throw retryError
+        }
     }
 
     return response
