@@ -1,15 +1,14 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
-import { supabase } from "@/lib/supabase"
+import { createClient } from "@/lib/supabase/client"
 import { motion } from "framer-motion"
 import CountUp from "react-countup"
 import confetti from "canvas-confetti"
 import { Button } from "@/components/ui/button"
 import { AIBadge } from "@/components/ui/ai-badge"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Progress } from "@/components/ui/progress"
 import { Loader2, CheckCircle2, Search, Mail, Eye, ArrowRight, Sparkles } from "lucide-react"
 import { toast } from "sonner"
 
@@ -21,126 +20,246 @@ interface ScrapingProgressWidgetProps {
 
 export function ScrapingProgressWidget({ jobId, maxResults, onComplete }: ScrapingProgressWidgetProps) {
     const router = useRouter()
-    const [status, setStatus] = useState<string>('initializing')
+    const supabase = createClient()
+
+    // Core state
+    const [status, setStatus] = useState<string>('running') // Start as running immediately  
     const [prospectCount, setProspectCount] = useState(0)
     const [emailCount, setEmailCount] = useState(0)
     const [deepSearchCount, setDeepSearchCount] = useState(0)
     const [progress, setProgress] = useState(0)
-    const [hasStarted, setHasStarted] = useState(false)
     const [confettiTriggered, setConfettiTriggered] = useState(false)
 
-    const calculateStats = (prospects: any[]) => {
-        setProspectCount(prospects.length)
+    // Refs for cleanup
+    const pollingRef = useRef<NodeJS.Timeout | null>(null)
+    const mountedRef = useRef(true)
 
+    // Optimized stats calculation from prospects array
+    const calculateStats = useCallback((prospects: any[]) => {
+        if (!mountedRef.current) return
+
+        const count = prospects.length
+        setProspectCount(count)
+
+        // Count emails
         const emails = prospects.filter(p => {
-            if (p.email_adresse_verified === true) return true;
+            if (p.email_adresse_verified === true) return true
             if (p.data_scrapping) {
                 try {
-                    const data = typeof p.data_scrapping === 'string' ? JSON.parse(p.data_scrapping) : p.data_scrapping;
-                    if (data.Email) return true;
-                } catch (e) { return false }
+                    const data = typeof p.data_scrapping === 'string'
+                        ? JSON.parse(p.data_scrapping)
+                        : p.data_scrapping
+                    if (data.Email) return true
+                } catch { return false }
             }
-            return false;
+            return false
         }).length
         setEmailCount(emails)
 
+        // Count enriched (deep search)
         const deep = prospects.filter(p => {
-            if (!p.deep_search) return false;
+            if (!p.deep_search) return false
             try {
-                const data = typeof p.deep_search === 'string' ? JSON.parse(p.deep_search) : p.deep_search;
-                return Object.keys(data).length > 0;
-            } catch (e) { return false }
+                const data = typeof p.deep_search === 'string'
+                    ? JSON.parse(p.deep_search)
+                    : p.deep_search
+                return Object.keys(data).length > 0
+            } catch { return false }
         }).length
         setDeepSearchCount(deep)
-    }
 
-    const fetchStats = async () => {
-        const { data: prospects } = await supabase
-            .from('scrape_prospect')
-            .select('*')
-            .eq('id_jobs', jobId)
+        // Calculate progress based on prospects found
+        const progressValue = count > 0
+            ? Math.min(Math.round((count / maxResults) * 100), 98)
+            : 5 // Show at least 5% when job started
+        setProgress(progressValue)
+    }, [maxResults])
 
-        if (prospects) calculateStats(prospects)
-    }
+    // OPTIMIZED: Fetch stats with minimal columns
+    const fetchStats = useCallback(async () => {
+        if (!mountedRef.current) return
 
-    useEffect(() => {
-        let mounted = true
-        const start = async () => {
-            const { data: job } = await supabase.from('scrape_jobs').select('statut').eq('id_jobs', jobId).single()
-            if (job && mounted) {
-                console.log("[Widget] Initial Job Status:", job.statut)
-                if (['done', 'ALLfinish'].includes(job.statut)) {
-                    setStatus('completed')
-                } else if (job.statut === 'error') {
-                    setStatus('error')
-                } else {
-                    setStatus(job.statut)
-                    if (job.statut !== 'initializing') setHasStarted(true)
-                }
+        try {
+            const { data: prospects, error } = await supabase
+                .from('scrape_prospect')
+                .select('id_prospect, email_adresse_verified, data_scrapping, deep_search')
+                .eq('id_jobs', String(jobId))
+
+            if (error) {
+                console.error('[Widget] Error fetching prospects:', error)
+                return
             }
-            if (mounted) await fetchStats()
-        }
-        start()
-        return () => { mounted = false }
-    }, [jobId])
 
-    useEffect(() => {
-        const jobSub = supabase.channel(`job_${jobId}`)
-            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'scrape_jobs', filter: `id_jobs=eq.${jobId}` }, (payload) => {
-                const s = payload.new.statut
-                console.log("[Widget] Realtime Job Update:", s)
-                if (['done', 'ALLfinish'].includes(s)) {
+            if (prospects && mountedRef.current) {
+                calculateStats(prospects)
+            }
+        } catch (err) {
+            console.error('[Widget] fetchStats error:', err)
+        }
+    }, [jobId, supabase, calculateStats])
+
+    // OPTIMIZED: Check job status
+    const checkJobStatus = useCallback(async () => {
+        if (!mountedRef.current) return
+
+        try {
+            const { data: job, error } = await supabase
+                .from('scrape_jobs')
+                .select('statut')
+                .eq('id_jobs', String(jobId))
+                .single()
+
+            if (error) {
+                console.error('[Widget] Error fetching job status:', error)
+                return
+            }
+
+            if (job && mountedRef.current) {
+                console.log('[Widget] Job status:', job.statut)
+
+                if (['done', 'ALLfinish'].includes(job.statut)) {
                     setStatus('completed')
                     setProgress(100)
                     if (onComplete) onComplete()
-                } else if (s === 'running') {
-                    setStatus('running')
-                    setHasStarted(true)
-                } else if (s === 'error') {
+                    return true // Signal completion
+                } else if (job.statut === 'error') {
                     setStatus('error')
                     toast.error("Erreur de scraping")
+                    return true // Signal completion (error)
+                } else if (job.statut === 'queued') {
+                    setStatus('queued')
+                } else {
+                    setStatus('running')
                 }
-            })
-            .subscribe()
-
-        const prospectSub = supabase.channel(`prospects_${jobId}`)
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'scrape_prospect', filter: `id_jobs=eq.${jobId}` }, () => {
-                if (!hasStarted) setHasStarted(true)
-                if (status === 'queued') setStatus('running')
-                fetchStats()
-            })
-            .subscribe()
-
-        return () => { supabase.removeChannel(jobSub); supabase.removeChannel(prospectSub) }
-    }, [jobId, hasStarted, status])
-
-    useEffect(() => {
-        if (status === 'completed') {
-            setProgress(100)
-            // Trigger confetti on completion (only once)
-            if (!confettiTriggered) {
-                confetti({
-                    particleCount: 100,
-                    spread: 70,
-                    origin: { y: 0.6 },
-                    colors: ['#22c55e', '#10b981', '#4ade80']
-                })
-                setConfettiTriggered(true)
             }
-        } else {
-            setProgress(Math.min(Math.round((prospectCount / maxResults) * 100), 98))
+            return false // Not completed yet
+        } catch (err) {
+            console.error('[Widget] checkJobStatus error:', err)
+            return false
         }
-    }, [prospectCount, maxResults, status, confettiTriggered])
+    }, [jobId, supabase, onComplete])
+
+    // IMMEDIATE: Fetch data on mount
+    useEffect(() => {
+        mountedRef.current = true
+
+        // Immediate first fetch
+        const init = async () => {
+            await Promise.all([checkJobStatus(), fetchStats()])
+        }
+        init()
+
+        return () => {
+            mountedRef.current = false
+        }
+    }, [checkJobStatus, fetchStats])
+
+    // REALTIME: Subscribe to both job and prospect changes
+    useEffect(() => {
+        const jobIdStr = String(jobId)
+
+        // Job status subscription
+        const jobChannel = supabase
+            .channel(`widget_job_${jobIdStr}`)
+            .on('postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'scrape_jobs',
+                    filter: `id_jobs=eq.${jobIdStr}`
+                },
+                (payload) => {
+                    const newStatus = payload.new?.statut
+                    console.log('[Widget] Realtime job update:', newStatus)
+
+                    if (['done', 'ALLfinish'].includes(newStatus)) {
+                        setStatus('completed')
+                        setProgress(100)
+                        fetchStats() // Final stats fetch
+                        if (onComplete) onComplete()
+                    } else if (newStatus === 'error') {
+                        setStatus('error')
+                        toast.error("Erreur de scraping")
+                    } else if (newStatus === 'running') {
+                        setStatus('running')
+                    }
+                }
+            )
+            .subscribe()
+
+        // Prospect inserts/updates subscription
+        const prospectChannel = supabase
+            .channel(`widget_prospects_${jobIdStr}`)
+            .on('postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'scrape_prospect',
+                    filter: `id_jobs=eq.${jobIdStr}`
+                },
+                () => {
+                    console.log('[Widget] Realtime prospect update')
+                    fetchStats() // Refresh stats on any prospect change
+                }
+            )
+            .subscribe()
+
+        return () => {
+            supabase.removeChannel(jobChannel)
+            supabase.removeChannel(prospectChannel)
+        }
+    }, [jobId, supabase, fetchStats, onComplete])
+
+    // POLLING FALLBACK: Poll every 3s until complete (realtime backup)
+    useEffect(() => {
+        if (status === 'completed' || status === 'error') {
+            // Clear polling if complete
+            if (pollingRef.current) {
+                clearInterval(pollingRef.current)
+                pollingRef.current = null
+            }
+            return
+        }
+
+        // Start polling as backup for realtime
+        pollingRef.current = setInterval(async () => {
+            if (!mountedRef.current) return
+
+            const isComplete = await checkJobStatus()
+            if (!isComplete) {
+                await fetchStats()
+            }
+        }, 3000) // Poll every 3 seconds
+
+        return () => {
+            if (pollingRef.current) {
+                clearInterval(pollingRef.current)
+                pollingRef.current = null
+            }
+        }
+    }, [status, checkJobStatus, fetchStats])
+
+    // Confetti on completion
+    useEffect(() => {
+        if (status === 'completed' && !confettiTriggered) {
+            confetti({
+                particleCount: 100,
+                spread: 70,
+                origin: { y: 0.6 },
+                colors: ['#22c55e', '#10b981', '#4ade80']
+            })
+            setConfettiTriggered(true)
+        }
+    }, [status, confettiTriggered])
 
     const handleViewDetails = () => router.push(`/searches/${jobId}`)
 
     const getStatusText = () => {
-        if (status === 'initializing' && !hasStarted) return "Initialisation..."
         if (status === 'queued') return "En attente de prise en charge..."
-        if (status === 'running') return `Scraping en cours`
+        if (status === 'running') return "Scraping en cours"
         if (status === 'completed') return "✨ Scraping terminé !"
         if (status === 'error') return "Erreur survenue"
-        return "Chargement..."
+        return "Scraping en cours" // Default to running
     }
 
     return (
@@ -153,7 +272,7 @@ export function ScrapingProgressWidget({ jobId, maxResults, onComplete }: Scrapi
                            border-primary/20 bg-gradient-to-br from-white via-blue-50/30 to-indigo-50/30 
                            shadow-xl hover:shadow-2xl transition-shadow">
                 {/* Animated shimmer on top */}
-                {status === 'running' && (
+                {(status === 'running' || status === 'queued') && (
                     <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r 
                                     from-transparent via-indigo-500 to-transparent 
                                     animate-shimmer opacity-75" />
@@ -172,7 +291,7 @@ export function ScrapingProgressWidget({ jobId, maxResults, onComplete }: Scrapi
                 <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
                         <CardTitle className="flex items-center gap-2 text-xl">
-                            {['initializing', 'queued', 'running'].includes(status) && status !== 'completed' && (
+                            {(status === 'running' || status === 'queued') && (
                                 <Loader2 className="h-5 w-5 animate-spin text-indigo-600" />
                             )}
                             {status === 'completed' && <CheckCircle2 className="h-5 w-5 text-green-500" />}
@@ -191,9 +310,8 @@ export function ScrapingProgressWidget({ jobId, maxResults, onComplete }: Scrapi
                     </div>
                     <CardDescription className="text-base">
                         {status === 'queued' ? "Votre recherche est dans la file d'attente." :
-                            status === 'initializing' ? "Connexion au serveur..." :
-                                status === 'completed' ? "🎉 Données enrichies et prêtes !" :
-                                    "Récupération et enrichissement des données en temps réel."}
+                            status === 'completed' ? "🎉 Données enrichies et prêtes !" :
+                                "Récupération et enrichissement des données en temps réel."}
                     </CardDescription>
                 </CardHeader>
 
@@ -208,7 +326,7 @@ export function ScrapingProgressWidget({ jobId, maxResults, onComplete }: Scrapi
                                 animate={{ width: `${progress}%` }}
                                 transition={{ duration: 0.5, ease: "easeOut" }}
                             />
-                            {status === 'running' && (
+                            {(status === 'running' || status === 'queued') && (
                                 <motion.div
                                     className="absolute inset-y-0 w-20 bg-white/40 blur-sm"
                                     animate={{ x: ['-100%', '500%'] }}
@@ -292,7 +410,7 @@ function StatBox({ icon: Icon, value, label, gradient }: { icon: any, value: num
                 animate={{ scale: 1, opacity: 1 }}
                 className={`text-3xl font-bold bg-gradient-to-r ${gradient} bg-clip-text text-transparent`}
             >
-                <CountUp end={value} duration={0.8} />
+                <CountUp end={value} duration={0.8} preserveValue />
             </motion.span>
             <span className="text-xs text-muted-foreground font-medium mt-1">{label}</span>
         </motion.div>
