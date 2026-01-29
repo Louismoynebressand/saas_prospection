@@ -18,7 +18,7 @@ SELECT
     sj.created_at,
     COALESCE(COUNT(sp.id_prospect), 0) as prospects_count
 FROM scrape_jobs sj
-LEFT JOIN scrape_prospect sp ON sp.id_jobs = sj.id_jobs
+LEFT JOIN scrape_prospect sp ON sp.id_jobs::text = sj.id_jobs::text
 GROUP BY sj.id_jobs, sj.id_user, sj.request_search, sj.resuest_ville, sj.statut, sj.created_at;
 
 -- Grant permissions
