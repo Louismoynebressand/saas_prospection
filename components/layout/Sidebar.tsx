@@ -25,6 +25,21 @@ export function Sidebar() {
         checkEmails: { used: number; total: number }
     } | null>(null)
 
+    const fetchProfile = async (userId: string) => {
+        try {
+            const supabase = createClient()
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('first_name, last_name, company_name')
+                .eq('id', userId)
+                .single()
+
+            if (profile) setUserProfile(profile)
+        } catch (err) {
+            console.error("Error fetching profile:", err)
+        }
+    }
+
     const fetchQuotas = async (userId: string) => {
         try {
             const supabase = createClient()
@@ -77,51 +92,62 @@ export function Sidebar() {
     }
 
     useEffect(() => {
-        const fetchData = async () => {
-            const supabase = createClient()
-            const { data: { user } } = await supabase.auth.getUser()
-
-            if (user) {
-                // Fetch Profile
-                const { data: profile } = await supabase
-                    .from('profiles')
-                    .select('first_name, last_name, company_name')
-                    .eq('id', user.id)
-                    .single()
-
-                if (profile) setUserProfile(profile)
-
-                // Fetch Quotas immediately
-                await fetchQuotas(user.id)
-            }
-            setLoadingProfile(false)
-        }
-
-        fetchData()
-
-        // Listen to quota changes in realtime
         const supabase = createClient()
-        const channel = supabase
-            .channel('quotas-sidebar-changes')
-            .on(
-                'postgres_changes',
-                {
-                    event: '*',
-                    schema: 'public',
-                    table: 'quotas'
-                },
-                async (payload: any) => {
-                    // Refresh if we have a user
-                    const { data: { user } } = await supabase.auth.getUser()
-                    if (user) {
+        let channel: ReturnType<typeof supabase.channel> | null = null
+
+        // Listen to auth state changes to handle session availability
+        const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange(
+            async (event, session) => {
+                const user = session?.user
+
+                if (user) {
+                    // User is authenticated - fetch data immediately
+                    await Promise.all([
+                        fetchProfile(user.id),
                         fetchQuotas(user.id)
+                    ])
+                    setLoadingProfile(false)
+
+                    // Setup Realtime subscription AFTER having a valid user
+                    if (!channel) {
+                        channel = supabase
+                            .channel(`quotas-updates-${user.id}`)
+                            .on(
+                                'postgres_changes',
+                                {
+                                    event: '*',
+                                    schema: 'public',
+                                    table: 'quotas',
+                                    filter: `user_id=eq.${user.id}` // Server-side filter
+                                },
+                                () => {
+                                    // Quota changed - refetch
+                                    fetchQuotas(user.id)
+                                }
+                            )
+                            .subscribe()
+                    }
+                } else {
+                    // User logged out - reset state
+                    setQuotas(null)
+                    setUserProfile(null)
+                    setLoadingProfile(false)
+
+                    // Cleanup channel if exists
+                    if (channel) {
+                        supabase.removeChannel(channel)
+                        channel = null
                     }
                 }
-            )
-            .subscribe()
+            }
+        )
 
+        // Cleanup on unmount
         return () => {
-            supabase.removeChannel(channel)
+            authSubscription?.unsubscribe()
+            if (channel) {
+                supabase.removeChannel(channel)
+            }
         }
     }, [])
 
