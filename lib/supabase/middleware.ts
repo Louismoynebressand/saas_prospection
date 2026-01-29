@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 // ⚠️ DEVELOPMENT ONLY: Set to true to bypass auth for local testing
 // ⚠️ IMPORTANT: Set back to false before deploying to production!
-const DEV_BYPASS_AUTH = true
+const DEV_BYPASS_AUTH = false
 
 export async function updateSession(request: NextRequest) {
     // DEV MODE: Skip all auth checks if bypass is enabled
