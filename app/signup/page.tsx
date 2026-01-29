@@ -174,7 +174,7 @@ export default function SignupPage() {
 
                         <div className="space-y-2">
                             <label htmlFor="phone" className="text-sm font-medium">
-                                Téléphone *
+                                Téléphone
                             </label>
                             <Input
                                 id="phone"
@@ -182,7 +182,6 @@ export default function SignupPage() {
                                 placeholder="+33 6 12 34 56 78"
                                 value={formData.phone}
                                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                                required
                                 disabled={loading}
                             />
                         </div>
