@@ -67,6 +67,11 @@ export function ProspectListTable({ searchId, autoRefresh }: { searchId: string,
     const [loading, setLoading] = useState(true)
     const pollInterval = useRef<NodeJS.Timeout | null>(null)
 
+    // Pagination state
+    const [currentPage, setCurrentPage] = useState(0)
+    const [totalCount, setTotalCount] = useState(0)
+    const ITEMS_PER_PAGE = 50
+
     // Filters & Sorting state
     const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null)
     const [filterHasEmail, setFilterHasEmail] = useState(false)
@@ -81,9 +86,9 @@ export function ProspectListTable({ searchId, autoRefresh }: { searchId: string,
         city: true,
     })
 
-    const fetchProspects = async () => {
+    const fetchProspects = async (page: number = currentPage) => {
         try {
-            const { data, error } = await supabase
+            const { data, error, count } = await supabase
                 .from('scrape_prospect')
                 .select(`
                     id_prospect,
@@ -97,12 +102,14 @@ export function ProspectListTable({ searchId, autoRefresh }: { searchId: string,
                     email_adresse_verified,
                     data_scrapping,
                     deep_search
-                `)
+                `, { count: 'exact' })
                 .eq('id_jobs', searchId)
+                .range(page * ITEMS_PER_PAGE, (page + 1) * ITEMS_PER_PAGE - 1)
                 .order('created_at', { ascending: false })
 
             if (error) throw error
             if (data) setProspects(data as ScrapeProspect[])
+            if (count !== null) setTotalCount(count)
         } catch (error) {
             console.error('Error fetching prospects:', error)
         } finally {
@@ -415,8 +422,41 @@ export function ProspectListTable({ searchId, autoRefresh }: { searchId: string,
                     </TableBody>
                 </Table>
             </div>
-            <div className="text-xs text-muted-foreground text-center">
-                {processedData.length} résultats affichés
+
+            {/* Pagination */}
+            <div className="flex items-center justify-between px-2 py-4 border-t">
+                <div className="text-sm text-muted-foreground">
+                    Affichage {currentPage * ITEMS_PER_PAGE + 1}-{Math.min((currentPage + 1) * ITEMS_PER_PAGE, totalCount)} sur {totalCount} résultats
+                </div>
+                <div className="flex gap-2 items-center">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                            const newPage = currentPage - 1
+                            setCurrentPage(newPage)
+                            fetchProspects(newPage)
+                        }}
+                        disabled={currentPage === 0 || loading}
+                    >
+                        Précédent
+                    </Button>
+                    <div className="text-sm">
+                        Page {currentPage + 1} sur {Math.max(1, Math.ceil(totalCount / ITEMS_PER_PAGE))}
+                    </div>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                            const newPage = currentPage + 1
+                            setCurrentPage(newPage)
+                            fetchProspects(newPage)
+                        }}
+                        disabled={currentPage >= Math.ceil(totalCount / ITEMS_PER_PAGE) - 1 || loading}
+                    >
+                        Suivant
+                    </Button>
+                </div>
             </div>
         </div>
     )
