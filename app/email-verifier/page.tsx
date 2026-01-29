@@ -59,7 +59,7 @@ export default function EmailVerifierPage() {
                     table: 'email_verification_results',
                     filter: `id_job=eq.${currentJobId}`
                 },
-                (payload) => {
+                (payload: any) => {
                     setResults(prev => [...prev, payload.new])
                 }
             )

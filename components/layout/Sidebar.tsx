@@ -107,7 +107,7 @@ export function Sidebar() {
 
         // Listen to auth state changes to handle session availability
         const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange(
-            async (event, session) => {
+            async (event: string, session: any) => {
                 const user = session?.user
 
                 if (user) {

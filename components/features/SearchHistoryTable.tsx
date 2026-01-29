@@ -68,7 +68,7 @@ export function SearchHistoryTable({ limit }: { limit?: number }) {
 
                 const countMap: Record<string, number> = {}
                 if (countsData) {
-                    countsData.forEach(item => {
+                    countsData.forEach((item: any) => {
                         countMap[item.id_jobs] = item.prospects_count || 0
                     })
                 }

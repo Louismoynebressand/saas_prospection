@@ -161,7 +161,7 @@ export function ScrapingProgressWidget({ jobId, maxResults, onComplete }: Scrapi
             .channel(`widget_job_${jobIdStr}`)
             .on('postgres_changes',
                 { event: 'UPDATE', schema: 'public', table: 'scrape_jobs', filter: `id_jobs=eq.${jobIdStr}` },
-                (payload) => {
+                (payload: any) => {
                     const newStatus = payload.new?.statut
                     if (['done', 'ALLfinish'].includes(newStatus)) {
                         setStatus('completed')
