@@ -120,6 +120,8 @@ export function Sidebar() {
 
                     // Setup Realtime subscription AFTER having a valid user
                     if (!channel) {
+                        let debounceTimer: NodeJS.Timeout
+
                         channel = supabase
                             .channel(`quotas-updates-${user.id}`)
                             .on(
@@ -131,8 +133,12 @@ export function Sidebar() {
                                     filter: `user_id=eq.${user.id}` // Server-side filter
                                 },
                                 () => {
-                                    // Quota changed - refetch
-                                    fetchQuotas(user.id)
+                                    // Quota changed - refetch with DEBOUNCE
+                                    // Prevents flooding during mass-inserts (scraping)
+                                    clearTimeout(debounceTimer)
+                                    debounceTimer = setTimeout(() => {
+                                        fetchQuotas(user.id)
+                                    }, 2000)
                                 }
                             )
                             .subscribe()

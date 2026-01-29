@@ -72,10 +72,15 @@ export function DashboardStats() {
             })
             .subscribe()
 
+        let debounceTimer: NodeJS.Timeout
+
         const prospectSub = supabase
             .channel('dashboard_stats_scrape_prospects')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'scrape_prospect' }, () => {
-                fetchStats()
+                clearTimeout(debounceTimer)
+                debounceTimer = setTimeout(() => {
+                    fetchStats()
+                }, 2000)
             })
             .subscribe()
 
