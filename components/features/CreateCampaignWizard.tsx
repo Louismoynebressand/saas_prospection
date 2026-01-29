@@ -126,7 +126,8 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
         try {
             // Get user ID for n8n to access user metadata
             const supabase = createClient()
-            const { data: { user } } = await supabase.auth.getUser()
+            // Use getSession instead of getUser to avoid network latency/locks
+            const { data: { session } } = await supabase.auth.getSession()
 
             const response = await authenticatedFetch('/api/campaigns/analyze', {
                 method: 'POST',
@@ -135,7 +136,7 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
                     website: formData.my_website,
                     company: formData.my_company_name,
                     siren: formData.siren,
-                    userId: user?.id  // Send user ID to n8n
+                    userId: session?.user?.id  // Send user ID to n8n
                 })
             })
 
