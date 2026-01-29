@@ -30,15 +30,17 @@ export function SearchHistoryTable({ limit }: { limit?: number }) {
                 return
             }
 
+            // Use view with pre-calculated counts (eliminates N+1 queries!)
             let query = supabase
-                .from('scrape_jobs')
+                .from('scrape_jobs_with_counts')
                 .select(`
                     id_jobs,
                     id_user,
                     request_search,
                     resuest_ville,
                     statut,
-                    created_at
+                    created_at,
+                    prospects_count
                 `)
                 .eq('id_user', user.id)
                 .order('created_at', { ascending: false })
@@ -51,19 +53,14 @@ export function SearchHistoryTable({ limit }: { limit?: number }) {
 
             if (error) throw error
             if (data) {
+                // @ts-ignore - Type cast for view data
                 setSearches(data as ScrapeJob[])
-                // Fetch counts for each search
-                const countMap: Record<string, number> = {}
-                await Promise.all(data.map(async (job) => {
-                    const { count } = await supabase
-                        .from('scrape_prospect')
-                        .select('*', { count: 'exact', head: true })
-                        .eq('id_jobs', job.id_jobs)
 
-                    if (count !== null) {
-                        countMap[job.id_jobs] = count
-                    }
-                }))
+                // Extract counts from view data (no additional queries needed!)
+                const countMap: Record<string, number> = {}
+                data.forEach(job => {
+                    countMap[job.id_jobs] = job.prospects_count || 0
+                })
                 setCounts(countMap)
             }
         } catch (error) {
