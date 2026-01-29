@@ -16,18 +16,6 @@
 CREATE INDEX IF NOT EXISTS idx_scrape_prospect_id_jobs 
 ON scrape_prospect(id_jobs);
 
--- Partial index on email (only non-null emails)
--- Used for: email filtering, verification
-CREATE INDEX IF NOT EXISTS idx_scrape_prospect_email 
-ON scrape_prospect(email) 
-WHERE email IS NOT NULL;
-
--- Partial index on ville (only non-null cities)
--- Used for: location-based searches
-CREATE INDEX IF NOT EXISTS idx_scrape_prospect_ville 
-ON scrape_prospect(ville) 
-WHERE ville IS NOT NULL;
-
 -- Composite index for common query patterns
 CREATE INDEX IF NOT EXISTS idx_scrape_prospect_job_created 
 ON scrape_prospect(id_jobs, created_at DESC);
