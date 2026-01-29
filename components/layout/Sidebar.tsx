@@ -182,8 +182,9 @@ export function Sidebar() {
     ]
 
     return (
-        <div className="flex h-full w-64 flex-col border-r bg-card">
-            <div className="p-6">
+        <div className="flex h-screen w-64 flex-col border-r bg-card">
+            {/* Header & Main Nav - Scrollable Area */}
+            <div className="flex-1 overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent">
                 <div className="flex items-center gap-2 font-bold text-xl text-primary mb-8">
                     <div className="h-8 w-8 rounded-lg bg-primary text-white flex items-center justify-center">N</div>
                     SUPER Prospect
@@ -219,7 +220,8 @@ export function Sidebar() {
                 </nav>
             </div>
 
-            <div className="mt-auto p-6 pt-0">
+            {/* Footer Section - Always Visible */}
+            <div className="flex-shrink-0 border-t bg-card p-6">
                 {/* Quotas Section */}
                 <div className="mb-6 space-y-4">
                     <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -282,9 +284,7 @@ export function Sidebar() {
                     </Button>
                 </div>
 
-                <Separator className="my-4" />
-
-                <nav className="space-y-1 mb-4">
+                <div className="grid gap-2 mb-4">
                     {configNavigation.map((item) => {
                         const Icon = item.icon
                         const isActive = pathname === item.href
@@ -293,10 +293,10 @@ export function Sidebar() {
                                 key={item.name}
                                 href={item.href}
                                 className={cn(
-                                    "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-200",
+                                    "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-all duration-200",
                                     isActive
-                                        ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
-                                        : "text-muted-foreground hover:bg-muted hover:text-foreground hover:pl-4"
+                                        ? "bg-primary/5 text-primary"
+                                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
                                 )}
                             >
                                 <Icon className="h-4 w-4" />
@@ -304,44 +304,36 @@ export function Sidebar() {
                             </Link>
                         )
                     })}
-                </nav>
-            </div>
+                </div>
 
-            {/* User Profile & Logout */}
-            <div className="border-t p-4 space-y-2">
-                {userProfile ? (
-                    <div className="flex items-center gap-3 rounded-lg bg-muted/50 p-3 mb-2">
-                        <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">
-                            {userProfile.first_name?.[0]}{userProfile.last_name?.[0]}
+                {/* User Profile & Logout */}
+                <div className="pt-2 border-t">
+                    {userProfile ? (
+                        <div className="flex items-center gap-3 rounded-lg bg-muted/50 p-2 mb-2">
+                            <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary flex-shrink-0">
+                                {userProfile.first_name?.[0]}{userProfile.last_name?.[0]}
+                            </div>
+                            <div className="text-sm flex-1 min-w-0">
+                                <p className="font-medium truncate">{userProfile.first_name} {userProfile.last_name}</p>
+                                <p className="text-xs text-muted-foreground truncate">{userProfile.company_name}</p>
+                            </div>
                         </div>
-                        <div className="text-sm flex-1 truncate">
-                            <p className="font-medium truncate">{userProfile.first_name} {userProfile.last_name}</p>
-                            <p className="text-xs text-muted-foreground truncate">{userProfile.company_name}</p>
-                        </div>
-                    </div>
-                ) : loadingProfile ? (
-                    <div className="flex items-center gap-3 rounded-lg bg-muted/20 p-3 mb-2 animate-pulse">
-                        <div className="h-8 w-8 rounded-full bg-muted"></div>
-                        <div className="space-y-2 flex-1">
-                            <div className="h-3 w-20 bg-muted rounded"></div>
-                            <div className="h-2 w-16 bg-muted rounded"></div>
-                        </div>
-                    </div>
-                ) : null}
+                    ) : null}
 
-                <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full justify-start gap-2"
-                    onClick={async () => {
-                        const supabase = createClient()
-                        await supabase.auth.signOut()
-                        window.location.href = '/login'
-                    }}
-                >
-                    <LogOut className="h-4 w-4" />
-                    Déconnexion
-                </Button>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full justify-start gap-2 border-red-200 hover:bg-red-50 hover:text-red-700 hover:border-red-300"
+                        onClick={async () => {
+                            const supabase = createClient()
+                            await supabase.auth.signOut()
+                            window.location.href = '/login'
+                        }}
+                    >
+                        <LogOut className="h-4 w-4" />
+                        Déconnexion
+                    </Button>
+                </div>
             </div>
         </div>
     )
