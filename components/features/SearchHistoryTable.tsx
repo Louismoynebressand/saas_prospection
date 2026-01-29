@@ -1,11 +1,10 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
 import { MoreHorizontal, Search as SearchIcon, MapPin, Loader2 } from "lucide-react"
-import { supabase } from "@/lib/supabase"
 import { createClient } from "@/lib/supabase/client"
 import { ScrapeJob } from "@/types"
 import { Button } from "@/components/ui/button"
@@ -14,14 +13,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 
 export function SearchHistoryTable({ limit }: { limit?: number }) {
     const router = useRouter()
+    const supabase = createClient()
     const [searches, setSearches] = useState<ScrapeJob[]>([])
     const [counts, setCounts] = useState<Record<string, number>>({})
     const [loading, setLoading] = useState(true)
 
-    const fetchSearches = async () => {
+    const fetchSearches = useCallback(async () => {
         try {
-            // Get authenticated user
-            const supabase = createClient()
             const { data: { user } } = await supabase.auth.getUser()
 
             if (!user) {
@@ -30,37 +28,50 @@ export function SearchHistoryTable({ limit }: { limit?: number }) {
                 return
             }
 
-            // Use view with pre-calculated counts (eliminates N+1 queries!)
-            let query = supabase
-                .from('scrape_jobs_with_counts')
+            // Fetch jobs from scrape_jobs (has all fields including JSON)
+            let jobsQuery = supabase
+                .from('scrape_jobs')
                 .select(`
                     id_jobs,
                     id_user,
                     request_search,
                     resuest_ville,
                     statut,
-                    created_at,
-                    prospects_count
+                    created_at
                 `)
                 .eq('id_user', user.id)
                 .order('created_at', { ascending: false })
 
             if (limit) {
-                query = query.limit(limit)
+                jobsQuery = jobsQuery.limit(limit)
             }
 
-            const { data, error } = await query
+            const { data, error } = await jobsQuery
 
-            if (error) throw error
+            if (error) {
+                console.error('Error fetching jobs:', error)
+                throw error
+            }
+
             if (data) {
-                // @ts-ignore - Type cast for view data
                 setSearches(data as ScrapeJob[])
 
-                // Extract counts from view data (no additional queries needed!)
+                // Fetch counts from view (eliminates N+1 queries!)
+                const { data: countsData, error: countsError } = await supabase
+                    .from('scrape_jobs_with_counts')
+                    .select('id_jobs, prospects_count')
+                    .eq('id_user', user.id)
+
+                if (countsError) {
+                    console.error('Error fetching counts:', countsError)
+                }
+
                 const countMap: Record<string, number> = {}
-                data.forEach(job => {
-                    countMap[job.id_jobs] = job.prospects_count || 0
-                })
+                if (countsData) {
+                    countsData.forEach(item => {
+                        countMap[item.id_jobs] = item.prospects_count || 0
+                    })
+                }
                 setCounts(countMap)
             }
         } catch (error) {
@@ -68,7 +79,7 @@ export function SearchHistoryTable({ limit }: { limit?: number }) {
         } finally {
             setLoading(false)
         }
-    }
+    }, [supabase, limit])
 
     useEffect(() => {
         fetchSearches()
@@ -76,111 +87,121 @@ export function SearchHistoryTable({ limit }: { limit?: number }) {
         // Realtime subscription
         const subscription = supabase
             .channel('scrape_jobs_list_changes')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'scrape_jobs' }, (payload) => {
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'scrape_jobs' }, () => {
                 fetchSearches()
             })
             .subscribe()
 
         return () => {
-            subscription.unsubscribe()
+            supabase.removeChannel(subscription)
         }
-    }, [limit])
+    }, [fetchSearches, supabase])
 
     const getStatusBadge = (status: string) => {
-        const s = status?.toLowerCase()
-        switch (s) {
-            case 'queued': return <Badge variant="secondary">En file d'attente</Badge>
-            case 'running': return <Badge variant="warning" className="animate-pulse">En cours</Badge>
-            case 'done':
-            case 'allfinish': return <Badge variant="success">Terminé</Badge>
-            case 'error': return <Badge variant="destructive">Erreur</Badge>
-            default: return <Badge variant="outline">{status || 'Inconnu'}</Badge>
+        const statusMap: { [key: string]: { label: string; variant: "default" | "secondary" | "destructive" | "outline" } } = {
+            pending: { label: "En attente", variant: "secondary" },
+            queued: { label: "En file", variant: "outline" },
+            running: { label: "En cours", variant: "default" },
+            done: { label: "Terminé", variant: "default" },
+            ALLfinish: { label: "Terminé", variant: "default" },
+            error: { label: "Erreur", variant: "destructive" }
+        }
+        const config = statusMap[status] || { label: status, variant: "secondary" as const }
+        return <Badge variant={config.variant}>{config.label}</Badge>
+    }
+
+    const formatSearchTerms = (job: ScrapeJob) => {
+        try {
+            const search = typeof job.request_search === 'string'
+                ? JSON.parse(job.request_search)
+                : job.request_search
+            return search?.quoiQui || "Recherche"
+        } catch {
+            return "Recherche"
         }
     }
 
-    const parseQuery = (jsonQuery: string) => {
-        if (!jsonQuery) return "N/A"
+    const formatLocation = (job: ScrapeJob) => {
         try {
-            const parsed = JSON.parse(jsonQuery)
-            return typeof parsed === 'string' ? parsed : jsonQuery
-        } catch (e) {
-            return jsonQuery
+            const ville = typeof job.resuest_ville === 'string'
+                ? JSON.parse(job.resuest_ville)
+                : job.resuest_ville
+            return ville?.ville || ville?.ou || ""
+        } catch {
+            return ""
         }
     }
 
     if (loading) {
         return (
-            <div className="flex justify-center p-8">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <div className="flex items-center justify-center p-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
         )
     }
 
     if (searches.length === 0) {
         return (
-            <div className="text-center p-8 text-muted-foreground bg-card border rounded-md">
-                Aucune recherche pour le moment.
+            <div className="text-center py-8 text-muted-foreground">
+                <SearchIcon className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                <p>Aucune recherche pour le moment</p>
+                <p className="text-sm">Lancez votre première recherche pour voir l&apos;historique</p>
             </div>
         )
     }
 
     return (
-        <div className="rounded-md border bg-card">
-            <Table>
-                <TableHeader>
-                    <TableRow>
-                        <TableHead>Recherche</TableHead>
-                        <TableHead>Localisation</TableHead>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="text-right">Résultats</TableHead>
-                        <TableHead></TableHead>
+        <Table>
+            <TableHeader>
+                <TableRow>
+                    <TableHead>Recherche</TableHead>
+                    <TableHead>Localisation</TableHead>
+                    <TableHead>Prospects</TableHead>
+                    <TableHead>Statut</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead className="w-[50px]"></TableHead>
+                </TableRow>
+            </TableHeader>
+            <TableBody>
+                {searches.map((job) => (
+                    <TableRow
+                        key={job.id_jobs}
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => router.push(`/searches/${job.id_jobs}`)}
+                    >
+                        <TableCell className="font-medium">
+                            <div className="flex items-center gap-2">
+                                <SearchIcon className="h-4 w-4 text-muted-foreground" />
+                                <span className="truncate max-w-[200px]">
+                                    {formatSearchTerms(job)}
+                                </span>
+                            </div>
+                        </TableCell>
+                        <TableCell>
+                            <div className="flex items-center gap-1 text-muted-foreground">
+                                <MapPin className="h-3 w-3" />
+                                <span className="truncate max-w-[150px]">
+                                    {formatLocation(job) || "—"}
+                                </span>
+                            </div>
+                        </TableCell>
+                        <TableCell>
+                            <Badge variant="outline">
+                                {counts[job.id_jobs] ?? 0}
+                            </Badge>
+                        </TableCell>
+                        <TableCell>{getStatusBadge(job.statut)}</TableCell>
+                        <TableCell className="text-muted-foreground text-sm">
+                            {format(new Date(job.created_at), "d MMM yyyy", { locale: fr })}
+                        </TableCell>
+                        <TableCell>
+                            <Button variant="ghost" size="sm">
+                                <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                        </TableCell>
                     </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {searches.map((search) => (
-                        <TableRow
-                            key={search.id_jobs}
-                            className="cursor-pointer hover:bg-muted/50 transition-colors pointer-events-auto"
-                            onClick={(e) => {
-                                // Prevent navigation if clicking on a button inside the row
-                                if ((e.target as HTMLElement).closest('button')) return;
-                                router.push(`/searches/${search.id_jobs}`)
-                            }}
-                        >
-                            <TableCell className="font-medium">
-                                <div className="flex items-center gap-2">
-                                    <SearchIcon className="h-4 w-4 text-muted-foreground" />
-                                    {parseQuery(search.request_search)}
-                                </div>
-                            </TableCell>
-                            <TableCell>
-                                <div className="flex items-center gap-2">
-                                    <MapPin className="h-4 w-4 text-muted-foreground" />
-                                    {search.resuest_ville || "Zone définie"}
-                                </div>
-                            </TableCell>
-                            <TableCell>
-                                {format(new Date(search.created_at), "d MMM yyyy HH:mm", { locale: fr })}
-                            </TableCell>
-                            <TableCell>{getStatusBadge(search.statut)}</TableCell>
-                            <TableCell className="text-right font-medium">
-                                {counts[search.id_jobs] !== undefined ? counts[search.id_jobs] : (
-                                    <span className="text-muted-foreground text-xs">...</span>
-                                )}
-                            </TableCell>
-                            <TableCell className="text-right">
-                                <Button variant="ghost" size="icon" onClick={(e) => {
-                                    e.stopPropagation()
-                                    router.push(`/searches/${search.id_jobs}`)
-                                }}>
-                                    <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                            </TableCell>
-                        </TableRow>
-                    ))}
-                </TableBody>
-            </Table>
-        </div>
+                ))}
+            </TableBody>
+        </Table>
     )
 }
