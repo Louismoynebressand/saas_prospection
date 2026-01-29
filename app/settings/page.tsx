@@ -27,6 +27,11 @@ export default function SettingsPage() {
         confirmPassword: ""
     })
 
+    const [emailChange, setEmailChange] = useState({
+        newEmail: "",
+        isChanging: false
+    })
+
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
     const [userId, setUserId] = useState<string | null>(null)
@@ -62,7 +67,7 @@ export default function SettingsPage() {
     const handleAutoSave = async (field: string, value: string) => {
         if (!userId) return
 
-        const dbFields = ['first_name', 'last_name', 'company_name', 'phone']
+        const dbFields = ['first_name', 'last_name', 'company_name']
         if (!dbFields.includes(field)) return
 
         try {
@@ -76,14 +81,39 @@ export default function SettingsPage() {
             const fieldNameMap: any = {
                 first_name: "Prénom",
                 last_name: "Nom",
-                company_name: "Entreprise",
-                phone: "Téléphone"
+                company_name: "Entreprise"
             }
 
             toast.success(`✅ ${fieldNameMap[field]} enregistré`)
         } catch (error) {
             console.error(error)
             toast.error("Erreur lors de la sauvegarde")
+        }
+    }
+
+    const handlePhoneChange = async (value: string) => {
+        if (!userId) return
+
+        try {
+            // Update in auth.users phone field
+            const { error: authError } = await supabase.auth.updateUser({
+                phone: value
+            })
+
+            if (authError) throw authError
+
+            // Also update in profiles table
+            const { error: profileError } = await supabase
+                .from('profiles')
+                .update({ phone: value })
+                .eq('id', userId)
+
+            if (profileError) throw profileError
+
+            toast.success("✅ Téléphone enregistré")
+        } catch (error: any) {
+            console.error(error)
+            toast.error(error.message || "Erreur lors de la sauvegarde")
         }
     }
 
@@ -110,6 +140,36 @@ export default function SettingsPage() {
             setAccountData({ newPassword: "", confirmPassword: "" })
         } catch (error: any) {
             toast.error(error.message || "Erreur lors de la mise à jour")
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    const handleEmailChange = async () => {
+        if (!emailChange.newEmail) {
+            toast.error("Veuillez entrer une nouvelle adresse email")
+            return
+        }
+
+        // Basic email validation
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+        if (!emailRegex.test(emailChange.newEmail)) {
+            toast.error("Adresse email invalide")
+            return
+        }
+
+        setSaving(true)
+        try {
+            const { error } = await supabase.auth.updateUser({
+                email: emailChange.newEmail
+            })
+
+            if (error) throw error
+
+            toast.success("📧 Email de confirmation envoyé ! Veuillez vérifier votre boîte de réception.")
+            setEmailChange({ newEmail: "", isChanging: false })
+        } catch (error: any) {
+            toast.error(error.message || "Erreur lors du changement d'email")
         } finally {
             setSaving(false)
         }
@@ -220,27 +280,72 @@ export default function SettingsPage() {
                                         </div>
                                     </div>
 
-                                    {/* Email Field (Read-only) */}
+                                    {/* Email Field */}
                                     <div className="space-y-2">
                                         <Label htmlFor="email" className="text-sm font-medium flex items-center gap-2">
                                             <Mail className="h-3.5 w-3.5 text-indigo-600" />
                                             Email
                                         </Label>
-                                        <div className="relative">
-                                            <Input
-                                                id="email"
-                                                type="email"
-                                                value={profileData.email}
-                                                disabled
-                                                className="bg-gradient-to-r from-gray-50 to-gray-100 border-gray-200"
-                                            />
-                                            <Badge className="absolute right-3 top-2.5 bg-green-500">
-                                                Vérifié
-                                            </Badge>
-                                        </div>
-                                        <p className="text-xs text-muted-foreground">
-                                            L'email ne peut pas être modifié ici.
-                                        </p>
+                                        {emailChange.isChanging ? (
+                                            <div className="space-y-2">
+                                                <Input
+                                                    id="newEmail"
+                                                    type="email"
+                                                    value={emailChange.newEmail}
+                                                    onChange={(e) => setEmailChange({ ...emailChange, newEmail: e.target.value })}
+                                                    className="border-indigo-200 focus:border-indigo-400 transition-colors"
+                                                    placeholder="nouveau@email.com"
+                                                />
+                                                <div className="flex gap-2">
+                                                    <Button
+                                                        size="sm"
+                                                        onClick={handleEmailChange}
+                                                        disabled={saving || !emailChange.newEmail}
+                                                        className="bg-indigo-600 hover:bg-indigo-700"
+                                                    >
+                                                        {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : "Confirmer"}
+                                                    </Button>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() => setEmailChange({ newEmail: "", isChanging: false })}
+                                                    >
+                                                        Annuler
+                                                    </Button>
+                                                </div>
+                                                <p className="text-xs text-amber-600">
+                                                    Un email de confirmation sera envoyé à votre nouvelle adresse
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            <div>
+                                                <div className="relative">
+                                                    <Input
+                                                        id="email"
+                                                        type="email"
+                                                        value={profileData.email}
+                                                        disabled
+                                                        className="bg-gradient-to-r from-gray-50 to-gray-100 border-gray-200"
+                                                    />
+                                                    <Badge className="absolute right-3 top-2.5 bg-green-500">
+                                                        Vérifié
+                                                    </Badge>
+                                                </div>
+                                                <div className="flex justify-between items-center mt-1">
+                                                    <p className="text-xs text-muted-foreground">
+                                                        Email actuel
+                                                    </p>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="link"
+                                                        className="h-auto p-0 text-xs text-indigo-600"
+                                                        onClick={() => setEmailChange({ newEmail: "", isChanging: true })}
+                                                    >
+                                                        Modifier l'email
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* Phone Field */}
@@ -254,12 +359,12 @@ export default function SettingsPage() {
                                             type="tel"
                                             value={profileData.phone}
                                             onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
-                                            onBlur={(e) => handleAutoSave('phone', e.target.value)}
+                                            onBlur={(e) => handlePhoneChange(e.target.value)}
                                             className="border-indigo-200 focus:border-indigo-400 transition-colors"
                                             placeholder="+33 6 12 34 56 78"
                                         />
                                         <p className="text-xs text-muted-foreground">
-                                            Utilisé pour vos signatures d'emails
+                                            Synchronisé avec votre compte Supabase Auth
                                         </p>
                                     </div>
 

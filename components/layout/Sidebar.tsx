@@ -318,7 +318,8 @@ export function Sidebar() {
                     size="sm"
                     className="w-full justify-start gap-2"
                     onClick={async () => {
-                        await fetch('/auth/logout', { method: 'POST' })
+                        const supabase = createClient()
+                        await supabase.auth.signOut()
                         window.location.href = '/login'
                     }}
                 >
