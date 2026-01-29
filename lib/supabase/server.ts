@@ -12,19 +12,16 @@ export async function createClient() {
                 get(name: string) {
                     return cookieStore.get(name)?.value
                 },
+                // The "Null Operation" Setter
+                // By leaving set/remove empty, we disable the SDK's ability to 
+                // trigger the refresh flow's write phase. 
+                // This effectively turns the client into "Read-Only" mode.
                 set(name: string, value: string, options: CookieOptions) {
-                    try {
-                        cookieStore.set({ name, value, ...options })
-                    } catch (error) {
-                        // Cookies can only be set in Server Actions or Route Handlers
-                    }
+                    // Intentionally empty. 
+                    // Server Components cannot write cookies.
                 },
                 remove(name: string, options: CookieOptions) {
-                    try {
-                        cookieStore.set({ name, value: '', ...options })
-                    } catch (error) {
-                        // Cookies can only be removed in Server Actions or Route Handlers
-                    }
+                    // Intentionally empty.
                 },
             },
         }

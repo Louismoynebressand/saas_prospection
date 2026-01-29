@@ -16,6 +16,8 @@ export async function updateSession(request: NextRequest) {
         })
     }
 
+    // 1. Initialize Response Holder
+    // We need a response object to attach cookies to, even before we know the outcome.
     let response = NextResponse.next({
         request: {
             headers: request.headers,
@@ -30,17 +32,28 @@ export async function updateSession(request: NextRequest) {
                 get(name: string) {
                     return request.cookies.get(name)?.value
                 },
+                /* 
+                 * CRITICAL: The "Dual-Write" Strategy
+                 * When Supabase SDK calls 'set', we must update:
+                 * 1. The Request: So Server Components get the valid token NOW.
+                 * 2. The Response: So the Browser gets the valid token for LATER.
+                 */
                 set(name: string, value: string, options: CookieOptions) {
+                    // Update the request cookies (propagates to Server Components)
                     request.cookies.set({
                         name,
                         value,
                         ...options,
                     })
+
+                    // Re-create the response to reflect the updated request headers
                     response = NextResponse.next({
                         request: {
                             headers: request.headers,
                         },
                     })
+
+                    // Update the response cookies (propagates to Browser)
                     response.cookies.set({
                         name,
                         value,
@@ -48,16 +61,19 @@ export async function updateSession(request: NextRequest) {
                     })
                 },
                 remove(name: string, options: CookieOptions) {
+                    // Same Dual-Write Pattern for removal
                     request.cookies.set({
                         name,
                         value: '',
                         ...options,
                     })
+
                     response = NextResponse.next({
                         request: {
                             headers: request.headers,
                         },
                     })
+
                     response.cookies.set({
                         name,
                         value: '',
@@ -68,16 +84,21 @@ export async function updateSession(request: NextRequest) {
         }
     )
 
-    // Refresh session if needed
+    // 2. Token Refresh Trigger
+    // This call is what triggers the 'set' method above if the token is expired.
+    // We use getUser() instead of getSession() for security (validates against DB).
     const { data: { user } } = await supabase.auth.getUser()
 
-    // Protected routes
+    // 3. Protected Route Logic
     const protectedPaths = ['/dashboard', '/recherche-prospect', '/searches', '/prospects', '/emails', '/email-verifier', '/settings', '/billing']
     const isProtectedRoute = protectedPaths.some(path => request.nextUrl.pathname.startsWith(path))
 
     // Redirect to login if accessing protected route without auth
     if (isProtectedRoute && !user) {
-        return NextResponse.redirect(new URL('/login', request.url))
+        // Use 307 to preserve request context
+        const url = request.nextUrl.clone()
+        url.pathname = '/login'
+        return NextResponse.redirect(url)
     }
 
     // Redirect to dashboard if logged in and trying to access login/signup

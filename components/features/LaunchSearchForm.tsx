@@ -12,6 +12,7 @@ import { AIBadge } from "@/components/ui/ai-badge"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { createClient } from "@/lib/supabase/client"
+import { authenticatedFetch } from "@/lib/fetch-client"
 import { toast } from "sonner"
 import { ScrapingProgressWidget } from "./ScrapingProgressWidget"
 
@@ -154,7 +155,7 @@ export function LaunchSearchForm() {
             }
 
             try {
-                const apiResponse = await fetch('/api/scrape/launch', {
+                const apiResponse = await authenticatedFetch('/api/scrape/launch', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({

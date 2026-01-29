@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
+import { authenticatedFetch } from "@/lib/fetch-client"
 import { ScrapeProspect, Campaign } from "@/types"
 import { motion, AnimatePresence } from "framer-motion"
 import confetti from "canvas-confetti"
@@ -82,7 +83,7 @@ export function EmailGenerationModal({ open, onOpenChange, prospect, onSuccess }
 
             if (!user) throw new Error("Non connecté")
 
-            const response = await fetch('/api/cold-email/generate', {
+            const response = await authenticatedFetch('/api/cold-email/generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

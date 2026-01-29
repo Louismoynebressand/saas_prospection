@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
+import { authenticatedFetch } from "@/lib/fetch-client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -127,7 +128,7 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
             const supabase = createClient()
             const { data: { user } } = await supabase.auth.getUser()
 
-            const response = await fetch('/api/campaigns/analyze', {
+            const response = await authenticatedFetch('/api/campaigns/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
