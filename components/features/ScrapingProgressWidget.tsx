@@ -22,83 +22,77 @@ export function ScrapingProgressWidget({ jobId, maxResults, onComplete }: Scrapi
     const router = useRouter()
     const supabase = createClient()
 
-    // Core state
-    const [status, setStatus] = useState<string>('running') // Start as running immediately  
-    const [prospectCount, setProspectCount] = useState(0)
-    const [emailCount, setEmailCount] = useState(0)
-    const [deepSearchCount, setDeepSearchCount] = useState(0)
-    const [progress, setProgress] = useState(0)
+    // Core state - Start as 'running' for immediate feedback
+    const [status, setStatus] = useState<string>('running')
+    // Stats
+    const [stats, setStats] = useState({
+        prospects: 0,
+        emails: 0,
+        enriched: 0
+    })
+
+    // Progress
+    const [progress, setProgress] = useState(5) // Start at 5% visually
     const [confettiTriggered, setConfettiTriggered] = useState(false)
 
-    // Refs for cleanup
-    const pollingRef = useRef<NodeJS.Timeout | null>(null)
+    // Refs
     const mountedRef = useRef(true)
 
-    // Optimized stats calculation from prospects array
-    const calculateStats = useCallback((prospects: any[]) => {
-        if (!mountedRef.current) return
-
-        const count = prospects.length
-        setProspectCount(count)
-
-        // Count emails
-        const emails = prospects.filter(p => {
-            if (p.email_adresse_verified === true) return true
-            if (p.data_scrapping) {
-                try {
-                    const data = typeof p.data_scrapping === 'string'
-                        ? JSON.parse(p.data_scrapping)
-                        : p.data_scrapping
-                    if (data.Email) return true
-                } catch { return false }
-            }
-            return false
-        }).length
-        setEmailCount(emails)
-
-        // Count enriched (deep search)
-        const deep = prospects.filter(p => {
-            if (!p.deep_search) return false
-            try {
-                const data = typeof p.deep_search === 'string'
-                    ? JSON.parse(p.deep_search)
-                    : p.deep_search
-                return Object.keys(data).length > 0
-            } catch { return false }
-        }).length
-        setDeepSearchCount(deep)
-
-        // Calculate progress based on prospects found
-        const progressValue = count > 0
-            ? Math.min(Math.round((count / maxResults) * 100), 98)
-            : 5 // Show at least 5% when job started
-        setProgress(progressValue)
-    }, [maxResults])
-
-    // OPTIMIZED: Fetch stats with minimal columns
+    // OPTIMIZED: Fetch stats using COUNT queries (Fast & Accurate like KPI cards)
     const fetchStats = useCallback(async () => {
         if (!mountedRef.current) return
 
         try {
-            const { data: prospects, error } = await supabase
+            const jobIdStr = String(jobId)
+
+            // 1. Count Prospects
+            const { count: prospectsCount } = await supabase
                 .from('scrape_prospect')
-                .select('id_prospect, email_adresse_verified, data_scrapping, deep_search')
-                .eq('id_jobs', String(jobId))
+                .select('*', { count: 'exact', head: true })
+                .eq('id_jobs', jobIdStr)
 
-            if (error) {
-                console.error('[Widget] Error fetching prospects:', error)
-                return
-            }
+            // 2. Count Emails (where email_adresse_verified is not null)
+            const { count: emailsCount } = await supabase
+                .from('scrape_prospect')
+                .select('*', { count: 'exact', head: true })
+                .eq('id_jobs', jobIdStr)
+                .not('email_adresse_verified', 'is', null)
 
-            if (prospects && mountedRef.current) {
-                calculateStats(prospects)
+            // 3. Count Enriched (where deep_search is not null)
+            const { count: enrichedCount } = await supabase
+                .from('scrape_prospect')
+                .select('*', { count: 'exact', head: true })
+                .eq('id_jobs', jobIdStr)
+                .not('deep_search', 'is', null)
+
+            if (mountedRef.current) {
+                const currentProspects = prospectsCount || 0
+                setStats({
+                    prospects: currentProspects,
+                    emails: emailsCount || 0,
+                    enriched: enrichedCount || 0
+                })
+
+                // Calculate progress
+                const rawProgress = maxResults > 0
+                    ? Math.round((currentProspects / maxResults) * 100)
+                    : 0
+
+                let visualProgress = Math.max(5, rawProgress) // Min 5%
+                if (status !== 'completed' && status !== 'done' && status !== 'ALLfinish') {
+                    visualProgress = Math.min(visualProgress, 98)
+                } else {
+                    visualProgress = 100
+                }
+
+                setProgress(visualProgress)
             }
         } catch (err) {
             console.error('[Widget] fetchStats error:', err)
         }
-    }, [jobId, supabase, calculateStats])
+    }, [jobId, supabase, maxResults, status])
 
-    // OPTIMIZED: Check job status
+    // Check Job Status
     const checkJobStatus = useCallback(async () => {
         if (!mountedRef.current) return
 
@@ -109,135 +103,83 @@ export function ScrapingProgressWidget({ jobId, maxResults, onComplete }: Scrapi
                 .eq('id_jobs', String(jobId))
                 .single()
 
-            if (error) {
-                console.error('[Widget] Error fetching job status:', error)
-                return
-            }
+            if (error) throw error
 
             if (job && mountedRef.current) {
-                console.log('[Widget] Job status:', job.statut)
-
                 if (['done', 'ALLfinish'].includes(job.statut)) {
                     setStatus('completed')
                     setProgress(100)
                     if (onComplete) onComplete()
-                    return true // Signal completion
                 } else if (job.statut === 'error') {
                     setStatus('error')
-                    toast.error("Erreur de scraping")
-                    return true // Signal completion (error)
-                } else if (job.statut === 'queued') {
-                    setStatus('queued')
                 } else {
-                    setStatus('running')
+                    setStatus(job.statut)
                 }
             }
-            return false // Not completed yet
         } catch (err) {
-            console.error('[Widget] checkJobStatus error:', err)
-            return false
+            console.error('[Widget] Status check error:', err)
         }
     }, [jobId, supabase, onComplete])
 
-    // IMMEDIATE: Fetch data on mount
+    // Initial Mount
     useEffect(() => {
         mountedRef.current = true
+        fetchStats()
+        checkJobStatus()
 
-        // Immediate first fetch
-        const init = async () => {
-            await Promise.all([checkJobStatus(), fetchStats()])
-        }
-        init()
+        // POLLING BACKUP (Every 2s)
+        const interval = setInterval(() => {
+            if (mountedRef.current && status !== 'completed' && status !== 'error') {
+                checkJobStatus()
+                fetchStats()
+            }
+        }, 2000)
 
         return () => {
             mountedRef.current = false
+            clearInterval(interval)
         }
-    }, [checkJobStatus, fetchStats])
+    }, [fetchStats, checkJobStatus, status])
 
-    // REALTIME: Subscribe to both job and prospect changes
+    // REALTIME SUBSCRIPTION
     useEffect(() => {
         const jobIdStr = String(jobId)
 
-        // Job status subscription
-        const jobChannel = supabase
+        // Listen to prospect changes
+        const prospectSub = supabase
+            .channel(`widget_prospects_${jobIdStr}`)
+            .on('postgres_changes',
+                { event: '*', schema: 'public', table: 'scrape_prospect', filter: `id_jobs=eq.${jobIdStr}` },
+                () => {
+                    fetchStats()
+                }
+            )
+            .subscribe()
+
+        // Listen to job status changes
+        const jobSub = supabase
             .channel(`widget_job_${jobIdStr}`)
             .on('postgres_changes',
-                {
-                    event: 'UPDATE',
-                    schema: 'public',
-                    table: 'scrape_jobs',
-                    filter: `id_jobs=eq.${jobIdStr}`
-                },
+                { event: 'UPDATE', schema: 'public', table: 'scrape_jobs', filter: `id_jobs=eq.${jobIdStr}` },
                 (payload) => {
                     const newStatus = payload.new?.statut
-                    console.log('[Widget] Realtime job update:', newStatus)
-
                     if (['done', 'ALLfinish'].includes(newStatus)) {
                         setStatus('completed')
                         setProgress(100)
-                        fetchStats() // Final stats fetch
+                        fetchStats()
                         if (onComplete) onComplete()
                     } else if (newStatus === 'error') {
                         setStatus('error')
-                        toast.error("Erreur de scraping")
-                    } else if (newStatus === 'running') {
-                        setStatus('running')
                     }
                 }
             )
             .subscribe()
 
-        // Prospect inserts/updates subscription
-        const prospectChannel = supabase
-            .channel(`widget_prospects_${jobIdStr}`)
-            .on('postgres_changes',
-                {
-                    event: '*',
-                    schema: 'public',
-                    table: 'scrape_prospect',
-                    filter: `id_jobs=eq.${jobIdStr}`
-                },
-                () => {
-                    console.log('[Widget] Realtime prospect update')
-                    fetchStats() // Refresh stats on any prospect change
-                }
-            )
-            .subscribe()
-
         return () => {
-            supabase.removeChannel(jobChannel)
-            supabase.removeChannel(prospectChannel)
+            supabase.removeChannel(prospectSub)
+            supabase.removeChannel(jobSub)
         }
     }, [jobId, supabase, fetchStats, onComplete])
-
-    // POLLING FALLBACK: Poll every 3s until complete (realtime backup)
-    useEffect(() => {
-        if (status === 'completed' || status === 'error') {
-            // Clear polling if complete
-            if (pollingRef.current) {
-                clearInterval(pollingRef.current)
-                pollingRef.current = null
-            }
-            return
-        }
-
-        // Start polling as backup for realtime
-        pollingRef.current = setInterval(async () => {
-            if (!mountedRef.current) return
-
-            const isComplete = await checkJobStatus()
-            if (!isComplete) {
-                await fetchStats()
-            }
-        }, 3000) // Poll every 3 seconds
-
-        return () => {
-            if (pollingRef.current) {
-                clearInterval(pollingRef.current)
-                pollingRef.current = null
-            }
-        }
-    }, [status, checkJobStatus, fetchStats])
 
     // Confetti on completion
     useEffect(() => {
@@ -256,10 +198,9 @@ export function ScrapingProgressWidget({ jobId, maxResults, onComplete }: Scrapi
 
     const getStatusText = () => {
         if (status === 'queued') return "En attente de prise en charge..."
-        if (status === 'running') return "Scraping en cours"
         if (status === 'completed') return "✨ Scraping terminé !"
         if (status === 'error') return "Erreur survenue"
-        return "Scraping en cours" // Default to running
+        return "Scraping en cours"
     }
 
     return (
@@ -271,92 +212,63 @@ export function ScrapingProgressWidget({ jobId, maxResults, onComplete }: Scrapi
             <Card className="w-full relative overflow-hidden border-2 
                            border-primary/20 bg-gradient-to-br from-white via-blue-50/30 to-indigo-50/30 
                            shadow-xl hover:shadow-2xl transition-shadow">
-                {/* Animated shimmer on top */}
-                {(status === 'running' || status === 'queued') && (
+                {(status !== 'completed' && status !== 'error') && (
                     <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r 
                                     from-transparent via-indigo-500 to-transparent 
                                     animate-shimmer opacity-75" />
                 )}
 
-                {/* Success pulse */}
-                {status === 'completed' && (
-                    <motion.div
-                        initial={{ scale: 1, opacity: 0.5 }}
-                        animate={{ scale: 1.05, opacity: 0 }}
-                        transition={{ duration: 1.5, repeat: 2 }}
-                        className="absolute inset-0 bg-gradient-to-br from-green-400/20 to-emerald-400/20 rounded-lg pointer-events-none"
-                    />
-                )}
-
                 <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
                         <CardTitle className="flex items-center gap-2 text-xl">
-                            {(status === 'running' || status === 'queued') && (
+                            {(status !== 'completed' && status !== 'error') && (
                                 <Loader2 className="h-5 w-5 animate-spin text-indigo-600" />
                             )}
                             {status === 'completed' && <CheckCircle2 className="h-5 w-5 text-green-500" />}
 
-                            <motion.span
-                                key={status}
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                className="truncate"
-                            >
-                                {getStatusText()}
-                            </motion.span>
+                            <span className="truncate">{getStatusText()}</span>
                         </CardTitle>
-
                         <AIBadge>Deep Search</AIBadge>
                     </div>
                     <CardDescription className="text-base">
-                        {status === 'queued' ? "Votre recherche est dans la file d'attente." :
-                            status === 'completed' ? "🎉 Données enrichies et prêtes !" :
-                                "Récupération et enrichissement des données en temps réel."}
+                        {status === 'completed'
+                            ? "🎉 Données enrichies et prêtes !"
+                            : "Récupération et enrichissement des données en temps réel."}
                     </CardDescription>
                 </CardHeader>
 
                 <CardContent className="space-y-6">
-                    {/* Gradient Progress Bar */}
                     <div className="space-y-2">
                         <div className="relative h-3 bg-gray-200 rounded-full overflow-hidden">
                             <motion.div
-                                className="absolute inset-y-0 left-0 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 
-                                           rounded-full shadow-lg shadow-indigo-300/50"
-                                initial={{ width: 0 }}
+                                className="absolute inset-y-0 left-0 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-full shadow-lg"
+                                initial={{ width: "5%" }}
                                 animate={{ width: `${progress}%` }}
-                                transition={{ duration: 0.5, ease: "easeOut" }}
+                                transition={{ duration: 0.5 }}
                             />
-                            {(status === 'running' || status === 'queued') && (
-                                <motion.div
-                                    className="absolute inset-y-0 w-20 bg-white/40 blur-sm"
-                                    animate={{ x: ['-100%', '500%'] }}
-                                    transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                                />
-                            )}
                         </div>
                         <div className="flex justify-between text-xs text-muted-foreground font-medium">
-                            <span>{prospectCount} / {maxResults} prospects</span>
+                            <span>{stats.prospects} / {maxResults} prospects</span>
                             <span className="text-indigo-600 font-bold">{progress}%</span>
                         </div>
                     </div>
 
-                    {/* Animated Stats with CountUp */}
                     <div className="grid grid-cols-3 gap-3">
                         <StatBox
                             icon={Search}
-                            value={prospectCount}
+                            value={stats.prospects}
                             label="Prospects"
                             gradient="from-blue-500 to-indigo-600"
                         />
                         <StatBox
                             icon={Mail}
-                            value={emailCount}
+                            value={stats.emails}
                             label="Emails"
                             gradient="from-cyan-500 to-blue-600"
                         />
                         <StatBox
                             icon={Eye}
-                            value={deepSearchCount}
+                            value={stats.enriched}
                             label="Enrichis"
                             gradient="from-purple-500 to-pink-600"
                         />
@@ -389,30 +301,15 @@ export function ScrapingProgressWidget({ jobId, maxResults, onComplete }: Scrapi
     )
 }
 
-// Enhanced StatBox with gradient and CountUp
 function StatBox({ icon: Icon, value, label, gradient }: { icon: any, value: number, label: string, gradient: string }) {
     return (
-        <motion.div
-            whileHover={{ scale: 1.05, y: -2 }}
-            className="relative flex flex-col items-center justify-center p-4 rounded-xl 
-                       bg-white border-2 border-gray-200 
-                       hover:border-indigo-300 hover:shadow-lg 
-                       transition-all duration-300 overflow-hidden group"
-        >
-            {/* Gradient background on hover */}
-            <div className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-0 
-                           group-hover:opacity-10 transition-opacity`} />
-
+        <div className="flex flex-col items-center justify-center p-4 rounded-xl 
+                       bg-white border-2 border-gray-200 hover:border-indigo-300 transition-all">
             <Icon className={`h-5 w-5 mb-2 bg-gradient-to-r ${gradient} bg-clip-text text-transparent`} />
-            <motion.span
-                key={value}
-                initial={{ scale: 0.5, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                className={`text-3xl font-bold bg-gradient-to-r ${gradient} bg-clip-text text-transparent`}
-            >
-                <CountUp end={value} duration={0.8} preserveValue />
-            </motion.span>
+            <span className={`text-3xl font-bold bg-gradient-to-r ${gradient} bg-clip-text text-transparent`}>
+                <CountUp end={value} duration={1} preserveValue />
+            </span>
             <span className="text-xs text-muted-foreground font-medium mt-1">{label}</span>
-        </motion.div>
+        </div>
     )
 }

@@ -62,23 +62,22 @@ export default function ProspectsPage() {
                 return
             }
 
-            // Fetch all prospects for the user via their jobs
-            const { data: jobs } = await supabase
-                .from('scrape_jobs')
-                .select('id_jobs')
-                .eq('id_user', user.id)
-
-            if (!jobs || jobs.length === 0) {
-                setLoading(false)
-                return
-            }
-
-            const jobIds = jobs.map(j => j.id_jobs)
-
+            // OPTIMIZED: Fetch all prospects for user directly (Single safe query)
+            // Instead of fetching jobs then using .in() which can be slow or overflow
             const { data, error } = await supabase
                 .from('scrape_prospect')
-                .select('*')
-                .in('id_jobs', jobIds)
+                .select(`
+                    id_prospect, 
+                    id_jobs, 
+                    id_user, 
+                    created_at,
+                    data_scrapping, 
+                    deep_search, 
+                    email_adresse_verified, 
+                    ville, 
+                    secteur
+                `)
+                .eq('id_user', user.id)
                 .order('created_at', { ascending: false })
 
             if (error) throw error
