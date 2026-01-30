@@ -171,26 +171,53 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
             console.log("🤖 [AI] Raw Data received:", rawData)
 
             // Handle n8n returning an array
-            const data = Array.isArray(rawData) ? rawData[0] : rawData
+            const item = Array.isArray(rawData) ? rawData[0] : rawData
 
-            console.log("🤖 [AI] Processed Data:", data)
+            // Handle "output" stringified JSON (New n8n format)
+            let data = item
+            if (item.output && typeof item.output === 'string') {
+                try {
+                    const parsedOutput = JSON.parse(item.output)
+                    // The useful data is in the 'prefill' sub-object
+                    data = parsedOutput.prefill || parsedOutput
+                    console.log("🤖 [AI] Parsed 'output' JSON:", data)
+                } catch (e) {
+                    console.error("⚠️ [AI] Failed to parse 'output' string:", e)
+                }
+            }
 
-            // Format arrays
+            console.log("🤖 [AI] Final Processed Data:", data)
+
+            // Format arrays (pain_points comes as string in prefill usually, but let's be safe)
             let formattedPainPoints = ""
             if (Array.isArray(data.pain_points)) {
                 formattedPainPoints = data.pain_points.map((p: string) => `- ${p}`).join('\n')
             } else if (typeof data.pain_points === 'string') {
-                // If it's a comma separated string or just text, we handle it
-                // The prompt returns a string description, so we just use it directly
-                // or if it looks like a list, we format it.
                 formattedPainPoints = data.pain_points
             }
 
-            let formattedJobTitles = ""
+            // Format target_job_titles
+            let formattedJobTitles = [] as string[]
             if (Array.isArray(data.target_job_titles)) {
-                formattedJobTitles = data.target_job_titles.join(', ')
-            } else if (typeof data.target_job_titles === 'string') {
                 formattedJobTitles = data.target_job_titles
+            } else if (typeof data.target_job_titles === 'string') {
+                formattedJobTitles = data.target_job_titles.split(',').map((s: string) => s.trim()).filter(Boolean)
+            }
+
+            // Format secondary_benefits
+            let formattedSecondaryBenefits = [] as string[]
+            if (Array.isArray(data.secondary_benefits)) {
+                formattedSecondaryBenefits = data.secondary_benefits
+            } else if (typeof data.secondary_benefits === 'string') {
+                formattedSecondaryBenefits = data.secondary_benefits.split(',').map((s: string) => s.trim()).filter(Boolean)
+            }
+
+            // Format target_sectors
+            let formattedTargetSectors = [] as string[]
+            if (Array.isArray(data.target_sectors)) {
+                formattedTargetSectors = data.target_sectors
+            } else if (typeof data.target_sectors === 'string') {
+                formattedTargetSectors = data.target_sectors.split(',').map((s: string) => s.trim()).filter(Boolean)
             }
 
             // Map ALL fields from webhook response
@@ -206,14 +233,14 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
                 main_promise: data.main_promise || prev.main_promise,
 
                 // Step 2: Positionnement  
-                secondary_benefits: data.secondary_benefits || prev.secondary_benefits,
+                secondary_benefits: formattedSecondaryBenefits.length > 0 ? formattedSecondaryBenefits : prev.secondary_benefits,
 
                 // Step 3: Ciblage
                 objective: data.objective || prev.objective,
                 target_audience: data.target_audience || prev.target_audience,
-                target_sectors: data.target_sectors || prev.target_sectors,
+                target_sectors: formattedTargetSectors.length > 0 ? formattedTargetSectors : prev.target_sectors,
                 target_company_size: data.target_company_size || prev.target_company_size,
-                target_job_titles: data.target_job_titles ? (Array.isArray(data.target_job_titles) ? data.target_job_titles : [data.target_job_titles]) : prev.target_job_titles,
+                target_job_titles: formattedJobTitles.length > 0 ? formattedJobTitles : prev.target_job_titles,
 
                 // Step 4: Signature & Params
                 signature_name: data.signature_name || prev.signature_name,
@@ -502,7 +529,7 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
     const renderPositioningStep = () => (
         <div className="space-y-5 py-6">
             <FieldWithTooltip
-                label="Pitch (Positionnement)"
+                label="Accroche (Pitch)"
                 tooltip="Résumez votre proposition de valeur en 1-2 phrases"
                 required
             >
@@ -512,6 +539,7 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
                     onChange={(e) => updateFormData('pitch', e.target.value)}
                     rows={3}
                     className="border-2 focus:border-primary transition-all resize-none"
+                    maxLength={500}
                 />
             </FieldWithTooltip>
 
@@ -526,11 +554,12 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
                     onChange={(e) => updateFormData('main_offer', e.target.value)}
                     rows={4}
                     className="border-2 focus:border-primary transition-all resize-none"
+                    maxLength={500}
                 />
             </FieldWithTooltip>
 
             <FieldWithTooltip
-                label="Pain Points (Douleurs)"
+                label="Problèmes Clients (Pain Points)"
                 tooltip="Listez les problèmes que vos prospects rencontrent"
             >
                 <Textarea
@@ -543,7 +572,7 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
             </FieldWithTooltip>
 
             <FieldWithTooltip
-                label="Promesse Principale"
+                label="Promesse de Valeur"
                 tooltip="Votre promesse chiffrée (ex: '+40% de RDV')"
             >
                 <Input
@@ -551,6 +580,7 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
                     value={formData.main_promise}
                     onChange={(e) => updateFormData('main_promise', e.target.value)}
                     className="h-11 border-2 focus:border-primary transition-all"
+                    maxLength={100}
                 />
             </FieldWithTooltip>
         </div>
