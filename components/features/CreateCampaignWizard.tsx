@@ -236,10 +236,12 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
                 secondary_benefits: formattedSecondaryBenefits.length > 0 ? formattedSecondaryBenefits : prev.secondary_benefits,
 
                 // Step 3: Ciblage
-                objective: data.objective || prev.objective,
+                // FIX: Do NOT map Enums directly from AI (it returns text, we need Key like 'BOOK_MEETING')
+                // For now, we keep the default or user selection
+                objective: prev.objective,
                 target_audience: data.target_audience || prev.target_audience,
                 target_sectors: formattedTargetSectors.length > 0 ? formattedTargetSectors : prev.target_sectors,
-                target_company_size: data.target_company_size || prev.target_company_size,
+                target_company_size: prev.target_company_size, // AI returns text, we need range
                 target_job_titles: formattedJobTitles.length > 0 ? formattedJobTitles : prev.target_job_titles,
 
                 // Step 4: Signature & Params
@@ -251,7 +253,7 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
                 signature_ps: data.signature_ps || prev.signature_ps,
                 desired_tone: data.desired_tone || prev.desired_tone,
                 formal: data.formal !== undefined ? data.formal : prev.formal,
-                email_length: data.email_length || prev.email_length,
+                email_length: prev.email_length, // AI returns text, we need Enum
                 language: data.language || prev.language,
             }))
 
