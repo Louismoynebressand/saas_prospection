@@ -14,7 +14,7 @@ export function DebugStatus() {
 
         // Check Session Immediately
         setStatus("Checking Session...")
-        supabase.auth.getSession().then(({ data, error }) => {
+        supabase.auth.getSession().then(({ data, error }: { data: { session: any }, error: any }) => {
             if (error) setSessionStatus(`Error: ${error.message}`)
             else if (data.session) setSessionStatus(`User: ${data.session.user.email}`)
             else setSessionStatus("No Session")
@@ -22,7 +22,7 @@ export function DebugStatus() {
         })
 
         // Listen for events
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event: string, session: any) => {
             setLastEvent(event)
             console.log(`[DebugStatus] Event: ${event}`)
         })
