@@ -122,8 +122,9 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
             return
         }
 
+        // 60s Soft Timeout (Client Side)
         const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 20000) // 20s hard timeout
+        const timeoutId = setTimeout(() => controller.abort(), 60000)
 
         setAiLoading(true)
         try {
@@ -160,13 +161,19 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
 
             clearTimeout(timeoutId)
 
-            if (!response.ok) throw new Error("Erreur lors de l'analyse")
+            if (!response.ok) {
+                const errorText = await response.text()
+                console.error(`❌ [AI] API Error (${response.status}): ${errorText}`)
+                throw new Error(`Erreur API (${response.status}): ${response.statusText}`)
+            }
 
             const rawData = await response.json()
+            console.log("🤖 [AI] Raw Data received:", rawData)
+
             // Handle n8n returning an array
             const data = Array.isArray(rawData) ? rawData[0] : rawData
 
-            console.log("🤖 [AI] Data received:", data)
+            console.log("🤖 [AI] Processed Data:", data)
 
             // Format arrays
             let formattedPainPoints = ""
@@ -223,9 +230,14 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
 
             toast.success("✨ Analyse terminée ! Données pré-remplies.")
 
-        } catch (error) {
-            console.error(error)
-            toast.error("Erreur lors de l'analyse IA. Vérifiez le site web.")
+        } catch (error: any) {
+            console.error("🔥 [AI] Exception:", error)
+
+            if (error.name === 'AbortError') {
+                toast.error("L'IA prend trop de temps à répondre (Timeout > 60s).")
+            } else {
+                toast.error(`Erreur IA: ${error.message || "Vérifiez le site web."}`)
+            }
         } finally {
             setAiLoading(false)
         }
