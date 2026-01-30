@@ -67,6 +67,24 @@ interface CreateCampaignWizardProps {
 
 type WizardStep = 'identity' | 'positioning' | 'targeting' | 'signature'
 
+// --- HELPERS ---
+const mapTone = (aiValue: string): string => {
+    if (!aiValue) return "professional"
+    const v = aiValue.toLowerCase()
+    if (v.includes("friendly") || v.includes("sympa") || v.includes("cool") || v.includes("créatif") || v.includes("audacieux")) return "friendly"
+    if (v.includes("direct")) return "direct"
+    if (v.includes("consult") || v.includes("conseil")) return "consultative"
+    return "professional"
+}
+
+const mapLength = (aiValue: string): string => {
+    if (!aiValue) return "STANDARD"
+    const v = aiValue.toLowerCase()
+    if (v.includes("court") || v.includes("short") || v.includes("concis")) return "CONCISE"
+    if (v.includes("long") || v.includes("détaillé") || v.includes("detail")) return "DETAILED"
+    return "STANDARD"
+}
+
 export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCampaignWizardProps) {
     const [step, setStep] = useState<WizardStep>('identity')
     const [loading, setLoading] = useState(false)
