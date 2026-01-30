@@ -112,10 +112,21 @@ export function Sidebar() {
 
                 if (user) {
                     // User is authenticated - fetch data immediately
-                    await Promise.all([
+                    // Add timeout safeguard to prevent infinite loading if Supabase SDK hangs
+                    const fetchDataPromise = Promise.all([
                         fetchProfile(user.id),
                         fetchQuotas(user.id)
                     ])
+
+                    const timeoutPromise = new Promise((resolve) => {
+                        setTimeout(() => {
+                            console.error("⚠️ [Sidebar] Data fetch timed out (5s). Forcing UI load.")
+                            resolve("timeout")
+                        }, 5000)
+                    })
+
+                    await Promise.race([fetchDataPromise, timeoutPromise])
+
                     setLoadingProfile(false)
 
                     // Setup Realtime subscription AFTER having a valid user

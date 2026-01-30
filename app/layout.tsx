@@ -6,6 +6,7 @@ import { Topbar } from "@/components/layout/Topbar";
 import { cn } from "@/lib/utils";
 import { Toaster } from "sonner";
 import SupabaseProvider from "@/components/providers/SupabaseProvider";
+import { DebugStatus } from "@/components/debug/DebugStatus";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
