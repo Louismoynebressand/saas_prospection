@@ -435,6 +435,7 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
                 siren: "",
                 pitch: "",
                 main_offer: "",
+                service_to_sell: "",
                 pain_points: "",
                 main_promise: "",
                 secondary_benefits: [],
