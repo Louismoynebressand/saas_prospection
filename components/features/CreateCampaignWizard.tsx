@@ -122,11 +122,13 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
             return
         }
 
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 20000) // 20s hard timeout
+
         setAiLoading(true)
         try {
-            // Get user ID for n8n to access user metadata
+            // Restore: Get user ID from client session (Lightweight)
             const supabase = createClient()
-            // Use getSession instead of getUser to avoid network latency/locks
             const { data: { session } } = await supabase.auth.getSession()
 
             const response = await authenticatedFetch('/api/campaigns/analyze', {
@@ -136,9 +138,12 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
                     website: formData.my_website,
                     company: formData.my_company_name,
                     siren: formData.siren,
-                    userId: session?.user?.id  // Send user ID to n8n
-                })
+                    userId: session?.user?.id
+                }),
+                signal: controller.signal
             })
+
+            clearTimeout(timeoutId)
 
             if (!response.ok) throw new Error("Erreur lors de l'analyse")
 
