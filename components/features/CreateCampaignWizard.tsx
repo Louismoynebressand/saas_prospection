@@ -127,14 +127,33 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
 
         setAiLoading(true)
         try {
+            // 1. Normalize Website URL (n8n expects protocol)
+            let websiteUrl = formData.my_website
+            if (websiteUrl && !/^https?:\/\//i.test(websiteUrl)) {
+                websiteUrl = 'https://' + websiteUrl
+            }
+
+            // 2. Safely get User ID (with timeout to avoid lock)
+            const supabase = createClient()
+            const getSessionPromise = supabase.auth.getSession()
+            const timeoutPromise = new Promise<{ data: { session: null } }>((resolve) =>
+                setTimeout(() => resolve({ data: { session: null } }), 2000)
+            )
+            const { data: { session } } = await Promise.race([getSessionPromise, timeoutPromise])
+
+            if (!session?.user?.id) {
+                console.warn("⚠️ [AI] User ID missing or timeout - sending without ID")
+            }
+
             // BYPASS: Use standard fetch to avoid ANY authentication lock issues
             const response = await fetch('/api/campaigns/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    website: formData.my_website,
+                    website: websiteUrl,
                     company: formData.my_company_name,
-                    siren: formData.siren
+                    siren: formData.siren,
+                    userId: session?.user?.id
                 }),
                 signal: controller.signal
             })
@@ -143,13 +162,20 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
 
             if (!response.ok) throw new Error("Erreur lors de l'analyse")
 
-            const data = await response.json()
+            const rawData = await response.json()
+            // Handle n8n returning an array
+            const data = Array.isArray(rawData) ? rawData[0] : rawData
+
+            console.log("🤖 [AI] Data received:", data)
 
             // Format arrays
             let formattedPainPoints = ""
             if (Array.isArray(data.pain_points)) {
                 formattedPainPoints = data.pain_points.map((p: string) => `- ${p}`).join('\n')
             } else if (typeof data.pain_points === 'string') {
+                // If it's a comma separated string or just text, we handle it
+                // The prompt returns a string description, so we just use it directly
+                // or if it looks like a list, we format it.
                 formattedPainPoints = data.pain_points
             }
 
@@ -163,6 +189,9 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
             // Map ALL fields from webhook response
             setFormData(prev => ({
                 ...prev,
+                // Update website if normalized
+                my_website: websiteUrl || prev.my_website,
+
                 // Step 1: Identité
                 pitch: data.pitch || prev.pitch,
                 main_offer: data.main_offer || prev.main_offer,
@@ -172,13 +201,12 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
                 // Step 2: Positionnement  
                 secondary_benefits: data.secondary_benefits || prev.secondary_benefits,
 
-
                 // Step 3: Ciblage
                 objective: data.objective || prev.objective,
                 target_audience: data.target_audience || prev.target_audience,
                 target_sectors: data.target_sectors || prev.target_sectors,
                 target_company_size: data.target_company_size || prev.target_company_size,
-                target_job_titles: Array.isArray(data.target_job_titles) ? data.target_job_titles : (data.target_job_titles ? [data.target_job_titles] : prev.target_job_titles),
+                target_job_titles: data.target_job_titles ? (Array.isArray(data.target_job_titles) ? data.target_job_titles : [data.target_job_titles]) : prev.target_job_titles,
 
                 // Step 4: Signature & Params
                 signature_name: data.signature_name || prev.signature_name,
