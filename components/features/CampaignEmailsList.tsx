@@ -7,10 +7,12 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Mail, Search, Calendar, User, ExternalLink } from "lucide-react"
+import { GenerateEmailDialog } from "./GenerateEmailDialog"
+import { Plus, Mail, Search, Calendar, User, ExternalLink, Sparkles } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
+import { toast } from "sonner"
 
 interface EmailGeneration {
     id: string
@@ -34,34 +36,35 @@ export function CampaignEmailsList({ campaignId }: CampaignEmailsListProps) {
     const [emails, setEmails] = useState<EmailGeneration[]>([])
     const [loading, setLoading] = useState(true)
     const [searchQuery, setSearchQuery] = useState("")
+    const [isGenerateOpen, setIsGenerateOpen] = useState(false)
+
+    const fetchEmails = async () => {
+        const supabase = createClient()
+        const { data, error } = await supabase
+            .from('email_generations')
+            .select(`
+                id,
+                id_campaign,
+                id_prospect,
+                subject,
+                body,
+                status,
+                sent_at,
+                opened_at,
+                clicked_at,
+                replied_at,
+                created_at
+            `)
+            .eq('id_campaign', campaignId)
+            .order('created_at', { ascending: false })
+
+        if (data) {
+            setEmails(data as EmailGeneration[])
+        }
+        setLoading(false)
+    }
 
     useEffect(() => {
-        const fetchEmails = async () => {
-            const supabase = createClient()
-            const { data, error } = await supabase
-                .from('email_generations')
-                .select(`
-                    id,
-                    id_campaign,
-                    id_prospect,
-                    subject,
-                    body,
-                    status,
-                    sent_at,
-                    opened_at,
-                    clicked_at,
-                    replied_at,
-                    created_at
-                `)
-                .eq('id_campaign', campaignId)
-                .order('created_at', { ascending: false })
-
-            if (data) {
-                setEmails(data as EmailGeneration[])
-            }
-            setLoading(false)
-        }
-
         fetchEmails()
     }, [campaignId])
 
@@ -96,21 +99,37 @@ export function CampaignEmailsList({ campaignId }: CampaignEmailsListProps) {
 
     if (emails.length === 0) {
         return (
-            <Card>
-                <CardHeader>
-                    <CardTitle>Emails Générés</CardTitle>
-                    <CardDescription>
-                        Aucun email généré pour cette campagne
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="text-center py-12 text-muted-foreground">
-                        <Mail className="h-16 w-16 mx-auto mb-4 opacity-20" />
-                        <p className="text-lg font-medium mb-1">Aucun email généré</p>
-                        <p className="text-sm">Les emails apparaîtront ici une fois générés par l'IA</p>
-                    </div>
-                </CardContent>
-            </Card>
+            <div className="space-y-6">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Emails Générés</CardTitle>
+                        <CardDescription>
+                            Aucun email généré pour cette campagne
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-center py-12 text-muted-foreground">
+                            <Mail className="h-16 w-16 mx-auto mb-4 opacity-20" />
+                            <p className="text-lg font-medium mb-1">Aucun email généré</p>
+                            <p className="text-sm mb-6">Les emails apparaîtront ici une fois générés par l'IA</p>
+                            <Button onClick={() => setIsGenerateOpen(true)} className="gap-2">
+                                <Plus className="w-4 h-4" />
+                                Générer un email
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <GenerateEmailDialog
+                    open={isGenerateOpen}
+                    onOpenChange={setIsGenerateOpen}
+                    campaignId={campaignId}
+                    onSuccess={() => {
+                        fetchEmails()
+                        setIsGenerateOpen(false)
+                    }}
+                />
+            </div>
         )
     }
 
@@ -180,21 +199,27 @@ export function CampaignEmailsList({ campaignId }: CampaignEmailsListProps) {
             {/* Search + List */}
             <Card>
                 <CardHeader>
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between flex-wrap gap-4">
                         <div>
                             <CardTitle>Emails Générés</CardTitle>
                             <CardDescription>
                                 {filteredEmails.length} email(s) trouvé(s)
                             </CardDescription>
                         </div>
-                        <div className="relative w-full max-w-sm">
-                            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                placeholder="Rechercher un email..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="pl-10"
-                            />
+                        <div className="flex items-center gap-2">
+                            <div className="relative w-full max-w-sm">
+                                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    placeholder="Rechercher un email..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="pl-10"
+                                />
+                            </div>
+                            <Button onClick={() => setIsGenerateOpen(true)} className="gap-2">
+                                <Plus className="w-4 h-4" />
+                                <span className="hidden sm:inline">Nouveau</span>
+                            </Button>
                         </div>
                     </div>
                 </CardHeader>
@@ -235,6 +260,15 @@ export function CampaignEmailsList({ campaignId }: CampaignEmailsListProps) {
                     </AnimatePresence>
                 </CardContent>
             </Card>
+
+            <GenerateEmailDialog
+                open={isGenerateOpen}
+                onOpenChange={setIsGenerateOpen}
+                campaignId={campaignId}
+                onSuccess={() => {
+                    fetchEmails()
+                }}
+            />
         </div>
     )
 }
