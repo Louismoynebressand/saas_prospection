@@ -77,7 +77,7 @@ const mapTone = (aiValue: string): string => {
     return "professional"
 }
 
-const mapLength = (aiValue: string): string => {
+const mapLength = (aiValue: string): "CONCISE" | "STANDARD" | "DETAILED" => {
     if (!aiValue) return "STANDARD"
     const v = aiValue.toLowerCase()
     if (v.includes("court") || v.includes("short") || v.includes("concis")) return "CONCISE"
