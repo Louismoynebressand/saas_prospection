@@ -39,7 +39,10 @@ export function CampaignList() {
                     is_active,
                     created_at,
                     updated_at,
-                    status
+                    status,
+                    main_offer,
+                    service_to_sell,
+                    target_audience
                 `)
                 .eq('user_id', user.id)
                 .order('created_at', { ascending: false })
@@ -154,11 +157,6 @@ export function CampaignList() {
                                                hover:-translate-y-1"
                                     onClick={() => handleViewCampaign(camp.id)}
                                 >
-                                    {/* Gradient overlay on hover */}
-                                    <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/0 to-purple-500/0 
-                                                    group-hover:from-indigo-500/5 group-hover:to-purple-500/5 
-                                                    transition-all duration-300 pointer-events-none" />
-
                                     <CardHeader className="pb-3 relative z-10">
                                         <div className="flex justify-between items-start">
                                             <motion.div
