@@ -23,7 +23,7 @@ export async function POST(req: Request) {
 
         // Call n8n Webhook with Timeout
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 10000); // 10s timeout
+        const timeout = setTimeout(() => controller.abort(), 60000); // 60s timeout
 
         try {
             const response = await fetch(webhookUrl, {
