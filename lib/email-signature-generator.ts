@@ -12,6 +12,7 @@ export interface SignatureData {
     signature_ps?: string;
     my_website?: string;
     signature_show_phone?: boolean;
+    signature_show_email?: boolean;
     signature_show_website?: boolean;
     signature_website_text?: string;
     signature_custom_link_url?: string;
@@ -19,7 +20,8 @@ export interface SignatureData {
 }
 
 export interface SignatureConfig extends SignatureData {
-    signature_elements_order: string[];
+    signature_elements_order?: string[];
+    signature_html?: string;
 }
 
 export type SignatureElement =
@@ -67,7 +69,7 @@ function generateElementHTML(
             return `<tr><td style="padding: 2px 0; color: #333; font-size: 14px;">📞 <a href="tel:${escapeHtml(data.signature_phone)}" style="color: #4f46e5; text-decoration: none;">${escapeHtml(data.signature_phone)}</a></td></tr>`;
 
         case 'email':
-            if (!data.signature_email) return null;
+            if (!data.signature_email || data.signature_show_email === false) return null;
             return `<tr><td style="padding: 2px 0; color: #333; font-size: 14px;">✉️ <a href="mailto:${escapeHtml(data.signature_email)}" style="color: #4f46e5; text-decoration: none;">${escapeHtml(data.signature_email)}</a></td></tr>`;
 
         case 'website':

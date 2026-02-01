@@ -4,6 +4,7 @@
 -- Add new columns for signature customization
 ALTER TABLE cold_email_campaigns
 ADD COLUMN IF NOT EXISTS signature_show_phone boolean DEFAULT true,
+ADD COLUMN IF NOT EXISTS signature_show_email boolean DEFAULT true,
 ADD COLUMN IF NOT EXISTS signature_show_website boolean DEFAULT true,
 ADD COLUMN IF NOT EXISTS signature_website_text text DEFAULT 'Visitez notre site web',
 ADD COLUMN IF NOT EXISTS signature_custom_link_url text,

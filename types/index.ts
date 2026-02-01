@@ -113,6 +113,7 @@ export interface Campaign {
 
     // Signature customization options
     signature_show_phone?: boolean;
+    signature_show_email?: boolean;
     signature_show_website?: boolean;
     signature_website_text?: string;
     signature_custom_link_url?: string;

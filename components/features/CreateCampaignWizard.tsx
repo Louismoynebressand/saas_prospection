@@ -14,6 +14,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Loader2, Sparkles, ArrowRight, ArrowLeft, CheckCircle2, Globe, Building2, Target, Award, Pen, Info, Zap, Brain } from "lucide-react"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
+import { EmailSignatureEditor } from "@/components/features/EmailSignatureEditor"
 
 // --- HELPER COMPONENTS (DEFINED OUTSIDE TO PREVENT RE-RENDERS) ---
 
@@ -682,127 +683,21 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
     )
 
     const renderSignatureStep = () => (
-        <div className="space-y-5 py-6">
-            <div className="bg-gradient-to-br from-slate-50 to-gray-100 p-6 rounded-xl border-2 border-slate-200 space-y-4 shadow-sm">
-                <h4 className="font-bold flex items-center gap-2 text-slate-900">
-                    <Pen className="w-5 h-5 text-indigo-600" />
-                    Signature de l'email
-                </h4>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FieldWithTooltip label="Nom" tooltip="Prénom et nom" required>
-                        <Input
-                            placeholder="Jean Dupont"
-                            value={formData.signature_name}
-                            onChange={(e) => updateFormData('signature_name', e.target.value)}
-                            className="h-10 border-2"
-                        />
-                    </FieldWithTooltip>
-
-                    <FieldWithTooltip label="Titre" tooltip="Votre rôle">
-                        <Input
-                            placeholder="CEO & Founder"
-                            value={formData.signature_title}
-                            onChange={(e) => updateFormData('signature_title', e.target.value)}
-                            className="h-10 border-2"
-                        />
-                    </FieldWithTooltip>
-                </div>
-
-                <FieldWithTooltip label="Société" tooltip="Nom de votre entreprise">
-                    <Input
-                        placeholder="SuperProspect"
-                        value={formData.signature_company}
-                        onChange={(e) => updateFormData('signature_company', e.target.value)}
-                        className="h-10 border-2"
-                    />
-                </FieldWithTooltip>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FieldWithTooltip label="Téléphone" tooltip="Numéro professionnel">
-                        <Input
-                            placeholder="+33 6 12 34 56 78"
-                            value={formData.signature_phone}
-                            onChange={(e) => updateFormData('signature_phone', e.target.value)}
-                            className="h-10 border-2"
-                        />
-                    </FieldWithTooltip>
-
-                    <FieldWithTooltip label="Email" tooltip="Email professionnel">
-                        <Input
-                            placeholder="jean@superprospect.io"
-                            value={formData.signature_email}
-                            onChange={(e) => updateFormData('signature_email', e.target.value)}
-                            className="h-10 border-2"
-                        />
-                    </FieldWithTooltip>
-                </div>
-
-                <FieldWithTooltip label="PS" tooltip="Message bonus (optionnel mais efficace)">
-                    <Textarea
-                        placeholder="PS : On offre 50% de réduction..."
-                        value={formData.signature_ps}
-                        onChange={(e) => updateFormData('signature_ps', e.target.value)}
-                        rows={2}
-                        className="border-2 resize-none"
-                    />
-                </FieldWithTooltip>
-            </div>
-
-            <FieldWithTooltip label="Tonalité" tooltip="Style d'écriture">
-                <Select value={formData.desired_tone} onValueChange={(value) => updateFormData('desired_tone', value)}>
-                    <SelectTrigger className="h-11 border-2">
-                        <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="professional">👔 Professionnel</SelectItem>
-                        <SelectItem value="friendly">😊 Amical</SelectItem>
-                        <SelectItem value="direct">⚡ Direct</SelectItem>
-                        <SelectItem value="consultative">🤝 Consultatif</SelectItem>
-                    </SelectContent>
-                </Select>
-            </FieldWithTooltip>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FieldWithTooltip label="Longueur" tooltip="Courts = plus de lecture">
-                    <Select value={formData.email_length} onValueChange={(value: any) => updateFormData('email_length', value)}>
-                        <SelectTrigger className="h-11 border-2">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="CONCISE">📝 Concis</SelectItem>
-                            <SelectItem value="STANDARD">📄 Standard</SelectItem>
-                            <SelectItem value="DETAILED">📚 Détaillé</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </FieldWithTooltip>
-
-                <FieldWithTooltip label="Langue" tooltip="Langue de rédaction">
-                    <Select value={formData.language} onValueChange={(value: any) => updateFormData('language', value)}>
-                        <SelectTrigger className="h-11 border-2">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="fr">🇫🇷 Français</SelectItem>
-                            <SelectItem value="en">🇬🇧 Anglais</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </FieldWithTooltip>
-            </div>
-
-            <div className="flex items-center space-x-3 py-3 px-4 bg-slate-50 rounded-lg border-2">
-                <Checkbox
-                    id="formal"
-                    checked={formData.formal}
-                    onCheckedChange={(checked) => updateFormData('formal', checked)}
-                    className="border-2"
-                />
-                <label htmlFor="formal" className="text-sm font-medium cursor-pointer">
-                    Utiliser le vouvoiement
-                </label>
-            </div>
+        <div className="py-4">
+            <EmailSignatureEditor
+                initialData={formData}
+                onSave={async (html, config) => {
+                    setFormData(prev => ({
+                        ...prev,
+                        ...config,
+                        signature_html: html
+                    }))
+                }}
+                showAIAssist={aiAnalysisComplete}
+            />
         </div>
     )
+
 
     const stepConfig = {
         identity: { title: "1. Identité", icon: Building2 },
