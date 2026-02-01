@@ -90,6 +90,7 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
     const [step, setStep] = useState<WizardStep>('identity')
     const [loading, setLoading] = useState(false)
     const [aiLoading, setAiLoading] = useState(false)
+    const [aiAnalysisComplete, setAiAnalysisComplete] = useState(false)
     const [campaignId, setCampaignId] = useState<string | null>(null)
     const router = useRouter()
 
@@ -105,7 +106,7 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
         pitch: "",
         main_offer: "",
         service_to_sell: "", // NEW: Added field
-        pain_points: "",
+        pain_points: [] as string[],
         main_promise: "",
         secondary_benefits: [] as string[],
 
@@ -208,12 +209,13 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
 
             console.log("🤖 [AI] Final Processed Data:", data)
 
-            // Format arrays (pain_points comes as string in prefill usually, but let's be safe)
-            let formattedPainPoints = ""
+            // Format arrays - keep pain_points as array
+            let formattedPainPoints = [] as string[]
             if (Array.isArray(data.pain_points)) {
-                formattedPainPoints = data.pain_points.map((p: string) => `- ${p}`).join('\n')
-            } else if (typeof data.pain_points === 'string') {
                 formattedPainPoints = data.pain_points
+            } else if (typeof data.pain_points === 'string' && data.pain_points) {
+                // If AI returns string, split it
+                formattedPainPoints = data.pain_points.split('\n').filter(Boolean)
             }
 
             // Format target_job_titles
@@ -300,10 +302,8 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) throw new Error("Non connecté")
 
+        // pain_points is already an array, no need to split
         const painPointsArray = formData.pain_points
-            .split('\n')
-            .filter(line => line.trim() !== '')
-            .map(l => l.replace(/^- /, ''))
 
         const campaignData = {
             user_id: user.id,
@@ -437,7 +437,7 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
                 pitch: "",
                 main_offer: "",
                 service_to_sell: "",
-                pain_points: "",
+                pain_points: [],
                 main_promise: "",
                 secondary_benefits: [],
                 objective: "BOOK_MEETING",

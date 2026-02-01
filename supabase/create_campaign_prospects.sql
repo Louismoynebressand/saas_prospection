@@ -2,27 +2,31 @@
 -- Description: Creates junction table to link prospects to campaigns with email generation/send tracking
 
 -- Create campaign_prospects junction table
+-- Links prospects to campaigns and tracks email generation/sending status
+
 CREATE TABLE IF NOT EXISTS campaign_prospects (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    
+    -- Foreign keys
     campaign_id uuid NOT NULL REFERENCES cold_email_campaigns(id) ON DELETE CASCADE,
-    prospect_id uuid NOT NULL REFERENCES scrape_prospect(id) ON DELETE CASCADE,
+    prospect_id text NOT NULL REFERENCES scrape_prospect(id_prospect) ON DELETE CASCADE,
     
-    -- Email status tracking
-    email_status text NOT NULL DEFAULT 'not_generated'
-        CHECK (email_status IN ('not_generated', 'generated', 'sent', 'bounced', 'replied')),
+    -- Email tracking
+    email_status text NOT NULL DEFAULT 'not_generated',
+    -- Possible values: 'not_generated', 'generated', 'sent', 'bounced', 'replied'
     
-    -- Generated email data
     generated_email_subject text,
     generated_email_content text,
     
     -- Timestamps
     email_generated_at timestamptz,
     email_sent_at timestamptz,
-    created_at timestamptz DEFAULT now(),
-    updated_at timestamptz DEFAULT now(),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
     
-    -- Unique constraint: one prospect per campaign
-    UNIQUE(campaign_id, prospect_id)
+    -- Constraints
+    UNIQUE(campaign_id, prospect_id),
+    CHECK (email_status IN ('not_generated', 'generated', 'sent', 'bounced', 'replied'))
 );
 
 -- Create indexes for performance
