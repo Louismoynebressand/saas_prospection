@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS campaign_prospects (
     
     -- Foreign keys
     campaign_id uuid NOT NULL REFERENCES cold_email_campaigns(id) ON DELETE CASCADE,
-    prospect_id text NOT NULL REFERENCES scrape_prospect(id_prospect) ON DELETE CASCADE,
+    prospect_id bigint NOT NULL REFERENCES scrape_prospect(id_prospect) ON DELETE CASCADE,
     
     -- Email tracking
     email_status text NOT NULL DEFAULT 'not_generated',
