@@ -11,6 +11,7 @@ import { toast } from "sonner"
 import { Loader2, UserPlus, Mail, Send, Eye, RefreshCw } from "lucide-react"
 import { AddProspectsToCampaignModal } from "./AddProspectsToCampaignModal"
 import { ProspectViewModal } from "./ProspectViewModal"
+import { ProspectDetailModal } from "./ProspectDetailModal"
 import type { CampaignProspectLink, EmailStatus } from "@/types"
 
 interface CampaignProspectsListProps {
@@ -23,6 +24,7 @@ export function CampaignProspectsList({ campaignId }: CampaignProspectsListProps
     const [selectedProspects, setSelectedProspects] = useState<Set<string>>(new Set())
     const [showAddModal, setShowAddModal] = useState(false)
     const [viewingProspect, setViewingProspect] = useState<any>(null)
+    const [detailProspect, setDetailProspect] = useState<any>(null)
     const [batchActionLoading, setBatchActionLoading] = useState(false)
 
     useEffect(() => {
@@ -349,8 +351,17 @@ export function CampaignProspectsList({ campaignId }: CampaignProspectsListProps
                                                             size="sm"
                                                             variant="ghost"
                                                             onClick={() => setViewingProspect({ ...prospect, campaignLink: cp })}
+                                                            title="Aperçu rapide"
                                                         >
                                                             <Eye className="w-4 h-4" />
+                                                        </Button>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() => setDetailProspect({ ...prospect, campaignLink: cp })}
+                                                            title="Voir profil complet"
+                                                        >
+                                                            👁️ Profil
                                                         </Button>
                                                     </div>
                                                 </td>
@@ -387,6 +398,25 @@ export function CampaignProspectsList({ campaignId }: CampaignProspectsListProps
                     if (viewingProspect) {
                         handleSendEmail(viewingProspect.id_prospect)
                         setViewingProspect(null)
+                    }
+                }}
+            />
+
+            <ProspectDetailModal
+                open={!!detailProspect}
+                onOpenChange={(open) => !open && setDetailProspect(null)}
+                prospect={detailProspect}
+                campaignLink={detailProspect?.campaignLink}
+                onGenerateEmail={() => {
+                    if (detailProspect) {
+                        handleGenerateEmail(detailProspect.id_prospect)
+                        setDetailProspect(null)
+                    }
+                }}
+                onSendEmail={() => {
+                    if (detailProspect) {
+                        handleSendEmail(detailProspect.id_prospect)
+                        setDetailProspect(null)
                     }
                 }}
             />
