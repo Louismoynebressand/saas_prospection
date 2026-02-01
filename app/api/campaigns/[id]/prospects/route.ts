@@ -9,16 +9,17 @@ export const dynamic = 'force-dynamic'
  */
 export async function GET(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         const supabase = await createClient()
+        const { id: campaignId } = await params
 
         // Get campaign with user check
         const { data: campaign, error: campaignError } = await supabase
             .from('cold_email_campaigns')
             .select('id, user_id')
-            .eq('id', params.id)
+            .eq('id', campaignId)
             .single()
 
         if (campaignError || !campaign) {
@@ -47,7 +48,7 @@ export async function GET(
                 updated_at,
                 scrape_prospect (*)
             `)
-            .eq('campaign_id', params.id)
+            .eq('campaign_id', campaignId)
             .order('created_at', { ascending: false })
 
         if (error) {
@@ -69,18 +70,19 @@ export async function GET(
  */
 export async function POST(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         const supabase = await createClient()
         const body = await request.json()
         const { prospectIds, searchIds } = body
+        const { id: campaignId } = await params
 
         // Get campaign with user check
         const { data: campaign, error: campaignError } = await supabase
             .from('cold_email_campaigns')
             .select('id, user_id')
-            .eq('id', params.id)
+            .eq('id', campaignId)
             .single()
 
         if (campaignError || !campaign) {
@@ -122,7 +124,7 @@ export async function POST(
 
         // Create campaign_prospect links (ignore duplicates)
         const linksToCreate = finalProspectIds.map(prospectId => ({
-            campaign_id: params.id,
+            campaign_id: campaignId,
             prospect_id: prospectId,
             email_status: 'not_generated' as const
         }))
@@ -155,12 +157,13 @@ export async function POST(
  */
 export async function DELETE(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         const supabase = await createClient()
         const body = await request.json()
         const { prospectIds } = body
+        const { id: campaignId } = await params
 
         if (!prospectIds || !Array.isArray(prospectIds)) {
             return NextResponse.json({ error: 'prospectIds required' }, { status: 400 })
@@ -170,7 +173,7 @@ export async function DELETE(
         const { data: campaign, error: campaignError } = await supabase
             .from('cold_email_campaigns')
             .select('id, user_id')
-            .eq('id', params.id)
+            .eq('id', campaignId)
             .single()
 
         if (campaignError || !campaign) {
@@ -187,7 +190,7 @@ export async function DELETE(
         const { error: deleteError } = await supabase
             .from('campaign_prospects')
             .delete()
-            .eq('campaign_id', params.id)
+            .eq('campaign_id', campaignId)
             .in('prospect_id', prospectIds)
 
         if (deleteError) {

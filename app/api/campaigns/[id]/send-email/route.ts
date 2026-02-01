@@ -12,12 +12,13 @@ export const dynamic = 'force-dynamic'
  */
 export async function POST(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         const supabase = await createClient()
         const body = await request.json()
         const { prospectId, prospectIds } = body
+        const { id: campaignId } = await params
 
         // Normalize to array
         const targetProspectIds = prospectId ? [prospectId] : prospectIds
@@ -29,7 +30,7 @@ export async function POST(
         const { data: campaign, error: campaignError } = await supabase
             .from('cold_email_campaigns')
             .select('id, user_id')
-            .eq('id', params.id)
+            .eq('id', campaignId)
             .single()
 
         if (campaignError || !campaign) {
@@ -46,7 +47,7 @@ export async function POST(
         const { data: campaignProspects, error: cpError } = await supabase
             .from('campaign_prospects')
             .select('*')
-            .eq('campaign_id', params.id)
+            .eq('campaign_id', campaignId)
             .in('prospect_id', targetProspectIds)
 
         if (cpError || !campaignProspects || campaignProspects.length === 0) {

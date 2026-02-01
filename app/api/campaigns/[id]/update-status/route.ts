@@ -11,12 +11,13 @@ export const dynamic = 'force-dynamic'
  */
 export async function PATCH(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         const supabase = await createClient()
         const body = await request.json()
         const { prospectId, newStatus } = body
+        const { id: campaignId } = await params
 
         if (!prospectId || !newStatus) {
             return NextResponse.json({ error: 'prospectId and newStatus required' }, { status: 400 })
@@ -31,7 +32,7 @@ export async function PATCH(
         const { data: campaign, error: campaignError } = await supabase
             .from('cold_email_campaigns')
             .select('id, user_id')
-            .eq('id', params.id)
+            .eq('id', campaignId)
             .single()
 
         if (campaignError || !campaign) {
@@ -58,7 +59,7 @@ export async function PATCH(
         const { data: updated, error: updateError } = await supabase
             .from('campaign_prospects')
             .update(updateData)
-            .eq('campaign_id', params.id)
+            .eq('campaign_id', campaignId)
             .eq('prospect_id', prospectId)
             .select()
             .single()
