@@ -6,7 +6,7 @@ import {
     ArrowLeft, Building2, Mail, Phone, MapPin, Globe, User,
     Star, Clock, CheckCircle2, XCircle, AlertCircle, Sparkles, Users, Store,
     Briefcase, Copy, ChevronLeft, ChevronRight, Share2, Trash2, FileDown, Printer,
-    Facebook, Instagram, Linkedin, Twitter, ChevronDown, Info
+    Facebook, Instagram, Linkedin, Twitter, ChevronDown, Info, Zap, Loader2 as LoaderIcon
 } from "lucide-react"
 import { differenceInYears, isValid } from "date-fns"
 import { supabase } from "@/lib/supabase"
@@ -120,6 +120,9 @@ export default function ProspectPage() {
     // Modal State
     const [isEmailModalOpen, setIsEmailModalOpen] = useState(false)
 
+    // Deep Search State
+    const [isLaunchingDeepSearch, setIsLaunchingDeepSearch] = useState(false)
+
     const safeParse = (data: any) => {
         if (!data) return {}
         if (typeof data === 'string') {
@@ -219,6 +222,47 @@ export default function ProspectPage() {
 
     const handlePrint = () => {
         window.print()
+    }
+
+    const handleLaunchDeepSearch = async () => {
+        if (!prospect || isLaunchingDeepSearch) return
+
+        try {
+            setIsLaunchingDeepSearch(true)
+
+            const response = await fetch('/api/prospects/deep-search', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prospectIds: [prospect.id_prospect] })
+            })
+
+            if (!response.ok) {
+                const error = await response.json()
+                if (response.status === 402) {
+                    toast.error(`Crédits insuffisants : ${error.required} requis, ${error.available} disponibles`)
+                } else {
+                    toast.error(error.error || 'Erreur lors du lancement du Deep Search')
+                }
+                return
+            }
+
+            const result = await response.json()
+            toast.success(
+                `Deep Search lancé ! Le profil sera enrichi dans quelques instants.`,
+                { duration: 5000 }
+            )
+
+            // Recharger le prospect après 10 secondes pour voir les résultats
+            setTimeout(() => {
+                fetchProspectData(id)
+            }, 10000)
+
+        } catch (error: any) {
+            console.error('Error launching deep search:', error)
+            toast.error('Erreur lors du lancement du Deep Search')
+        } finally {
+            setIsLaunchingDeepSearch(false)
+        }
     }
 
     // --- DISPLAY VARS ---
@@ -369,6 +413,23 @@ export default function ProspectPage() {
                         </div>
 
                         <div className="flex items-center gap-2">
+                            {/* Bouton Deep Search si pas encore fait */}
+                            {!deep || Object.keys(deep).length === 0 ? (
+                                <Button
+                                    variant="outline"
+                                    onClick={handleLaunchDeepSearch}
+                                    disabled={isLaunchingDeepSearch}
+                                    className="border-orange-300 text-orange-700 hover:bg-orange-50"
+                                >
+                                    {isLaunchingDeepSearch ? (
+                                        <LoaderIcon className="mr-2 h-4 w-4 animate-spin" />
+                                    ) : (
+                                        <Zap className="mr-2 h-4 w-4" />
+                                    )}
+                                    {isLaunchingDeepSearch ? 'Lancement...' : 'Lancer Deep Search'}
+                                </Button>
+                            ) : null}
+
                             <Button
                                 variant="default"
                                 onClick={() => setIsEmailModalOpen(true)}

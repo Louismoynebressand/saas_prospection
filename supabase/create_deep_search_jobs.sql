@@ -17,10 +17,7 @@ CREATE TABLE IF NOT EXISTS deep_search_jobs (
     -- Métadonnées
     created_at timestamptz DEFAULT NOW(),
     started_at timestamptz,
-    completed_at timestamptz,
-    
-    -- Index pour l'utilisateur
-    CONSTRAINT deep_search_jobs_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
+    completed_at timestamptz
 );
 
 -- Index pour performance
