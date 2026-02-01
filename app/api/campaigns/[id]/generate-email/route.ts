@@ -53,58 +53,83 @@ export async function POST(
 
         const results = []
 
-        // Generate email for each prospect
+        // Generate email for each prospect via n8n webhook
         for (const prospect of prospects) {
             try {
-                // Extract prospect info from data_scrapping
-                const prospectData = typeof prospect.data_scrapping === 'string'
-                    ? JSON.parse(prospect.data_scrapping)
-                    : prospect.data_scrapping || {}
-
-                const prospectName = prospectData.title || prospectData.name || 'Prospect'
-                const prospectCompany = prospectData.company || prospectData.companyName || prospect.secteur || 'Votre entreprise'
-                const prospectTitle = prospectData.jobTitle || prospectData.position || ''
-
-                // Simple email generation (can be enhanced with AI later)
-                const subject = `${campaign.main_offer || campaign.pitch || 'Proposition pour ' + prospectCompany}`
-
-                let emailContent = `Bonjour ${prospectName},\n\n`
-                emailContent += `${campaign.pitch || ''}\n\n`
-                emailContent += `${campaign.main_promise || ''}\n\n`
-
-                if (campaign.signature_html) {
-                    emailContent += `\n${campaign.signature_html}`
-                } else {
-                    emailContent += `\nCordialement,\n${campaign.signature_name || ''}\n${campaign.signature_title || ''}`
-                }
-
-                // Update campaign_prospects table
-                const { error: updateError } = await supabase
+                // Ensure campaign_prospect link exists
+                const { data: existingLink, error: linkError } = await supabase
                     .from('campaign_prospects')
-                    .update({
-                        email_status: 'generated',
-                        generated_email_subject: subject,
-                        generated_email_content: emailContent,
-                        email_generated_at: new Date().toISOString(),
-                        updated_at: new Date().toISOString()
-                    })
+                    .select('id')
                     .eq('campaign_id', campaignId)
                     .eq('prospect_id', prospect.id_prospect)
+                    .maybeSingle()
 
-                if (updateError) {
-                    console.error('Error updating prospect email:', updateError)
-                    results.push({
-                        prospect_id: prospect.id_prospect,
-                        success: false,
-                        error: updateError.message
-                    })
+                let campaignProspectId: string
+
+                if (linkError || !existingLink) {
+                    // Create link if it doesn't exist
+                    const { data: newLink, error: createError } = await supabase
+                        .from('campaign_prospects')
+                        .insert({
+                            campaign_id: campaignId,
+                            prospect_id: prospect.id_prospect,
+                            email_status: 'not_generated'
+                        })
+                        .select('id')
+                        .single()
+
+                    if (createError || !newLink) {
+                        throw new Error('Failed to create campaign prospect link')
+                    }
+                    campaignProspectId = newLink.id
                 } else {
+                    campaignProspectId = existingLink.id
+                }
+
+                // Call n8n webhook to generate email
+                const webhookUrl = process.env.N8N_GENERATE_EMAIL_WEBHOOK || 'https://neuraflow-n8n.app.n8n.cloud/webhook/generate-cold-email'
+
+                const webhookPayload = {
+                    user_id: user.id,
+                    campaign_id: campaignId,
+                    prospect_id: prospect.id_prospect.toString(),
+                    campaign_prospect_id: campaignProspectId
+                }
+
+                console.log('📤 Calling n8n webhook:', webhookUrl, webhookPayload)
+
+                const webhookResponse = await fetch(webhookUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(webhookPayload),
+                    signal: AbortSignal.timeout(30000) // 30s timeout
+                })
+
+                if (!webhookResponse.ok) {
+                    throw new Error(`Webhook failed: ${webhookResponse.statusText}`)
+                }
+
+                const webhookResult = await webhookResponse.json()
+                console.log('📥 n8n webhook result:', webhookResult)
+
+                if (webhookResult.status === 'finished') {
+                    // Verify the email was saved in DB by n8n
+                    const { data: updatedLink } = await supabase
+                        .from('campaign_prospects')
+                        .select('generated_email_subject, generated_email_content, email_status')
+                        .eq('id', campaignProspectId)
+                        .single()
+
                     results.push({
                         prospect_id: prospect.id_prospect,
                         success: true,
-                        subject,
-                        content: emailContent
+                        subject: updatedLink?.generated_email_subject || webhookResult.email_subject,
+                        content: updatedLink?.generated_email_content || webhookResult.email_content_text
                     })
+                } else {
+                    throw new Error(webhookResult.message || 'Email generation failed')
                 }
             } catch (err: any) {
                 console.error('Error generating email for prospect:', err)

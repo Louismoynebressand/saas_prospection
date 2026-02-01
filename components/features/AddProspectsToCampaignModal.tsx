@@ -58,9 +58,13 @@ export function AddProspectsToCampaignModal({
     const loadProspects = async () => {
         try {
             const supabase = createClient()
+            const { data: { user } } = await supabase.auth.getUser()
+            if (!user) return
+
             const { data, error } = await supabase
                 .from('scrape_prospect')
                 .select('*')
+                .eq('id_user', user.id)
                 .order('created_at', { ascending: false })
                 .limit(100)
 
@@ -75,11 +79,14 @@ export function AddProspectsToCampaignModal({
     const loadSearches = async () => {
         try {
             const supabase = createClient()
+            const { data: { user } } = await supabase.auth.getUser()
+            if (!user) return
 
-            // Get searches
+            // Get searches for this user only
             const { data: searchData, error: searchError } = await supabase
                 .from('scrape_jobs')
                 .select('id_jobs, request_search, request_count, statut, created_at')
+                .eq('id_user', user.id)
                 .order('created_at', { ascending: false })
                 .limit(50)
 
@@ -92,6 +99,7 @@ export function AddProspectsToCampaignModal({
                         .from('scrape_prospect')
                         .select('*', { count: 'exact', head: true })
                         .eq('id_jobs', search.id_jobs)
+                        .eq('id_user', user.id)
 
                     return {
                         ...search,
@@ -242,20 +250,23 @@ export function AddProspectsToCampaignModal({
                             {selectedProspectIds.size} prospect(s) sélectionné(s)
                         </div>
 
-                        <ScrollArea className="flex-1 border rounded-lg">
+                        <ScrollArea className="h-[400px] border rounded-lg">
                             <div className="p-4 space-y-2">
                                 {filteredProspects.map((prospect) => {
                                     const data = typeof prospect.data_scrapping === 'string'
                                         ? JSON.parse(prospect.data_scrapping)
                                         : prospect.data_scrapping || {}
                                     const name = data.title || data.name || 'Prospect'
-                                    const company = data.company || data.companyName || prospect.secteur
-                                    const email = prospect.email_adresse_verified
+                                    const company = data.company || data.companyName || prospect.secteur || 'N/A'
+                                    const jobTitle = data.jobTitle || data.position || ''
+                                    const email = Array.isArray(prospect.email_adresse_verified)
+                                        ? prospect.email_adresse_verified[0]
+                                        : prospect.email_adresse_verified
 
                                     return (
                                         <div
                                             key={prospect.id_prospect}
-                                            className="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 cursor-pointer"
+                                            className="flex items-start space-x-3 p-4 rounded-lg border hover:bg-gray-50 cursor-pointer transition-colors"
                                             onClick={() => toggleProspect(prospect.id_prospect)}
                                         >
                                             <Checkbox
@@ -270,11 +281,28 @@ export function AddProspectsToCampaignModal({
                                                     }
                                                 }}
                                                 onClick={(e) => e.stopPropagation()}
+                                                className="mt-1"
                                             />
-                                            <div className="flex-1">
-                                                <div className="font-medium">{name}</div>
-                                                <div className="text-sm text-muted-foreground">{company}</div>
-                                                {email && <div className="text-xs text-muted-foreground">{email}</div>}
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="font-semibold text-gray-900">{name}</div>
+                                                    {jobTitle && (
+                                                        <Badge variant="secondary" className="text-xs">
+                                                            {jobTitle}
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                                <div className="text-sm text-gray-600 mt-1">
+                                                    🏢 {company}
+                                                </div>
+                                                {email && (
+                                                    <div className="text-xs text-gray-500 mt-1 truncate">
+                                                        ✉️ {email}
+                                                    </div>
+                                                )}
+                                                <div className="text-xs text-gray-400 mt-1">
+                                                    Ajouté le {new Date(prospect.created_at).toLocaleDateString('fr-FR')}
+                                                </div>
                                             </div>
                                         </div>
                                     )
@@ -298,12 +326,12 @@ export function AddProspectsToCampaignModal({
                             </Button>
                         </div>
 
-                        <ScrollArea className="flex-1 border rounded-lg">
+                        <ScrollArea className="h-[400px] border rounded-lg">
                             <div className="p-4 space-y-2">
                                 {searches.map((search) => (
                                     <div
                                         key={search.id_jobs}
-                                        className="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 cursor-pointer"
+                                        className="flex items-start space-x-3 p-4 rounded-lg border hover:bg-gray-50 cursor-pointer transition-colors"
                                         onClick={() => toggleSearch(search.id_jobs)}
                                     >
                                         <Checkbox
@@ -318,15 +346,24 @@ export function AddProspectsToCampaignModal({
                                                 }
                                             }}
                                             onClick={(e) => e.stopPropagation()}
+                                            className="mt-1"
                                         />
-                                        <div className="flex-1">
-                                            <div className="font-medium">{search.request_search}</div>
-                                            <div className="flex items-center gap-2 mt-1">
-                                                <Badge variant="outline" className="text-xs">
-                                                    {search.prospectCount || 0} prospects
+                                        <div className="flex-1 min-w-0">
+                                            <div className="font-semibold text-gray-900 mb-2">
+                                                {search.request_search}
+                                            </div>
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <Badge variant="default" className="text-xs font-medium">
+                                                    👥 {search.prospectCount || 0} prospects
                                                 </Badge>
-                                                <span className="text-xs text-muted-foreground">
-                                                    {new Date(search.created_at).toLocaleDateString()}
+                                                <Badge
+                                                    variant={search.statut === 'ALLfinish' ? 'default' : 'secondary'}
+                                                    className="text-xs"
+                                                >
+                                                    {search.statut}
+                                                </Badge>
+                                                <span className="text-xs text-gray-500">
+                                                    📅 {new Date(search.created_at).toLocaleDateString('fr-FR')}
                                                 </span>
                                             </div>
                                         </div>

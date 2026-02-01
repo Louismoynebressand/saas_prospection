@@ -48,7 +48,7 @@ export function SignaturePreview({ config, className }: SignaturePreviewProps) {
                 if (!config.signature_email || config.signature_show_email === false) return null
                 return (
                     <div key="email" className="mb-1 text-sm">
-                        \\✉️ <a href={`mailto:${config.signature_email}`} className="text-indigo-600 hover:underline">
+                        ✉️ <a href={`mailto:${config.signature_email}`} className="text-indigo-600 hover:underline">
                             {config.signature_email}
                         </a>
                     </div>
