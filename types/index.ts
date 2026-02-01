@@ -111,6 +111,15 @@ export interface Campaign {
     signature_email?: string;
     signature_ps?: string;
 
+    // Signature customization options
+    signature_show_phone?: boolean;
+    signature_show_website?: boolean;
+    signature_website_text?: string;
+    signature_custom_link_url?: string;
+    signature_custom_link_text?: string;
+    signature_elements_order?: string[];
+    signature_html?: string;
+
     // Email Parameters
     desired_tone?: string;
     formal?: boolean;

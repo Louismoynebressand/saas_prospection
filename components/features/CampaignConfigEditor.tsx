@@ -13,6 +13,8 @@ import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { Save, Loader2 } from "lucide-react"
 import { motion } from "framer-motion"
+import { EmailSignatureEditor } from "@/components/features/EmailSignatureEditor"
+import { SignatureConfig } from "@/lib/email-signature-generator"
 
 interface CampaignConfigEditorProps {
     campaign: Campaign
@@ -192,7 +194,7 @@ export function CampaignConfigEditor({ campaign, onUpdate }: CampaignConfigEdito
                 </Card>
             </motion.div>
 
-            {/* Section 3: Signature */}
+            {/* Section 3: Signature Email */}
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -201,63 +203,39 @@ export function CampaignConfigEditor({ campaign, onUpdate }: CampaignConfigEdito
                 <Card>
                     <CardHeader>
                         <div className="flex items-center gap-2">
-                            <CardTitle>Signature</CardTitle>
+                            <CardTitle>Signature Email</CardTitle>
                             <Badge variant="outline">Étape 3</Badge>
                         </div>
                         <CardDescription>
-                            Vos coordonnées et signature d'email
+                            Personnalisez votre signature avec aperçu en temps réel
                         </CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="grid gap-4 md:grid-cols-2">
-                            <div className="space-y-2">
-                                <Label htmlFor="signature_name">Nom</Label>
-                                <Input
-                                    id="signature_name"
-                                    value={formData.signature_name || ""}
-                                    onChange={(e) => setFormData({ ...formData, signature_name: e.target.value })}
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="signature_title">Titre</Label>
-                                <Input
-                                    id="signature_title"
-                                    value={formData.signature_title || ""}
-                                    onChange={(e) => setFormData({ ...formData, signature_title: e.target.value })}
-                                />
-                            </div>
-                        </div>
+                    <CardContent>
+                        <EmailSignatureEditor
+                            initialData={formData}
+                            onSave={async (html, config) => {
+                                const updated = {
+                                    ...formData,
+                                    ...config,
+                                    signature_html: html
+                                }
+                                setFormData(updated)
 
-                        <div className="grid gap-4 md:grid-cols-2">
-                            <div className="space-y-2">
-                                <Label htmlFor="signature_email">Email</Label>
-                                <Input
-                                    id="signature_email"
-                                    type="email"
-                                    value={formData.signature_email || ""}
-                                    onChange={(e) => setFormData({ ...formData, signature_email: e.target.value })}
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="signature_phone">Téléphone</Label>
-                                <Input
-                                    id="signature_phone"
-                                    type="tel"
-                                    value={formData.signature_phone || ""}
-                                    onChange={(e) => setFormData({ ...formData, signature_phone: e.target.value })}
-                                />
-                            </div>
-                        </div>
+                                // Also persist immediately to DB
+                                try {
+                                    const supabase = createClient()
+                                    const { error } = await supabase
+                                        .from('cold_email_campaigns')
+                                        .update(updated)
+                                        .eq('id', campaign.id)
 
-                        <div className="space-y-2">
-                            <Label htmlFor="signature_ps">PS  (Post-Scriptum)</Label>
-                            <Textarea
-                                id="signature_ps"
-                                value={formData.signature_ps || ""}
-                                onChange={(e) => setFormData({ ...formData, signature_ps: e.target.value })}
-                                rows={2}
-                            />
-                        </div>
+                                    if (error) throw error
+                                } catch (error) {
+                                    console.error('Auto-save signature error:', error)
+                                    throw error
+                                }
+                            }}
+                        />
                     </CardContent>
                 </Card>
             </motion.div>

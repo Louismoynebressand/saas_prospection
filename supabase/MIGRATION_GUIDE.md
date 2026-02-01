@@ -21,7 +21,7 @@ Les migrations DOIVENT être exécutées dans cet ordre :
 ---
 
 ## 📋 Phase 1: Cleanup (OBLIGATOIRE)
-
+donn
 **Fichier**: `migrate_cold_email_phase1_cleanup.sql`
 
 **Ce que ça fait**:
