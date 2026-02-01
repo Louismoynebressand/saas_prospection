@@ -1,5 +1,49 @@
 export type ScrapeStatus = 'queued' | 'running' | 'done' | 'error' | 'ALLfinish';
 
+export interface SearchJobPage {
+    id: number
+    created_at: string
+    id_user: string
+    query: string
+    filters?: unknown
+    results_count?: number
+    status?: string
+}
+
+// ===== CAMPAIGN-PROSPECT MANAGEMENT =====
+
+export type EmailStatus = 'not_generated' | 'generated' | 'sent' | 'bounced' | 'replied'
+
+export interface CampaignProspectLink {
+    id: string
+    campaign_id: string
+    prospect_id: string
+    email_status: EmailStatus
+    generated_email_subject?: string
+    generated_email_content?: string
+    email_generated_at?: string
+    email_sent_at?: string
+    created_at: string
+    updated_at: string
+
+    // Relations (optional, loaded via JOIN)
+    campaign?: Campaign
+    prospect?: ScrapeProspect
+}
+
+// Extended Prospect interface with campaign links
+export interface ProspectWithCampaigns extends ScrapeProspect {
+    campaigns?: CampaignProspectLink[]
+}
+
+// Extended Campaign interface with prospect links  
+export interface CampaignWithProspects extends Campaign {
+    prospects?: CampaignProspectLink[]
+    prospect_count?: number
+    generated_count?: number
+    sent_count?: number
+}
+
 export interface ScrapeJob {
     id_jobs: number; // bigint
     created_at: string;

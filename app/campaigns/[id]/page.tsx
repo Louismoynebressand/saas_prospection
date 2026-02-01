@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, Mail, Settings, Sparkles } from "lucide-react"
 import { motion } from "framer-motion"
-import { CampaignEmailsList } from "@/components/features/CampaignEmailsList"
+import { CampaignProspectsList } from "@/components/features/CampaignProspectsList"
 import { CampaignConfigEditor } from "@/components/features/CampaignConfigEditor"
 import { AIBadge } from "@/components/ui/ai-badge"
 import Link from "next/link"
@@ -20,7 +20,7 @@ export default function CampaignDetailPage() {
     const searchParams = useSearchParams()
     const router = useRouter()
     const campaignId = params.id as string
-    const defaultTab = searchParams.get('tab') || 'emails'
+    const defaultTab = searchParams.get('tab') || 'prospects'
 
     const [campaign, setCampaign] = useState<Campaign | null>(null)
     const [loading, setLoading] = useState(true)
@@ -114,9 +114,9 @@ export default function CampaignDetailPage() {
             >
                 <Tabs defaultValue={defaultTab} className="w-full">
                     <TabsList className="grid w-full max-w-md grid-cols-2 mb-6">
-                        <TabsTrigger value="emails" className="gap-2">
+                        <TabsTrigger value="prospects" className="gap-2">
                             <Mail className="w-4 h-4" />
-                            Emails Générés
+                            Prospects
                         </TabsTrigger>
                         <TabsTrigger value="configuration" className="gap-2">
                             <Settings className="w-4 h-4" />
@@ -124,8 +124,8 @@ export default function CampaignDetailPage() {
                         </TabsTrigger>
                     </TabsList>
 
-                    <TabsContent value="emails" className="space-y-4">
-                        <CampaignEmailsList campaignId={campaignId} />
+                    <TabsContent value="prospects" className="space-y-4">
+                        <CampaignProspectsList campaignId={campaignId} />
                     </TabsContent>
 
                     <TabsContent value="configuration" className="space-y-4">
@@ -136,6 +136,6 @@ export default function CampaignDetailPage() {
                     </TabsContent>
                 </Tabs>
             </motion.div>
-        </div>
+        </div >
     )
 }
