@@ -283,15 +283,10 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
 
 
             toast.success("✨ Analyse terminée ! Données pré-remplies.")
-
-        } catch (error: any) {
-            console.error("🔥 [AI] Exception:", error)
-
-            if (error.name === 'AbortError') {
-                toast.error("L'IA prend trop de temps à répondre (Timeout > 60s).")
-            } else {
-                toast.error(`Erreur IA: ${error.message || "Vérifiez le site web."}`)
-            }
+            setAiAnalysisComplete(true)
+        } catch (err) {
+            console.error('❌ [AI] Error in handleAiAnalyze:', err)
+            toast.error('Erreur lors de l\'analyse IA')
         } finally {
             setAiLoading(false)
         }
