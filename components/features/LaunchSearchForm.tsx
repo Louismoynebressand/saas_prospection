@@ -227,22 +227,6 @@ export function LaunchSearchForm() {
             transition={{ duration: 0.4 }}
             className="w-full relative group"
         >
-            {/* Rotating Glow Border */}
-            <div className="absolute -inset-[2px] rounded-xl overflow-hidden pointer-events-none">
-                <motion.div
-                    className="absolute inset-[-200%] bg-[conic-gradient(from_0deg,transparent_0deg,transparent_90deg,#6366f1_180deg,#a855f7_270deg,transparent_360deg)] opacity-40 will-change-transform"
-                    animate={{ rotate: 360 }}
-                    transition={{
-                        duration: 8,
-                        ease: "linear",
-                        repeat: Infinity
-                    }}
-                />
-            </div>
-
-            {/* Secondary subtle glow */}
-            <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/10 to-purple-500/10 blur-xl transform scale-95 -z-10 rounded-xl" />
-
             <Card className="w-full relative overflow-hidden border bg-white/95 backdrop-blur-sm shadow-xl">
 
                 <CardHeader className="relative z-10">

@@ -45,25 +45,6 @@ export function AIBadge({
                 <Sparkles className="w-3 h-3" />
             )}
             <span>{children}</span>
-
-            {/* Glow pulse */}
-            {animated && (
-                <motion.div
-                    className="absolute inset-0 rounded-full blur-md opacity-50"
-                    style={{
-                        background: "linear-gradient(135deg, rgb(99 102 241), rgb(168 85 247), rgb(236 72 153))"
-                    }}
-                    animate={{
-                        opacity: [0.3, 0.6, 0.3],
-                        scale: [1, 1.1, 1]
-                    }}
-                    transition={{
-                        duration: 2,
-                        repeat: Infinity,
-                        ease: "easeInOut"
-                    }}
-                />
-            )}
         </motion.div>
     )
 }
