@@ -12,7 +12,7 @@ export interface SearchJobPage {
 
 // ===== CAMPAIGN-PROSPECT MANAGEMENT =====
 
-export type EmailStatus = 'not_generated' | 'generated' | 'sent' | 'bounced' | 'replied'
+export type EmailStatus = 'not_generated' | 'generated' | 'sent' | 'opened' | 'clicked' | 'bounced' | 'replied'
 
 export interface CampaignProspectLink {
     id: string
@@ -211,3 +211,36 @@ export interface ColdEmailGeneration {
     model_meta?: any;
     created_at: string;
 }
+
+// ===== DEEP SEARCH SYSTEM =====
+
+export interface DeepSearchJob {
+    id: string
+    user_id: string
+    prospect_ids: string[]
+    prospects_total: number
+    prospects_processed: number
+    status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'
+    error_message?: string
+    created_at: string
+    started_at?: string
+    completed_at?: string
+}
+
+export interface ProspectWithFlags extends ScrapeProspect {
+    hasEmail: boolean
+    hasDeepSearch: boolean
+}
+
+export interface DeepSearchRequest {
+    user_id: string
+    job_id: string
+    prospect_ids: string[]
+}
+
+export interface DeepSearchResponse {
+    job_id: string
+    status: 'processing' | 'completed' | 'error'
+    prospects_count: number
+}
+

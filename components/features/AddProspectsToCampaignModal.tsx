@@ -11,7 +11,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
 import { Loader2, Search, Users, Database } from "lucide-react"
-import type { ScrapeProspect } from "@/types"
+import type { ScrapeProspect, ProspectWithFlags } from "@/types"
 
 interface SearchJob {
     id_jobs: number
@@ -36,7 +36,7 @@ export function AddProspectsToCampaignModal({
     onSuccess
 }: AddProspectsToCampaignModalProps) {
     const [loading, setLoading] = useState(false)
-    const [prospects, setProspects] = useState<ScrapeProspect[]>([])
+    const [prospects, setProspects] = useState<ProspectWithFlags[]>([])
     const [searches, setSearches] = useState<SearchJob[]>([])
     const [selectedProspectIds, setSelectedProspectIds] = useState<Set<string>>(new Set())
     const [selectedSearchIds, setSelectedSearchIds] = useState<Set<number>>(new Set())
@@ -69,7 +69,23 @@ export function AddProspectsToCampaignModal({
                 .limit(100)
 
             if (error) throw error
-            setProspects(data || [])
+
+            // Enrichir avec flags email et deep search
+            const enrichedProspects: ProspectWithFlags[] = (data || []).map((p: ScrapeProspect) => {
+                const hasEmail = !!p.email_adresse_verified
+                const deepSearch = typeof p.deep_search === 'string'
+                    ? JSON.parse(p.deep_search)
+                    : p.deep_search
+                const hasDeepSearch = !!(deepSearch && Object.keys(deepSearch).length > 0)
+
+                return {
+                    ...p,
+                    hasEmail,
+                    hasDeepSearch
+                }
+            })
+
+            setProspects(enrichedProspects)
         } catch (error: any) {
             console.error('Error loading prospects:', error)
             toast.error('Erreur lors du chargement des prospects')
@@ -119,24 +135,60 @@ export function AddProspectsToCampaignModal({
         try {
             setLoading(true)
 
-            let body: any = {}
+            let prospectIds: string[] = []
+
             if (mode === 'prospects') {
-                if (selectedProspectIds.size === 0) {
-                    toast.error('Aucun prospect sélectionné')
+                prospectIds = Array.from(selectedProspectIds)
+
+                // Validation email + deep search
+                const selectedProspects = prospects.filter(p => prospectIds.includes(p.id_prospect))
+                const noEmail = selectedProspects.filter(p => !p.hasEmail)
+                const noDeepSearch = selectedProspects.filter(p => !p.hasDeepSearch)
+
+                if (noEmail.length > 0) {
+                    toast.error(`❌ ${noEmail.length} prospect(s) sans email ne peuvent pas être ajoutés à une campagne`)
+                    setLoading(false)
                     return
                 }
-                body = { prospectIds: Array.from(selectedProspectIds) }
+
+                if (noDeepSearch.length > 0) {
+                    toast.warning(
+                        `⚠️ ${noDeepSearch.length} prospect(s) sans Deep Search. Lancez un Deep Search d'abord pour une meilleure personnalisation.`,
+                        { duration: 5000 }
+                    )
+                    // On permet l'ajout mais avec avertissement
+                    // Dans une prochaine version, on ouvrira le modal DeepSearchWarningModal ici
+                }
             } else {
-                if (selectedSearchIds.size === 0) {
-                    toast.error('Aucune recherche sélectionnée')
-                    return
+                // Si sélection par recherches, charger tous les prospects de ces recherches
+                const selectedJobIds = Array.from(selectedSearchIds)
+                if (selectedJobIds.length > 0) {
+                    const supabase = createClient()
+                    const { data, error } = await supabase
+                        .from('scrape_prospect')
+                        .select('id_prospect')
+                        .in('id_job_scrap', selectedJobIds)
+
+                    if (error) throw error
+                    prospectIds = data?.map((p: any) => p.id_prospect) || []
                 }
-                body = { searchIds: Array.from(selectedSearchIds) }
             }
+
+            if (prospectIds.length === 0) {
+                toast.error('Aucun prospect sélectionné')
+                setLoading(false)
+                return
+            }
+
+            const body = mode === 'prospects'
+                ? { prospectIds }
+                : { searchIds: Array.from(selectedSearchIds) }
 
             const response = await fetch(`/api/campaigns/${campaignId}/prospects`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json'
+                },
                 body: JSON.stringify(body)
             })
 
@@ -284,11 +336,21 @@ export function AddProspectsToCampaignModal({
                                                 className="mt-1"
                                             />
                                             <div className="flex-1 min-w-0">
-                                                <div className="flex items-center gap-2">
+                                                <div className="flex items-center gap-2 flex-wrap">
                                                     <div className="font-semibold text-gray-900">{name}</div>
                                                     {jobTitle && (
                                                         <Badge variant="secondary" className="text-xs">
                                                             {jobTitle}
+                                                        </Badge>
+                                                    )}
+                                                    {!prospect.hasEmail && (
+                                                        <Badge variant="destructive" className="text-xs">
+                                                            ❌ Pas d'email
+                                                        </Badge>
+                                                    )}
+                                                    {!prospect.hasDeepSearch && (
+                                                        <Badge variant="outline" className="text-xs border-orange-300 text-orange-600 bg-orange-50">
+                                                            ⚠️ Pas de Deep Search
                                                         </Badge>
                                                     )}
                                                 </div>
