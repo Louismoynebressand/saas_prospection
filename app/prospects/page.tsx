@@ -3,12 +3,13 @@
 import { useEffect, useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import {
-    Search, Filter, Columns, Download, Building2, Mail, Phone, MapPin, Calendar, Loader2
+    Search, Filter, Columns, Download, Building2, Mail, Phone, MapPin, Calendar, Loader2, Zap, CheckSquare
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { createClient } from "@/lib/supabase/client"
 import { ScrapeProspect } from "@/types"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import {
@@ -30,6 +31,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
+import { toast } from "sonner"
 
 export default function ProspectsPage() {
     const router = useRouter()
@@ -49,6 +51,10 @@ export default function ProspectsPage() {
         city: true,
         date: true,
     })
+
+    // Batch Deep Search
+    const [selectedProspects, setSelectedProspects] = useState<Set<string>>(new Set())
+    const [isLaunchingBatch, setIsLaunchingBatch] = useState(false)
 
     const fetchAllProspects = async () => {
         try {
@@ -99,6 +105,66 @@ export default function ProspectsPage() {
             try { return JSON.parse(data) } catch (e) { return {} }
         }
         return data
+    }
+
+    const toggleProspect = (id: string) => {
+        const newSet = new Set(selectedProspects)
+        if (newSet.has(id)) {
+            newSet.delete(id)
+        } else {
+            newSet.add(id)
+        }
+        setSelectedProspects(newSet)
+    }
+
+    const toggleSelectAll = () => {
+        if (selectedProspects.size === processedData.length) {
+            setSelectedProspects(new Set())
+        } else {
+            setSelectedProspects(new Set(processedData.map(p => p.id)))
+        }
+    }
+
+    const handleBatchDeepSearch = async () => {
+        if (selectedProspects.size === 0 || isLaunchingBatch) return
+
+        try {
+            setIsLaunchingBatch(true)
+            const prospectIds = Array.from(selectedProspects).map(id => parseInt(id))
+
+            const response = await fetch('/api/prospects/deep-search', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prospectIds })
+            })
+
+            if (!response.ok) {
+                const error = await response.json()
+                if (response.status === 402) {
+                    toast.error(`Crédits insuffisants : ${error.required} requis, ${error.available} disponibles`)
+                } else {
+                    toast.error(error.error || 'Erreur')
+                }
+                return
+            }
+
+            toast.success(
+                `Deep Search lancé pour ${selectedProspects.size} prospect(s) !`,
+                { duration: 5000 }
+            )
+            setSelectedProspects(new Set())
+
+            // Reload après 15s
+            setTimeout(() => {
+                fetchAllProspects()
+            }, 15000)
+
+        } catch (error: any) {
+            console.error('Error:', error)
+            toast.error('Erreur lors du lancement')
+        } finally {
+            setIsLaunchingBatch(false)
+        }
     }
 
     const processedData = useMemo(() => {
@@ -311,7 +377,27 @@ export default function ProspectsPage() {
             <div className="flex items-center justify-between">
                 <p className="text-sm text-muted-foreground">
                     {processedData.length} prospect{processedData.length > 1 ? 's' : ''} trouvé{processedData.length > 1 ? 's' : ''}
+                    {selectedProspects.size > 0 && (
+                        <span className="ml-2 text-primary font-medium">
+                            • {selectedProspects.size} sélectionné{selectedProspects.size > 1 ? 's' : ''}
+                        </span>
+                    )}
                 </p>
+
+                {selectedProspects.size > 0 && (
+                    <Button
+                        onClick={handleBatchDeepSearch}
+                        disabled={isLaunchingBatch}
+                        className="bg-orange-600 hover:bg-orange-700 text-white"
+                    >
+                        {isLaunchingBatch ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                            <Zap className="mr-2 h-4 w-4" />
+                        )}
+                        {isLaunchingBatch ? 'Lancement...' : `Lancer Deep Search (${selectedProspects.size})`}
+                    </Button>
+                )}
             </div>
 
             {/* Table */}
@@ -321,6 +407,12 @@ export default function ProspectsPage() {
                         <Table>
                             <TableHeader>
                                 <TableRow>
+                                    <TableHead className="w-12">
+                                        <Checkbox
+                                            checked={selectedProspects.size === processedData.length && processedData.length > 0}
+                                            onCheckedChange={toggleSelectAll}
+                                        />
+                                    </TableHead>
                                     {visibleColumns.company && <TableHead>Société</TableHead>}
                                     {visibleColumns.category && <TableHead>Catégorie</TableHead>}
                                     {visibleColumns.contact && <TableHead>Email</TableHead>}
@@ -332,7 +424,7 @@ export default function ProspectsPage() {
                             <TableBody>
                                 {processedData.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                                        <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                                             Aucun prospect trouvé
                                         </TableCell>
                                     </TableRow>
@@ -343,6 +435,12 @@ export default function ProspectsPage() {
                                             className="cursor-pointer hover:bg-muted/50 transition-colors"
                                             onClick={() => router.push(`/prospects/${row.id}`)}
                                         >
+                                            <TableCell onClick={(e) => e.stopPropagation()}>
+                                                <Checkbox
+                                                    checked={selectedProspects.has(row.id)}
+                                                    onCheckedChange={() => toggleProspect(row.id)}
+                                                />
+                                            </TableCell>
                                             {visibleColumns.company && (
                                                 <TableCell className="font-medium">
                                                     <div className="flex items-center gap-2">
