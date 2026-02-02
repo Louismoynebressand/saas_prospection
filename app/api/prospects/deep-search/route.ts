@@ -113,11 +113,12 @@ export async function POST(request: NextRequest) {
         jobToRollback = job
 
         // 4. Déclencher webhook n8n
-        const webhookUrl = process.env.N8N_DEEP_SEARCH_WEBHOOK
+        const webhookUrl = process.env.N8N_DEEP_SEARCH_WEBHOOK || process.env.NEXT_PUBLIC_N8N_DEEP_SEARCH_WEBHOOK
         console.log('🔍 [DEBUG] Webhook URL from env:', webhookUrl ? `${webhookUrl.substring(0, 50)}...` : 'NOT FOUND')
 
         if (!webhookUrl) {
             console.error('❌ N8N_DEEP_SEARCH_WEBHOOK not configured')
+            console.error('❌ Check .env.local for N8N_DEEP_SEARCH_WEBHOOK or NEXT_PUBLIC_N8N_DEEP_SEARCH_WEBHOOK')
             // Rollback
             await rollback(supabase, user.id, quota.deep_search_used, job.id)
             return NextResponse.json({ error: 'Webhook not configured' }, { status: 500 })
