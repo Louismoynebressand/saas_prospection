@@ -1,9 +1,9 @@
 "use client"
 
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname } from "next/navigation"
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
-import { LogOut, User } from "lucide-react"
+import { LogOut } from "lucide-react"
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -15,40 +15,43 @@ import { Button } from "@/components/ui/button"
 export function Topbar() {
     const pathname = usePathname()
     const [userProfile, setUserProfile] = useState<{
-        first_name: string | null
-        last_name: string | null
-        company_name: string | null
+        first_name: string
+        last_name: string
+        company_name: string
     } | null>(null)
 
     useEffect(() => {
-        const fetchProfile = async () => {
-            try {
-                const supabase = createClient()
-                const { data: { user }, error: authError } = await supabase.auth.getUser()
+        const supabase = createClient()
 
+        // ✅ Utiliser onAuthStateChange pour attendre que la session soit chargée
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(
+            async (event: string, session: any) => {
+                const user = session?.user
+
+                console.log('🔍 [Topbar] Auth event:', event)
                 console.log('🔍 [Topbar] User:', user)
                 console.log('🔍 [Topbar] User metadata:', user?.user_metadata)
 
-                if (authError || !user) {
-                    console.error('❌ [Topbar] Auth error:', authError)
-                    return
-                }
+                if (user) {
+                    // ✅ Récupérer depuis user_metadata
+                    const profile = {
+                        first_name: user.user_metadata?.first_name || user.user_metadata?.firstName || '',
+                        last_name: user.user_metadata?.last_name || user.user_metadata?.lastName || '',
+                        company_name: user.user_metadata?.company_name || user.user_metadata?.companyName || ''
+                    }
 
-                // ✅ Récupérer depuis user_metadata (pas de table profiles)
-                const profile = {
-                    first_name: user.user_metadata?.first_name || user.user_metadata?.firstName || '',
-                    last_name: user.user_metadata?.last_name || user.user_metadata?.lastName || '',
-                    company_name: user.user_metadata?.company_name || user.user_metadata?.companyName || ''
+                    console.log('✅ [Topbar] Profile from metadata:', profile)
+                    setUserProfile(profile)
+                } else {
+                    console.warn('⚠️ [Topbar] No user in session')
+                    setUserProfile(null)
                 }
-
-                console.log('✅ [Topbar] Profile from metadata:', profile)
-                setUserProfile(profile)
-            } catch (error) {
-                console.error('❌ [Topbar] Error:', error)
             }
-        }
+        )
 
-        fetchProfile()
+        return () => {
+            subscription.unsubscribe()
+        }
     }, [])
 
     const handleLogout = async () => {
@@ -76,7 +79,7 @@ export function Topbar() {
             <h1 className="text-lg font-semibold">{getTitle()}</h1>
 
             <div className="flex items-center gap-4">
-                {userProfile ? (
+                {userProfile && userProfile.first_name && userProfile.last_name ? (
                     <div className="flex items-center gap-3">
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -85,13 +88,15 @@ export function Topbar() {
                                         <p className="text-sm font-medium leading-none">
                                             {userProfile.first_name} {userProfile.last_name}
                                         </p>
-                                        <p className="text-xs text-muted-foreground mt-1">
-                                            {userProfile.company_name}
-                                        </p>
+                                        {userProfile.company_name && (
+                                            <p className="text-xs text-muted-foreground mt-1">
+                                                {userProfile.company_name}
+                                            </p>
+                                        )}
                                     </div>
                                     <div className="relative h-9 w-9 rounded-full bg-primary/10 hover:bg-primary/20 flex items-center justify-center">
                                         <span className="text-sm font-semibold text-primary">
-                                            {userProfile.first_name?.[0]}{userProfile.last_name?.[0]}
+                                            {userProfile.first_name[0]}{userProfile.last_name[0]}
                                         </span>
                                     </div>
                                 </Button>
