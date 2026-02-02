@@ -8,10 +8,12 @@ import {
     Briefcase, Copy, ChevronLeft, ChevronRight, Share2, Trash2, FileDown, Printer,
     Facebook, Instagram, Linkedin, Twitter, ChevronDown, Info, Zap, Loader2 as LoaderIcon
 } from "lucide-react"
+import { motion } from "framer-motion"
 import { differenceInYears, isValid } from "date-fns"
 import { supabase } from "@/lib/supabase"
 import { ScrapeProspect } from "@/types"
 import { Button } from "@/components/ui/button"
+import { AIButton } from "@/components/ui/ai-button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
@@ -415,19 +417,28 @@ export default function ProspectPage() {
                         <div className="flex items-center gap-2">
                             {/* Bouton Deep Search si pas encore fait */}
                             {!deep || Object.keys(deep).length === 0 ? (
-                                <Button
-                                    variant="outline"
+                                <AIButton
                                     onClick={handleLaunchDeepSearch}
                                     disabled={isLaunchingDeepSearch}
-                                    className="border-orange-300 text-orange-700 hover:bg-orange-50"
+                                    loading={isLaunchingDeepSearch}
+                                    variant="primary"
+                                    className="gap-2"
                                 >
                                     {isLaunchingDeepSearch ? (
-                                        <LoaderIcon className="mr-2 h-4 w-4 animate-spin" />
+                                        <>
+                                            <LoaderIcon className="w-4 h-4 animate-spin" />
+                                            Lancement en cours...
+                                        </>
                                     ) : (
-                                        <Zap className="mr-2 h-4 w-4" />
+                                        <motion.div
+                                            className="flex items-center gap-2"
+                                            whileHover={{ scale: 1.05 }}
+                                        >
+                                            <Sparkles className="w-4 h-4" />
+                                            <span>Lancer Deep Search</span>
+                                        </motion.div>
                                     )}
-                                    {isLaunchingDeepSearch ? 'Lancement...' : 'Lancer Deep Search'}
-                                </Button>
+                                </AIButton>
                             ) : null}
 
                             <Button
