@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import {
-    Search, Filter, Columns, Download, Building2, Mail, Phone, MapPin, Calendar, Loader2, Zap, CheckSquare, Sparkles, Square
+    Search, Filter, Columns, Download, Upload, Building2, Mail, Phone, MapPin, Calendar, Loader2, Zap, CheckSquare, Sparkles, Square
 } from "lucide-react"
 import { motion } from "framer-motion"
 import { supabase } from "@/lib/supabase"
@@ -256,11 +256,20 @@ export default function ProspectsPage() {
 
     return (
         <div className="space-y-6">
-            <div>
-                <h1 className="text-3xl font-bold tracking-tight">Tous les Prospects</h1>
-                <p className="text-muted-foreground mt-1">
-                    Liste complète de tous vos prospects scrappés
-                </p>
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-3xl font-bold tracking-tight">Tous les Prospects</h1>
+                    <p className="text-muted-foreground mt-1">
+                        Liste complète de tous vos prospects scrappés
+                    </p>
+                </div>
+                <Button
+                    onClick={() => router.push('/prospects/import')}
+                    className="gap-2"
+                >
+                    <Upload className="h-4 w-4" />
+                    Importer des prospects
+                </Button>
             </div>
 
             {/* Filters Bar */}

@@ -244,3 +244,36 @@ export interface DeepSearchResponse {
     prospects_count: number
 }
 
+// ===== PROSPECT IMPORT SYSTEM =====
+
+export interface ProspectImportData {
+    titre: string // obligatoire
+    email?: string
+    site_web?: string
+    telephone?: string
+    rue?: string
+    ville?: string
+    code_postal?: string
+    secteur?: string
+    categorie?: string
+    score_total?: number
+    nombre_avis?: number
+    latitude?: number
+    longitude?: number
+    url_google_maps?: string
+    notes?: string
+}
+
+export interface ProspectImportValidation {
+    isValid: boolean
+    errors: string[]
+    warnings: string[]
+}
+
+export interface ProspectImportResult {
+    success: boolean
+    imported_count: number
+    failed_count: number
+    errors?: Array<{ line: number; error: string }>
+}
+
