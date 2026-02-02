@@ -12,14 +12,8 @@ const deepSearchSchema = z.object({
  * POST /api/prospects/deep-search
  * 
  * Déclenche un Deep Search pour une liste de prospects.
- * Pattern COPIÉ EXACTEMENT de /api/scrape/launch qui fonctionne.
  * 
- * Flow simplifié:
- * 1. Valider le payload
- * 2. Appeler le webhook n8n
- * 3. Retourner le résultat
- * 
- * Note: La gestion des quotas est faite AVANT cet appel, dans le client.
+ * CORRECTION FORCEE : Ajout d'une URL en dur si les variables d'environnement manquent.
  */
 export async function POST(request: NextRequest) {
     const startTime = Date.now()
@@ -45,13 +39,21 @@ export async function POST(request: NextRequest) {
             prospectCount: validated.prospectIds.length,
         })
 
-        // Get webhook URL from server env (checking both secure and public for compatibility)
-        const webhookUrl = process.env.N8N_DEEP_SEARCH_WEBHOOK || process.env.NEXT_PUBLIC_N8N_DEEP_SEARCH_WEBHOOK
+        // Get webhook URL from server env OR HARDCODED FALLBACK
+        // C'est nécessaire car sur Vercel les env vars peuvent manquer si pas configurées
+        const HARDCODED_URL = "https://n8n.srv903375.hstgr.cloud/webhook/neuraflow_scrappeur_deep-search-prospect-&-check-email"
 
-        console.log('🔍 [DEBUG] Webhook URL from env:', webhookUrl ? `${webhookUrl.substring(0, 50)}...` : 'NOT FOUND')
+        const webhookUrl = process.env.N8N_DEEP_SEARCH_WEBHOOK || process.env.NEXT_PUBLIC_N8N_DEEP_SEARCH_WEBHOOK || HARDCODED_URL
+
+        console.log('🔍 [DEBUG] Webhook URL strategy:', {
+            env_std: !!process.env.N8N_DEEP_SEARCH_WEBHOOK,
+            env_public: !!process.env.NEXT_PUBLIC_N8N_DEEP_SEARCH_WEBHOOK,
+            hardcoded: !!HARDCODED_URL,
+            final_url: webhookUrl.substring(0, 50) + '...'
+        })
 
         if (!webhookUrl) {
-            throw new Error('N8N_DEEP_SEARCH_WEBHOOK not configured on server')
+            throw new Error('N8N_DEEP_SEARCH_WEBHOOK not configured on server (even hardcoded fallback failed)')
         }
 
         // Préparer le payload pour n8n (format simple)
@@ -63,7 +65,6 @@ export async function POST(request: NextRequest) {
 
         // Call n8n webhook with timeout
         console.log(`📤 [Deep Search] Calling webhook: ${webhookUrl}`)
-        console.log(`📦 [Deep Search] Payload:`, JSON.stringify(webhookPayload, null, 2))
 
         const controller = new AbortController()
         const timeoutId = setTimeout(() => controller.abort(), 30000) // 30s max
@@ -107,30 +108,16 @@ export async function POST(request: NextRequest) {
 
         } catch (fetchError: any) {
             clearTimeout(timeoutId)
-
-            // Handle timeout
             if (fetchError.name === 'AbortError') {
                 throw new Error('Webhook timeout after 30 seconds')
             }
-
             throw fetchError
         }
 
     } catch (error: any) {
-        const duration = Date.now() - startTime
-
-        logError('Deep Search job launch failed', error, {
-            userId,
-            duration
-        })
-
+        logError('Deep Search job launch failed', error, { userId })
         return NextResponse.json(
-            {
-                ok: false,
-                error: error.message || 'Internal server error',
-                userId,
-                duration
-            },
+            { ok: false, error: error.message || 'Internal server error' },
             { status: 500 }
         )
     }
