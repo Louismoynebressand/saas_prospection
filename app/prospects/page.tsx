@@ -489,6 +489,22 @@ export default function ProspectsPage() {
                                                     </div>
                                                 </TableCell>
                                             )}
+                                            {visibleColumns.deep && (
+                                                <TableCell>
+                                                    {/* Check if prospect has deep_search data */}
+                                                    {prospects.find(p => p.id_prospect === row.id)?.deep_search &&
+                                                        Object.keys(prospects.find(p => p.id_prospect === row.id)?.deep_search || {}).length > 0 ? (
+                                                        <div className="flex items-center gap-2">
+                                                            <Sparkles className="w-4 h-4 text-purple-600 fill-purple-100" />
+                                                            <span className="text-xs font-medium text-purple-700">Enrichi</span>
+                                                        </div>
+                                                    ) : (
+                                                        <Badge variant="outline" className="text-muted-foreground font-normal">
+                                                            Non enrichi
+                                                        </Badge>
+                                                    )}
+                                                </TableCell>
+                                            )}
                                             {visibleColumns.date && (
                                                 <TableCell className="text-sm text-muted-foreground">
                                                     {format(row.createdAt, "d MMM yyyy", { locale: fr })}

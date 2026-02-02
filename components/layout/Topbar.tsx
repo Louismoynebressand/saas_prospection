@@ -64,22 +64,24 @@ export function Topbar() {
             <h1 className="text-lg font-semibold">{getTitle()}</h1>
 
             <div className="flex items-center gap-4">
-                {userProfile && (
+                {userProfile ? (
                     <div className="flex items-center gap-3">
-                        <div className="text-right hidden sm:block">
-                            <p className="text-sm font-medium leading-none">
-                                {userProfile.first_name} {userProfile.last_name}
-                            </p>
-                            <p className="text-xs text-muted-foreground mt-1">
-                                {userProfile.company_name}
-                            </p>
-                        </div>
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" className="relative h-9 w-9 rounded-full bg-primary/10 hover:bg-primary/20 p-0">
-                                    <span className="text-sm font-semibold text-primary">
-                                        {userProfile.first_name?.[0]}{userProfile.last_name?.[0]}
-                                    </span>
+                                <Button variant="ghost" className="flex items-center gap-3 hover:bg-muted/50 px-3 py-2 h-auto">
+                                    <div className="text-left">
+                                        <p className="text-sm font-medium leading-none">
+                                            {userProfile.first_name} {userProfile.last_name}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground mt-1">
+                                            {userProfile.company_name}
+                                        </p>
+                                    </div>
+                                    <div className="relative h-9 w-9 rounded-full bg-primary/10 hover:bg-primary/20 flex items-center justify-center">
+                                        <span className="text-sm font-semibold text-primary">
+                                            {userProfile.first_name?.[0]}{userProfile.last_name?.[0]}
+                                        </span>
+                                    </div>
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
@@ -90,6 +92,8 @@ export function Topbar() {
                             </DropdownMenuContent>
                         </DropdownMenu>
                     </div>
+                ) : (
+                    <div className="h-9 w-9 rounded-full bg-muted animate-pulse" />
                 )}
             </div>
         </header>

@@ -209,7 +209,6 @@ export function Sidebar() {
                                 )}
                             >
                                 <Icon className="h-4 w-4" />
-                                <Icon className="h-4 w-4" />
                                 {item.name}
                             </Link>
                         )
@@ -219,22 +218,6 @@ export function Sidebar() {
 
             {/* Footer Section - Always Visible */}
             <div className="flex-shrink-0 border-t bg-card p-6">
-
-                {/* Upgrade Button - Always Visible, Styled */}
-                <Button
-                    variant="outline"
-                    className="w-full mb-6 bg-white border-2 border-purple-300 text-purple-700 
-                               hover:bg-purple-50 hover:border-purple-400
-                               shadow-[0_0_15px_rgba(168,85,247,0.3)] 
-                               hover:shadow-[0_0_25px_rgba(168,85,247,0.5)]
-                               transition-all duration-300 font-bold"
-                    asChild
-                >
-                    <Link href="/billing">
-                        <TrendingUp className="mr-2 h-4 w-4" />
-                        ✨ Upgrade Plan
-                    </Link>
-                </Button>
 
                 <div className="grid gap-2 mb-4">
                     {configNavigation.map((item) => {
@@ -257,6 +240,22 @@ export function Sidebar() {
                         )
                     })}
                 </div>
+
+                {/* Upgrade Button - Above Quotas */}
+                <Button
+                    variant="outline"
+                    className="w-full mb-4 bg-white border-2 border-purple-300 text-purple-700 
+                               hover:bg-purple-50 hover:border-purple-400
+                               shadow-[0_0_15px_rgba(168,85,247,0.3)] 
+                               hover:shadow-[0_0_25px_rgba(168,85,247,0.5)]
+                               transition-all duration-300 font-bold"
+                    asChild
+                >
+                    <Link href="/billing">
+                        <TrendingUp className="mr-2 h-4 w-4" />
+                        Upgrade Plan
+                    </Link>
+                </Button>
 
                 {/* Condensed Quotas Section */}
                 <div className="pt-4 border-t">

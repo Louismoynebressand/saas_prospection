@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Search, MapPin, Rocket, Sparkles, Loader2, Zap } from "lucide-react"
+import { Search, MapPin, Rocket, Sparkles, Loader2, Info } from "lucide-react"
 import { motion } from "framer-motion"
 import confetti from "canvas-confetti"
 import { v4 as uuidv4 } from 'uuid'
@@ -15,6 +15,7 @@ import { createClient } from "@/lib/supabase/client"
 import { authenticatedFetch } from "@/lib/fetch-client"
 import { toast } from "sonner"
 import { ScrapingProgressWidget } from "./ScrapingProgressWidget"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 export function LaunchSearchForm() {
     const router = useRouter()
@@ -24,8 +25,7 @@ export function LaunchSearchForm() {
         query: "",
         city: "",
         maxResults: 10,
-        deepScan: true,
-        enrichEmails: true,
+        enrichmentEnabled: true, // Single toggle for both deepScan + enrichEmails
     })
 
     const geocodeCity = async (city: string): Promise<{ lat: number; lon: number } | null> => {
@@ -103,6 +103,7 @@ export function LaunchSearchForm() {
                 mapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(formData.query + " " + formData.city + ", France")}`
             }
 
+            // When enrichmentEnabled is true, both deepScan and enrichEmails are sent as true
             const { data: newJob, error: jobError } = await supabase
                 .from('scrape_jobs')
                 .insert({
@@ -113,8 +114,8 @@ export function LaunchSearchForm() {
                     resuest_ville: formData.city,
                     request_count: formData.maxResults,
                     localisation: coords ? { lat: coords.lat, lng: coords.lon } : null,
-                    deepscan: formData.deepScan,
-                    enrichie_emails: formData.enrichEmails,
+                    deepscan: formData.enrichmentEnabled,
+                    enrichie_emails: formData.enrichmentEnabled,
                     Estimate_coast: null,
                     debug_id: debugId
                 })
@@ -143,8 +144,8 @@ export function LaunchSearchForm() {
                     },
                     limits: { maxResults: Number(formData.maxResults) },
                     options: {
-                        deepScan: formData.deepScan,
-                        enrichEmails: formData.enrichEmails
+                        deepScan: formData.enrichmentEnabled,
+                        enrichEmails: formData.enrichmentEnabled
                     }
                 },
                 actor: { userId: user.id, sessionId: null },
@@ -317,52 +318,64 @@ export function LaunchSearchForm() {
                             />
                         </motion.div>
 
+                        {/* Single enrichment option with tooltip */}
                         <motion.div
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: 0.4 }}
-                            className="flex flex-col sm:flex-row items-start sm:items-center gap-4 py-3 px-4 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border border-indigo-200"
+                            className="flex items-center justify-between py-4 px-4 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border-2 border-indigo-200"
                         >
                             <label className="flex items-center gap-3 text-sm font-medium cursor-pointer group">
                                 <input
                                     type="checkbox"
                                     className="accent-indigo-600 h-5 w-5 rounded border-gray-300 cursor-pointer"
-                                    checked={formData.deepScan}
-                                    onChange={(e) => setFormData({ ...formData, deepScan: e.target.checked })}
-                                    disabled={loading}
-                                />
-                                <span className="flex items-center gap-2">
-                                    <Zap className="w-4 h-4 text-indigo-600" />
-                                    Deep Scan (Site web + IA)
-                                </span>
-                            </label>
-                            <label className="flex items-center gap-3 text-sm font-medium cursor-pointer group">
-                                <input
-                                    type="checkbox"
-                                    className="accent-indigo-600 h-5 w-5 rounded border-gray-300 cursor-pointer"
-                                    checked={formData.enrichEmails}
-                                    onChange={(e) => setFormData({ ...formData, enrichEmails: e.target.checked })}
+                                    checked={formData.enrichmentEnabled}
+                                    onChange={(e) => setFormData({ ...formData, enrichmentEnabled: e.target.checked })}
                                     disabled={loading}
                                 />
                                 <span className="flex items-center gap-2">
                                     <Sparkles className="w-4 h-4 text-indigo-600" />
-                                    Enrichir Emails
+                                    <span className="font-semibold">Enrichissement Intelligent (IA)</span>
                                 </span>
                             </label>
+
+                            <TooltipProvider>
+                                <Tooltip delayDuration={200}>
+                                    <TooltipTrigger asChild>
+                                        <button type="button" className="text-indigo-600 hover:text-indigo-700 transition-colors">
+                                            <Info className="w-5 h-5" />
+                                        </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-xs p-4 bg-gradient-to-br from-indigo-900 to-purple-900 text-white border-indigo-400">
+                                        <p className="font-semibold mb-2">🚀 Deep Search + Email Enrichment</p>
+                                        <p className="text-sm leading-relaxed mb-2">
+                                            L'IA va extraire des <strong>informations détaillées</strong> sur chaque prospect en analysant leur site web et leurs données publiques.
+                                        </p>
+                                        <p className="text-sm leading-relaxed mb-2">
+                                            Si un email existe, il sera <strong>vérifié automatiquement</strong>. Sinon, plusieurs <strong>combinaisons intelligentes</strong> seront générées pour trouver une adresse email valide.
+                                        </p>
+                                        <p className="text-xs text-indigo-200 border-t border-indigo-400 pt-2 mt-2">
+                                            ⚠️ <strong>Obligatoire</strong> pour générer des emails de prospection par la suite.
+                                        </p>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
                         </motion.div>
 
                         {/* Info card */}
-                        <motion.div
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.5 }}
-                            className="bg-gradient-to-br from-blue-50 to-cyan-50 border-2 border-blue-200 rounded-xl p-4 text-sm"
-                        >
-                            <p className="text-blue-900 font-semibold mb-1">✨ Deep Search IA activé</p>
-                            <p className="text-blue-700 text-xs leading-relaxed">
-                                L'IA va scraper Google Maps, analyser les sites web, enrichir les emails et extraire des insights pour une prospection ultra-personnalisée.
-                            </p>
-                        </motion.div>
+                        {formData.enrichmentEnabled && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.5 }}
+                                className="bg-gradient-to-br from-blue-50 to-cyan-50 border-2 border-blue-200 rounded-xl p-4 text-sm"
+                            >
+                                <p className="text-blue-900 font-semibold mb-1">✨ Enrichissement IA activé</p>
+                                <p className="text-blue-700 text-xs leading-relaxed">
+                                    L'IA va scraper Google Maps, analyser les sites web, enrichir et vérifier les emails pour une prospection ultra-personnalisée.
+                                </p>
+                            </motion.div>
+                        )}
                     </CardContent>
 
                     <CardFooter className="relative z-10">
@@ -377,15 +390,13 @@ export function LaunchSearchForm() {
                                 {loading ? (
                                     "Lancement en cours..."
                                 ) : (
-                                    <>
-                                        <motion.div
-                                            className="flex items-center gap-2"
-                                            whileHover={{ scale: 1.05 }}
-                                        >
-                                            <Rocket className="w-5 h-5" />
-                                            <span>Lancer la recherche</span>
-                                        </motion.div>
-                                    </>
+                                    <motion.div
+                                        className="flex items-center gap-2"
+                                        whileHover={{ scale: 1.05 }}
+                                    >
+                                        <Rocket className="w-5 h-5" />
+                                        <span>Lancer la recherche</span>
+                                    </motion.div>
                                 )}
                             </AIButton>
                         </div>

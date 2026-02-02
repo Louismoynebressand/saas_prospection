@@ -110,25 +110,24 @@ export function SearchHistoryTable({ limit }: { limit?: number }) {
         return <Badge variant={config.variant}>{config.label}</Badge>
     }
 
-    const formatSearchTerms = (job: ScrapeJob) => {
+    const formatSearchTitle = (job: ScrapeJob) => {
         try {
             const search = typeof job.request_search === 'string'
                 ? JSON.parse(job.request_search)
                 : job.request_search
-            return search?.quoiQui || "Recherche"
-        } catch {
-            return "Recherche"
-        }
-    }
-
-    const formatLocation = (job: ScrapeJob) => {
-        try {
             const ville = typeof job.resuest_ville === 'string'
                 ? JSON.parse(job.resuest_ville)
                 : job.resuest_ville
-            return ville?.ville || ville?.ou || ""
+
+            const category = search?.quoiQui || "Recherche"
+            const location = ville?.ville || ville?.ou || ""
+
+            if (location) {
+                return `${category} • ${location}`
+            }
+            return category
         } catch {
-            return ""
+            return "Recherche"
         }
     }
 
@@ -170,13 +169,10 @@ export function SearchHistoryTable({ limit }: { limit?: number }) {
                         onClick={() => router.push(`/searches/${job.id_jobs}`)}
                     >
                         <TableCell className="font-medium">
-                            <div className="flex flex-col">
+                            <div className="flex items-center gap-2">
+                                <SearchIcon className="h-4 w-4 text-muted-foreground shrink-0" />
                                 <span className="font-semibold text-foreground">
-                                    {formatSearchTerms(job)}
-                                </span>
-                                <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                    <MapPin className="h-3 w-3" />
-                                    {formatLocation(job) || "Localisation non spécifiée"}
+                                    {formatSearchTitle(job)}
                                 </span>
                             </div>
                         </TableCell>
@@ -186,11 +182,11 @@ export function SearchHistoryTable({ limit }: { limit?: number }) {
                             </Badge>
                         </TableCell>
                         <TableCell>
-                            {/* Placeholder logic for Deep Search status on a Job */}
-                            {/* Ideally we would check if related prospects have deep search data */}
-                            <Badge variant="outline" className="text-muted-foreground font-normal border-dashed">
-                                Non effectué
-                            </Badge>
+                            {/* TODO: Could be enhanced with real deep search count if needed */}
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                                <Sparkles className="h-4 w-4 text-purple-600/50" />
+                                <span className="text-xs">-</span>
+                            </div>
                         </TableCell>
                         <TableCell>{getStatusBadge(job.statut)}</TableCell>
                         <TableCell className="text-muted-foreground text-sm">

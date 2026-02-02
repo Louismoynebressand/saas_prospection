@@ -7,15 +7,20 @@ import { createClient } from "@/lib/supabase/server"
  * POST /api/prospects/deep-search
  * 
  * Déclenche un Deep Search manuel pour des prospects qui n'en ont pas encore.
+ * Pattern copié de email-verifier/check qui fonctionne.
  * 
  * Flow:
- * 1. Vérifier quota utilisateur
- * 2. Créer job dans deep_search_jobs (status='pending')
- * 3. Décrémenter quota
+ * 1. Vérifier quota utilisateur (lecture directe)
+ * 2. Décrémenter quota (UPDATE direct, pas RPC)
+ * 3. Créer job dans deep_search_jobs (status='pending')
  * 4. Déclencher webhook n8n
- * 5. n8n traite et met à jour directement la BDD
+ * 5. Si erreur webhook: rollback quota + job
  */
 export async function POST(request: NextRequest) {
+    let jobToRollback: any = null
+    let quotaToRefund = 0
+    let userToRefund: string | null = null
+
     try {
         const supabase = await createClient()
         const body = await request.json()
@@ -31,108 +36,191 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        // 1. Vérifier quota
-        const { data: quota, error: quotaError } = await supabase
+        userToRefund = user.id
+        const prospectCount = prospectIds.length
+
+        console.log('🔍 Deep Search requested by user:', user.id, 'for', prospectCount, 'prospects')
+
+        // 1. Vérifier quota (lecture directe comme email-verifier)
+        const { data: quota, error: quotaFetchError } = await supabase
             .from('quotas')
             .select('deep_search_used, deep_search_limit')
             .eq('user_id', user.id)
             .single()
 
-        if (quotaError) {
-            console.error('Quota check error:', quotaError)
-            return NextResponse.json({ error: 'Failed to check quota' }, { status: 500 })
-        }
-
-        const remaining = (quota?.deep_search_limit || 0) - (quota?.deep_search_used || 0)
-
-        if (!quota || remaining < prospectIds.length) {
+        if (quotaFetchError || !quota) {
+            console.error('❌ Failed to fetch quota:', quotaFetchError)
             return NextResponse.json({
-                error: 'Crédits insuffisants',
-                required: prospectIds.length,
-                available: remaining
-            }, { status: 402 })
+                error: 'Impossible de récupérer les quotas',
+                details: quotaFetchError?.message
+            }, { status: 500 })
         }
 
-        // 2. Créer job AVANT webhook
+        console.log('✅ Quota fetched:', quota)
+
+        const remaining = quota.deep_search_limit - quota.deep_search_used
+        if (remaining < prospectCount) {
+            return NextResponse.json({
+                error: `Crédits insuffisants. Il vous reste ${remaining} crédits, mais vous tentez d'en utiliser ${prospectCount}.`,
+                required: prospectCount,
+                available: remaining
+            }, { status: 403 })
+        }
+
+        // 2. Décrémenter quota (UPDATE direct comme email-verifier - PAS de RPC)
+        const { error: updateError } = await supabase
+            .from('quotas')
+            .update({
+                deep_search_used: quota.deep_search_used + prospectCount,
+                updated_at: new Date().toISOString()
+            })
+            .eq('user_id', user.id)
+
+        if (updateError) {
+            console.error('❌ Failed to update quota:', updateError)
+            return NextResponse.json({
+                error: 'Erreur lors du débit des crédits',
+                details: updateError.message
+            }, { status: 500 })
+        }
+
+        console.log('✅ Quota debited:', prospectCount)
+        quotaToRefund = prospectCount
+
+        // 3. Créer job AVANT webhook
         const { data: job, error: jobError } = await supabase
             .from('deep_search_jobs')
             .insert({
                 user_id: user.id,
                 prospect_ids: prospectIds,
-                prospects_total: prospectIds.length,
+                prospects_total: prospectCount,
                 status: 'pending'
             })
             .select('id')
             .single()
 
         if (jobError || !job) {
-            console.error('Error creating job:', jobError)
+            console.error('❌ Error creating job:', jobError)
+            // Rollback quota
+            await supabase
+                .from('quotas')
+                .update({ deep_search_used: quota.deep_search_used })
+                .eq('user_id', user.id)
             return NextResponse.json({ error: 'Failed to create job' }, { status: 500 })
         }
 
-        // 3. Décrémenter crédits (atomique avec vérification)
-        const { error: decrementError } = await supabase.rpc('decrement_deep_search_quota', {
-            p_user_id: user.id,
-            p_amount: prospectIds.length
-        })
-
-        if (decrementError) {
-            console.error('Error decrementing quota:', decrementError)
-            // Rollback job
-            await supabase.from('deep_search_jobs').delete().eq('id', job.id)
-            return NextResponse.json({ error: 'Crédits insuffisants' }, { status: 402 })
-        }
+        console.log('✅ Job created:', job.id)
+        jobToRollback = job
 
         // 4. Déclencher webhook n8n
         const webhookUrl = process.env.N8N_DEEP_SEARCH_WEBHOOK
         if (!webhookUrl) {
-            console.error('N8N_DEEP_SEARCH_WEBHOOK not configured')
+            console.error('❌ N8N_DEEP_SEARCH_WEBHOOK not configured')
+            // Rollback
+            await rollback(supabase, user.id, quota.deep_search_used, job.id)
             return NextResponse.json({ error: 'Webhook not configured' }, { status: 500 })
         }
 
         console.log('📤 Triggering Deep Search webhook:', {
             job_id: job.id,
-            prospects_count: prospectIds.length
+            prospects_count: prospectCount
         })
 
-        const webhookResponse = await fetch(webhookUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                user_id: user.id,
-                job_id: job.id,
-                prospect_ids: prospectIds
-            }),
-            signal: AbortSignal.timeout(10000) // 10s timeout for webhook trigger
-        })
+        try {
+            const webhookResponse = await fetch(webhookUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    user_id: user.id,
+                    job_id: job.id,
+                    prospect_ids: prospectIds
+                }),
+                signal: AbortSignal.timeout(10000) // 10s timeout
+            })
 
-        if (!webhookResponse.ok) {
-            console.error('Webhook failed:', webhookResponse.statusText)
-            // Marquer job comme failed
+            if (!webhookResponse.ok) {
+                const errorText = await webhookResponse.text()
+                console.error('❌ Webhook failed:', webhookResponse.status, errorText)
+                throw new Error(`Webhook returned ${webhookResponse.status}: ${errorText}`)
+            }
+
+            console.log('✅ Deep Search webhook triggered successfully')
+
+            // Mettre à jour job à "processing"
             await supabase
                 .from('deep_search_jobs')
-                .update({ status: 'failed', error_message: `Webhook failed: ${webhookResponse.statusText}` })
+                .update({ status: 'processing', started_at: new Date().toISOString() })
                 .eq('id', job.id)
 
-            return NextResponse.json({ error: 'Failed to trigger Deep Search' }, { status: 500 })
+            return NextResponse.json({
+                success: true,
+                job_id: job.id,
+                status: 'processing',
+                prospects_count: prospectCount,
+                message: 'Deep Search lancé avec succès'
+            })
+
+        } catch (webhookError: any) {
+            console.error('❌ Webhook error:', webhookError)
+            // Rollback quota + mark job as failed
+            await rollback(supabase, user.id, quota.deep_search_used, job.id)
+            return NextResponse.json({
+                error: `Erreur service Deep Search: ${webhookError.message}`
+            }, { status: 502 })
         }
 
-        console.log('✅ Deep Search job created:', job.id)
+    } catch (error: any) {
+        console.error('❌ Deep Search API error:', error)
 
-        // Mettre à jour job à "processing"
+        // Attempt rollback if we know who and how much
+        if (userToRefund && quotaToRefund > 0) {
+            try {
+                const supabase = await createClient()
+                const { data: currentQuota } = await supabase
+                    .from('quotas')
+                    .select('deep_search_used')
+                    .eq('user_id', userToRefund)
+                    .single()
+
+                if (currentQuota) {
+                    await supabase
+                        .from('quotas')
+                        .update({ deep_search_used: Math.max(0, currentQuota.deep_search_used - quotaToRefund) })
+                        .eq('user_id', userToRefund)
+                }
+
+                if (jobToRollback) {
+                    await supabase
+                        .from('deep_search_jobs')
+                        .update({ status: 'failed', error_message: error.message })
+                        .eq('id', jobToRollback.id)
+                }
+            } catch (rollbackError) {
+                console.error('❌ Rollback error:', rollbackError)
+            }
+        }
+
+        return NextResponse.json({ error: error.message || 'Erreur serveur' }, { status: 500 })
+    }
+}
+
+// Helper function for rollback
+async function rollback(supabase: any, userId: string, originalUsed: number, jobId: string) {
+    try {
+        // Revert quota
+        await supabase
+            .from('quotas')
+            .update({ deep_search_used: originalUsed })
+            .eq('user_id', userId)
+
+        // Mark job as failed
         await supabase
             .from('deep_search_jobs')
-            .update({ status: 'processing', started_at: new Date().toISOString() })
-            .eq('id', job.id)
+            .update({ status: 'failed', error_message: 'Webhook failed' })
+            .eq('id', jobId)
 
-        return NextResponse.json({
-            job_id: job.id,
-            status: 'processing',
-            prospects_count: prospectIds.length
-        })
-
-    } catch (error: any) {
-        console.error('Error in deep-search endpoint:', error)
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        console.log('✅ Rollback completed')
+    } catch (rollbackError) {
+        console.error('❌ Rollback error:', rollbackError)
     }
 }
