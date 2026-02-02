@@ -14,7 +14,6 @@ import { Button } from "@/components/ui/button"
 
 export function Topbar() {
     const pathname = usePathname()
-    // const router = useRouter() // Might not be needed if we use window.location
     const [userProfile, setUserProfile] = useState<{
         first_name: string | null
         last_name: string | null
@@ -27,36 +26,25 @@ export function Topbar() {
                 const supabase = createClient()
                 const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-                console.log('🔍 [Topbar] Fetching profile for user:', user?.id)
+                console.log('🔍 [Topbar] User:', user)
+                console.log('🔍 [Topbar] User metadata:', user?.user_metadata)
 
-                if (authError) {
+                if (authError || !user) {
                     console.error('❌ [Topbar] Auth error:', authError)
                     return
                 }
 
-                if (!user) {
-                    console.warn('⚠️ [Topbar] No authenticated user')
-                    return
+                // ✅ Récupérer depuis user_metadata (pas de table profiles)
+                const profile = {
+                    first_name: user.user_metadata?.first_name || user.user_metadata?.firstName || '',
+                    last_name: user.user_metadata?.last_name || user.user_metadata?.lastName || '',
+                    company_name: user.user_metadata?.company_name || user.user_metadata?.companyName || ''
                 }
 
-                const { data: profile, error: profileError } = await supabase
-                    .from('profiles')
-                    .select('first_name, last_name, company_name')
-                    .eq('id', user.id)
-                    .single()
-
-                if (profileError) {
-                    console.error('❌ [Topbar] Profile fetch error:', profileError)
-                    return
-                }
-
-                console.log('✅ [Topbar] Profile loaded:', profile)
-
-                if (profile) {
-                    setUserProfile(profile)
-                }
+                console.log('✅ [Topbar] Profile from metadata:', profile)
+                setUserProfile(profile)
             } catch (error) {
-                console.error('❌ [Topbar] Unexpected error:', error)
+                console.error('❌ [Topbar] Error:', error)
             }
         }
 

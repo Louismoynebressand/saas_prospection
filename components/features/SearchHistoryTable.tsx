@@ -112,21 +112,40 @@ export function SearchHistoryTable({ limit }: { limit?: number }) {
 
     const formatSearchTitle = (job: ScrapeJob) => {
         try {
-            const search = typeof job.request_search === 'string'
-                ? JSON.parse(job.request_search)
-                : job.request_search
-            const ville = typeof job.resuest_ville === 'string'
-                ? JSON.parse(job.resuest_ville)
-                : job.resuest_ville
+            // request_search is stored as JSON string of the actual query
+            let searchQuery = "Recherche"
+            let location = ""
 
-            const category = search?.quoiQui || "Recherche"
-            const location = ville?.ville || ville?.ou || ""
-
-            if (location) {
-                return `${category} • ${location}`
+            // Extract search query
+            if (job.request_search) {
+                if (typeof job.request_search === 'string') {
+                    try {
+                        // It's stored as JSON string, try to parse
+                        const parsed = JSON.parse(job.request_search)
+                        searchQuery = parsed || job.request_search.replace(/"/g, '')
+                    } catch {
+                        // If parsing fails, use as is (removing quotes)
+                        searchQuery = job.request_search.replace(/"/g, '')
+                    }
+                } else {
+                    searchQuery = job.request_search
+                }
             }
-            return category
-        } catch {
+
+            // Extract location (ville)
+            if (job.resuest_ville) {
+                if (typeof job.resuest_ville === 'string') {
+                    location = job.resuest_ville
+                }
+            }
+
+            // Format: "Query • Location" or just "Query"
+            if (location && searchQuery) {
+                return `${searchQuery} • ${location}`
+            }
+            return searchQuery || "Recherche"
+        } catch (error) {
+            console.error('Error formatting search title:', error)
             return "Recherche"
         }
     }
