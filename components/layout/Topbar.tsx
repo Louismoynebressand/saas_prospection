@@ -23,29 +23,42 @@ export function Topbar() {
     useEffect(() => {
         const supabase = createClient()
 
-        // ✅ Utiliser onAuthStateChange pour attendre que la session soit chargée
+        // Function to fetch and set profile
+        const fetchProfile = async (user: any) => {
+            if (!user) {
+                console.warn('⚠️ [Topbar] No user in session')
+                setUserProfile(null)
+                return
+            }
+
+            console.log('🔍 [Topbar] User:', user)
+            console.log('🔍 [Topbar] User metadata:', user.user_metadata)
+
+            // ✅ Récupérer depuis user_metadata
+            const profile = {
+                first_name: user.user_metadata?.first_name || user.user_metadata?.firstName || '',
+                last_name: user.user_metadata?.last_name || user.user_metadata?.lastName || '',
+                company_name: user.user_metadata?.company_name || user.user_metadata?.companyName || ''
+            }
+
+            console.log('✅ [Topbar] Profile from metadata:', profile)
+            setUserProfile(profile)
+        }
+
+        // ✅ 1. Fetch immediately on mount (if already logged in)
+        supabase.auth.getUser().then((response: any) => {
+            const user = response.data?.user
+            if (user) {
+                fetchProfile(user)
+            }
+        })
+
+        // ✅ 2. Listen to auth state changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
             async (event: string, session: any) => {
-                const user = session?.user
-
                 console.log('🔍 [Topbar] Auth event:', event)
-                console.log('🔍 [Topbar] User:', user)
-                console.log('🔍 [Topbar] User metadata:', user?.user_metadata)
-
-                if (user) {
-                    // ✅ Récupérer depuis user_metadata
-                    const profile = {
-                        first_name: user.user_metadata?.first_name || user.user_metadata?.firstName || '',
-                        last_name: user.user_metadata?.last_name || user.user_metadata?.lastName || '',
-                        company_name: user.user_metadata?.company_name || user.user_metadata?.companyName || ''
-                    }
-
-                    console.log('✅ [Topbar] Profile from metadata:', profile)
-                    setUserProfile(profile)
-                } else {
-                    console.warn('⚠️ [Topbar] No user in session')
-                    setUserProfile(null)
-                }
+                const user = session?.user
+                fetchProfile(user)
             }
         )
 

@@ -114,6 +114,8 @@ export async function POST(request: NextRequest) {
 
         // 4. Déclencher webhook n8n
         const webhookUrl = process.env.N8N_DEEP_SEARCH_WEBHOOK
+        console.log('🔍 [DEBUG] Webhook URL from env:', webhookUrl ? `${webhookUrl.substring(0, 50)}...` : 'NOT FOUND')
+
         if (!webhookUrl) {
             console.error('❌ N8N_DEEP_SEARCH_WEBHOOK not configured')
             // Rollback
