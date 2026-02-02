@@ -173,130 +173,106 @@ export function LaunchSearchForm() {
             transition={{ duration: 0.4 }}
             className="w-full relative"
         >
-            {/* ✨ Siri-like Edge Glow Effect */}
+            {/* 🧠 Organic AI Shockwave & Breathing Effect */}
             <style jsx>{`
-                @keyframes siri-pulse {
+                @keyframes shockwave-scan {
                     0% {
+                        left: -50%;
                         opacity: 0;
-                        transform: scale(0.95);
                     }
-                    50% {
-                        opacity: 0.4;
+                    10% {
+                        opacity: 1;
+                    }
+                    90% {
+                        opacity: 1;
                     }
                     100% {
+                        left: 150%;
                         opacity: 0;
-                        transform: scale(1.05);
                     }
                 }
 
-                @keyframes siri-rotate {
-                    0% {
-                        transform: rotate(0deg);
-                    }
-                    100% {
-                        transform: rotate(360deg);
-                    }
-                }
-
-                @keyframes siri-breathe {
+                @keyframes ai-breathe {
                     0%, 100% {
-                        opacity: 0.6;
+                        box-shadow: 0 0 10px rgba(99, 102, 241, 0.2);
+                        border-color: rgba(99, 102, 241, 0.3);
                     }
                     50% {
-                        opacity: 0.8;
+                        box-shadow: 0 0 25px rgba(168, 85, 247, 0.4);
+                        border-color: rgba(168, 85, 247, 0.6);
                     }
                 }
 
-                .siri-glow-container {
+                @keyframes border-trace {
+                    0% { clip-path: inset(0 100% 0 0); }
+                    100% { clip-path: inset(0 0 0 0); }
+                }
+
+                .ai-card-container {
                     position: relative;
-                }
-
-                .siri-glow-border {
-                    position: absolute;
-                    inset: -6px;
                     border-radius: 1rem;
-                    padding: 6px;
-                    background: conic-gradient(
-                        from 0deg,
-                        #8b5cf6,
-                        #06b6d4,
-                        #ec4899,
-                        #8b5cf6
-                    );
-                    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-                    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-                    -webkit-mask-composite: xor;
-                    mask-composite: exclude;
-                    opacity: 0;
-                    transition: opacity 0.3s ease;
-                    animation: siri-rotate 8s linear infinite, siri-breathe 3s ease-in-out infinite;
-                    pointer-events: none;
+                    /* Initial state: no visible border, just the card content */
+                    padding: 2px; /* Space for the border */
+                    background: transparent;
+                    transition: all 0.5s ease;
                 }
 
-                .siri-glow-border.active {
-                    opacity: 1;
+                /* The card itself */
+                .ai-card-inner {
+                    border-radius: 0.9rem; /* Slightly smaller than container */
+                    z-index: 2;
+                    position: relative;
+                    background: rgba(255, 255, 255, 0.95);
                 }
 
-                .siri-glow-halo {
+                /* The Living Border (Breathing) */
+                .ai-card-container.living {
+                    animation: ai-breathe 4s ease-in-out infinite;
+                    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.1));
+                }
+
+                /* The Shockwave Overlay */
+                .ai-shockwave {
                     position: absolute;
-                    inset: -6px;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
                     border-radius: 1rem;
-                    background: radial-gradient(
-                        circle at 50% 50%,
-                        rgba(139, 92, 246, 0.3),
-                        rgba(6, 182, 212, 0.2),
-                        rgba(236, 72, 153, 0.3),
-                        transparent 70%
-                    );
-                    filter: blur(30px);
-                    opacity: 0;
-                    transition: opacity 0.3s ease;
-                    animation: siri-breathe 3s ease-in-out infinite;
                     pointer-events: none;
+                    overflow: hidden;
+                    z-index: 10;
                 }
 
-                .siri-glow-halo.active {
-                    opacity: 1;
-                }
-
-                .siri-pulse-wave {
+                .ai-shockwave::before {
+                    content: '';
                     position: absolute;
-                    inset: -6px;
-                    border-radius: 1rem;
-                    background: radial-gradient(
-                        circle at 50% 50%,
-                        rgba(139, 92, 246, 0.4),
-                        rgba(6, 182, 212, 0.3),
-                        transparent 60%
+                    top: 0;
+                    bottom: 0;
+                    width: 50%; /* Width of the wave */
+                    background: linear-gradient(
+                        90deg, 
+                        transparent, 
+                        rgba(99, 102, 241, 0.8), 
+                        rgba(236, 72, 153, 0.8), 
+                        transparent
                     );
-                    filter: blur(60px);
+                    transform: skewX(-20deg);
                     opacity: 0;
-                    animation: siri-pulse 0.5s ease-out;
-                    pointer-events: none;
+                }
+
+                .ai-shockwave.active::before {
+                    animation: shockwave-scan 1s cubic-bezier(0.4, 0, 0.2, 1) forwards;
                 }
             `}</style>
 
-            <div className="siri-glow-container">
-                {/* Animated pulse wave on focus */}
-                <AnimatePresence>
-                    {isCardFocused && (
-                        <motion.div
-                            key="pulse"
-                            className="siri-pulse-wave"
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 0 }}
-                            transition={{ duration: 0.5 }}
-                        />
-                    )}
-                </AnimatePresence>
+            <div
+                className={`ai-card-container ${isCardFocused ? 'living' : ''}`}
+            >
+                {/* Shockwave Effect Layer */}
+                <div className={`ai-shockwave ${isCardFocused ? 'active' : ''}`} />
 
-                {/* Rotating border */}
-                <div className={`siri-glow-border ${isCardFocused ? 'active' : ''}`} />
-
-                {/* Outer halo */}
-                <div className={`siri-glow-halo ${isCardFocused ? 'active' : ''}`} />
-
-                <Card className="w-full relative overflow-hidden border-2 bg-white/95 backdrop-blur-sm shadow-xl transition-all duration-300">
+                <Card className="w-full relative overflow-hidden bg-white/95 backdrop-blur-sm shadow-xl transition-all duration-300 border-0 ai-card-inner">
                     <form onSubmit={handleSubmit}>
                         <CardHeader className="relative z-10">
                             <div className="flex items-center justify-between">
@@ -452,17 +428,20 @@ export function LaunchSearchForm() {
                                     disabled={loading}
                                     loading={loading}
                                     className="w-full h-14 text-lg"
-                                    variant="primary"
+                                    variant="outline"
+                                    hideIcon={true}
                                 >
                                     {loading ? (
                                         "Lancement en cours..."
                                     ) : (
                                         <motion.div
-                                            className="flex items-center justify-center gap-2"
+                                            className="flex items-center justify-center gap-3"
                                             whileHover={{ scale: 1.02 }}
                                         >
-                                            <Rocket className="w-5 h-5" />
-                                            <span>Lancer la recherche</span>
+                                            <Sparkles className="w-6 h-6 text-indigo-600 animate-pulse" />
+                                            <span className="font-medium bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                                                Lancer la recherche
+                                            </span>
                                         </motion.div>
                                     )}
                                 </AIButton>

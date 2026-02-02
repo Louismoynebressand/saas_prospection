@@ -425,18 +425,9 @@ export default function ProspectPage() {
                                     className="gap-2"
                                 >
                                     {isLaunchingDeepSearch ? (
-                                        <>
-                                            <LoaderIcon className="w-4 h-4 animate-spin" />
-                                            Lancement en cours...
-                                        </>
+                                        "Lancement en cours..."
                                     ) : (
-                                        <motion.div
-                                            className="flex items-center gap-2"
-                                            whileHover={{ scale: 1.05 }}
-                                        >
-                                            <Sparkles className="w-4 h-4" />
-                                            <span>Lancer Deep Search</span>
-                                        </motion.div>
+                                        <span>Lancer Deep Search</span>
                                     )}
                                 </AIButton>
                             ) : null}
