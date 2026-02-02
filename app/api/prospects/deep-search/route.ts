@@ -56,10 +56,29 @@ export async function POST(request: NextRequest) {
             throw new Error('N8N_DEEP_SEARCH_WEBHOOK not configured on server (even hardcoded fallback failed)')
         }
 
+        // Create job in database to track progress
+        const { data: job, error: jobError } = await supabase
+            .from('deep_search_jobs')
+            .insert({
+                user_id: user.id,
+                prospect_ids: validated.prospectIds,
+                prospects_total: validated.prospectIds.length,
+                status: 'pending'
+            })
+            .select()
+            .single()
+
+        if (jobError || !job) {
+            console.error('❌ Failed to create deep search job:', jobError)
+            throw new Error('Failed to create tracking job')
+        }
+
+        logInfo('Deep Search job created in DB', { jobId: job.id })
+
         // Préparer le payload pour n8n (format simple)
         const webhookPayload = {
             user_id: user.id,
-            job_id: Date.now(), // Générer un ID unique
+            job_id: job.id, // Use real UUID from database
             prospect_ids: validated.prospectIds
         }
 
