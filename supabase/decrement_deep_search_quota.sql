@@ -10,16 +10,14 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 BEGIN
-    -- Mise à jour atomique avec vérification
-    UPDATE user_quotas
-    SET 
-        deep_search_remaining = deep_search_remaining - p_amount,
-        deep_search_used = deep_search_used + p_amount,
+    -- Mise à jour atomique des quotas
+    UPDATE quotas
+    SET deep_search_used = deep_search_used + p_amount,
         updated_at = NOW()
     WHERE user_id = p_user_id
-    AND deep_search_remaining >= p_amount;
-    
-    -- Si aucune ligne n'a été mise à jour, c'est qu'il n'y a pas assez de crédits
+    AND (deep_search_limit - deep_search_used) >= p_amount;
+
+    -- Vérifier si la mise à jour a réussi
     IF NOT FOUND THEN
         RAISE EXCEPTION 'Crédits Deep Search insuffisants pour l''utilisateur %', p_user_id;
     END IF;

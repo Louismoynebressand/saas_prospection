@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
-import { MoreHorizontal, Search as SearchIcon, MapPin, Loader2 } from "lucide-react"
+import { MoreHorizontal, Search as SearchIcon, MapPin, Loader2, Sparkles } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { ScrapeJob } from "@/types"
 import { Button } from "@/components/ui/button"
@@ -155,8 +155,8 @@ export function SearchHistoryTable({ limit }: { limit?: number }) {
             <TableHeader>
                 <TableRow>
                     <TableHead>Recherche</TableHead>
-                    <TableHead>Localisation</TableHead>
                     <TableHead>Prospects</TableHead>
+                    <TableHead>Deep Search</TableHead>
                     <TableHead>Statut</TableHead>
                     <TableHead>Date</TableHead>
                     <TableHead className="w-[50px]"></TableHead>
@@ -170,24 +170,26 @@ export function SearchHistoryTable({ limit }: { limit?: number }) {
                         onClick={() => router.push(`/searches/${job.id_jobs}`)}
                     >
                         <TableCell className="font-medium">
-                            <div className="flex items-center gap-2">
-                                <SearchIcon className="h-4 w-4 text-muted-foreground" />
-                                <span className="truncate max-w-[200px]">
+                            <div className="flex flex-col">
+                                <span className="font-semibold text-foreground">
                                     {formatSearchTerms(job)}
                                 </span>
-                            </div>
-                        </TableCell>
-                        <TableCell>
-                            <div className="flex items-center gap-1 text-muted-foreground">
-                                <MapPin className="h-3 w-3" />
-                                <span className="truncate max-w-[150px]">
-                                    {formatLocation(job) || "—"}
+                                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                    <MapPin className="h-3 w-3" />
+                                    {formatLocation(job) || "Localisation non spécifiée"}
                                 </span>
                             </div>
                         </TableCell>
                         <TableCell>
                             <Badge variant="outline">
                                 {counts[job.id_jobs] ?? 0}
+                            </Badge>
+                        </TableCell>
+                        <TableCell>
+                            {/* Placeholder logic for Deep Search status on a Job */}
+                            {/* Ideally we would check if related prospects have deep search data */}
+                            <Badge variant="outline" className="text-muted-foreground font-normal border-dashed">
+                                Non effectué
                             </Badge>
                         </TableCell>
                         <TableCell>{getStatusBadge(job.statut)}</TableCell>

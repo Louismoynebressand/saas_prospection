@@ -33,20 +33,23 @@ export async function POST(request: NextRequest) {
 
         // 1. Vérifier quota
         const { data: quota, error: quotaError } = await supabase
-            .from('user_quotas')
-            .select('deep_search_remaining')
+            .from('quotas')
+            .select('deep_search_used, deep_search_limit')
             .eq('user_id', user.id)
             .single()
 
         if (quotaError) {
+            console.error('Quota check error:', quotaError)
             return NextResponse.json({ error: 'Failed to check quota' }, { status: 500 })
         }
 
-        if (!quota || quota.deep_search_remaining < prospectIds.length) {
+        const remaining = (quota?.deep_search_limit || 0) - (quota?.deep_search_used || 0)
+
+        if (!quota || remaining < prospectIds.length) {
             return NextResponse.json({
                 error: 'Crédits insuffisants',
                 required: prospectIds.length,
-                available: quota?.deep_search_remaining || 0
+                available: remaining
             }, { status: 402 })
         }
 

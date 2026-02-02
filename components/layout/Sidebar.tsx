@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, List, Search, Users, Settings, CreditCard, Mail, LogOut, TrendingUp, Loader2, ShieldCheck } from "lucide-react"
+import { LayoutDashboard, List, Search, Users, Settings, CreditCard, Mail, LogOut, TrendingUp, Loader2, ShieldCheck, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
@@ -12,12 +12,7 @@ import { createClient } from "@/lib/supabase/client"
 
 export function Sidebar() {
     const pathname = usePathname()
-    const [userProfile, setUserProfile] = useState<{
-        first_name: string | null
-        last_name: string | null
-        company_name: string | null
-    } | null>(null)
-    const [loadingProfile, setLoadingProfile] = useState(true)
+    const [isQuotaExpanded, setIsQuotaExpanded] = useState(false)
     const [quotas, setQuotas] = useState<{
         scraps: { used: number; total: number }
         deepSearch: { used: number; total: number }
@@ -25,20 +20,7 @@ export function Sidebar() {
         checkEmails: { used: number; total: number }
     } | null>(null)
 
-    const fetchProfile = async (userId: string) => {
-        try {
-            const supabase = createClient()
-            const { data: profile } = await supabase
-                .from('profiles')
-                .select('first_name, last_name, company_name')
-                .eq('id', userId)
-                .single()
-
-            if (profile) setUserProfile(profile)
-        } catch (err) {
-            console.error("Error fetching profile:", err)
-        }
-    }
+    // Removed fetchProfile logic
 
     const fetchQuotas = async (userId: string) => {
         try {
@@ -113,10 +95,7 @@ export function Sidebar() {
                 if (user) {
                     // User is authenticated - fetch data immediately
                     // Add timeout safeguard to prevent infinite loading if Supabase SDK hangs
-                    const fetchDataPromise = Promise.all([
-                        fetchProfile(user.id),
-                        fetchQuotas(user.id)
-                    ])
+                    const fetchDataPromise = fetchQuotas(user.id)
 
                     const timeoutPromise = new Promise((resolve) => {
                         setTimeout(() => {
@@ -126,8 +105,6 @@ export function Sidebar() {
                     })
 
                     await Promise.race([fetchDataPromise, timeoutPromise])
-
-                    setLoadingProfile(false)
 
                     // Setup Realtime subscription AFTER having a valid user
                     if (!channel) {
@@ -157,8 +134,6 @@ export function Sidebar() {
                 } else {
                     // User logged out - reset state
                     setQuotas(null)
-                    setUserProfile(null)
-                    setLoadingProfile(false)
 
                     // Cleanup channel if exists
                     if (channel) {
@@ -192,6 +167,16 @@ export function Sidebar() {
         { name: "Forfait", href: "/billing", icon: CreditCard },
     ]
 
+    // Calculate Global Quota Percentage
+    const getGlobalQuotaValid = () => {
+        if (!quotas) return 0
+        const s = (quotas.scraps.used / quotas.scraps.total)
+        const d = (quotas.deepSearch.used / quotas.deepSearch.total)
+        const c = (quotas.coldEmails.used / quotas.coldEmails.total)
+        const e = (quotas.checkEmails.used / quotas.checkEmails.total)
+        return Math.min(100, Math.round(((s + d + c + e) / 4) * 100))
+    }
+
     return (
         <div className="flex h-screen w-64 flex-col border-r bg-card">
             {/* Header & Main Nav - Scrollable Area */}
@@ -224,6 +209,7 @@ export function Sidebar() {
                                 )}
                             >
                                 <Icon className="h-4 w-4" />
+                                <Icon className="h-4 w-4" />
                                 {item.name}
                             </Link>
                         )
@@ -233,67 +219,22 @@ export function Sidebar() {
 
             {/* Footer Section - Always Visible */}
             <div className="flex-shrink-0 border-t bg-card p-6">
-                {/* Quotas Section */}
-                <div className="mb-6 space-y-4">
-                    <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                        <TrendingUp className="h-3 w-3" />
-                        Quotas
-                    </div>
 
-                    {quotas ? (
-                        <>
-                            <div className="space-y-2">
-                                <div className="flex justify-between text-xs">
-                                    <span className="text-muted-foreground">Scraps</span>
-                                    <span className="font-medium">{quotas.scraps.used}/{quotas.scraps.total}</span>
-                                </div>
-                                <Progress value={(quotas.scraps.used / quotas.scraps.total) * 100} className="h-1.5" />
-                            </div>
-
-                            <div className="space-y-2">
-                                <div className="flex justify-between text-xs">
-                                    <span className="text-muted-foreground">Deep Search</span>
-                                    <span className="font-medium">{quotas.deepSearch.used}/{quotas.deepSearch.total}</span>
-                                </div>
-                                <Progress value={(quotas.deepSearch.used / quotas.deepSearch.total) * 100} className="h-1.5" />
-                            </div>
-
-                            <div className="space-y-2">
-                                <div className="flex justify-between text-xs">
-                                    <span className="text-muted-foreground">Cold Emails</span>
-                                    <span className="font-medium">{quotas.coldEmails.used}/{quotas.coldEmails.total}</span>
-                                </div>
-                                <Progress value={(quotas.coldEmails.used / quotas.coldEmails.total) * 100} className="h-1.5" />
-                            </div>
-
-                            <div className="space-y-2">
-                                <div className="flex justify-between text-xs">
-                                    <span className="text-muted-foreground">Check Emails</span>
-                                    <span className="font-medium">{quotas.checkEmails.used}/{quotas.checkEmails.total}</span>
-                                </div>
-                                <Progress value={(quotas.checkEmails.used / quotas.checkEmails.total) * 100} className="h-1.5" />
-                            </div>
-                        </>
-                    ) : (
-                        <div className="space-y-2 animate-pulse">
-                            <div className="h-4 bg-muted rounded w-full"></div>
-                            <div className="h-4 bg-muted rounded w-3/4"></div>
-                            <div className="h-4 bg-muted rounded w-5/6"></div>
-                        </div>
-                    )}
-
-                    <Button
-                        variant="default"
-                        size="sm"
-                        className="w-full bg-green-600 hover:bg-green-700 text-white mt-2"
-                        asChild
-                    >
-                        <Link href="/billing">
-                            <TrendingUp className="mr-2 h-4 w-4" />
-                            Upgrade Plan
-                        </Link>
-                    </Button>
-                </div>
+                {/* Upgrade Button - Always Visible, Styled */}
+                <Button
+                    variant="outline"
+                    className="w-full mb-6 bg-white border-2 border-purple-300 text-purple-700 
+                               hover:bg-purple-50 hover:border-purple-400
+                               shadow-[0_0_15px_rgba(168,85,247,0.3)] 
+                               hover:shadow-[0_0_25px_rgba(168,85,247,0.5)]
+                               transition-all duration-300 font-bold"
+                    asChild
+                >
+                    <Link href="/billing">
+                        <TrendingUp className="mr-2 h-4 w-4" />
+                        ✨ Upgrade Plan
+                    </Link>
+                </Button>
 
                 <div className="grid gap-2 mb-4">
                     {configNavigation.map((item) => {
@@ -317,33 +258,63 @@ export function Sidebar() {
                     })}
                 </div>
 
-                {/* User Profile & Logout */}
-                <div className="pt-2 border-t">
-                    {userProfile ? (
-                        <div className="flex items-center gap-3 rounded-lg bg-muted/50 p-2 mb-2">
-                            <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary flex-shrink-0">
-                                {userProfile.first_name?.[0]}{userProfile.last_name?.[0]}
+                {/* Condensed Quotas Section */}
+                <div className="pt-4 border-t">
+                    {quotas ? (
+                        <div className="space-y-2">
+                            <div
+                                className="flex items-center justify-between cursor-pointer p-2 rounded hover:bg-muted/50 transition-colors"
+                                onClick={() => setIsQuotaExpanded(!isQuotaExpanded)}
+                            >
+                                <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                    <TrendingUp className="h-3 w-3" />
+                                    Quota global
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-sm font-bold text-primary">{getGlobalQuotaValid()}%</span>
+                                    <ChevronDown className={cn("h-4 w-4 transition-transform", isQuotaExpanded && "rotate-180")} />
+                                </div>
                             </div>
-                            <div className="text-sm flex-1 min-w-0">
-                                <p className="font-medium truncate">{userProfile.first_name} {userProfile.last_name}</p>
-                                <p className="text-xs text-muted-foreground truncate">{userProfile.company_name}</p>
-                            </div>
-                        </div>
-                    ) : null}
 
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full justify-start gap-2 border-red-200 hover:bg-red-50 hover:text-red-700 hover:border-red-300"
-                        onClick={async () => {
-                            const supabase = createClient()
-                            await supabase.auth.signOut()
-                            window.location.href = '/login'
-                        }}
-                    >
-                        <LogOut className="h-4 w-4" />
-                        Déconnexion
-                    </Button>
+                            {/* Expanded Details */}
+                            {isQuotaExpanded && (
+                                <div className="space-y-3 pt-2 animate-in slide-in-from-top-2 fade-in duration-200">
+                                    <div className="space-y-1">
+                                        <div className="flex justify-between text-[10px] text-muted-foreground">
+                                            <span>Scraps</span>
+                                            <span>{quotas.scraps.used}/{quotas.scraps.total}</span>
+                                        </div>
+                                        <Progress value={(quotas.scraps.used / quotas.scraps.total) * 100} className="h-1" />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <div className="flex justify-between text-[10px] text-muted-foreground">
+                                            <span>Deep Search</span>
+                                            <span>{quotas.deepSearch.used}/{quotas.deepSearch.total}</span>
+                                        </div>
+                                        <Progress value={(quotas.deepSearch.used / quotas.deepSearch.total) * 100} className="h-1" />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <div className="flex justify-between text-[10px] text-muted-foreground">
+                                            <span>Cold Emails</span>
+                                            <span>{quotas.coldEmails.used}/{quotas.coldEmails.total}</span>
+                                        </div>
+                                        <Progress value={(quotas.coldEmails.used / quotas.coldEmails.total) * 100} className="h-1" />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <div className="flex justify-between text-[10px] text-muted-foreground">
+                                            <span>Check Emails</span>
+                                            <span>{quotas.checkEmails.used}/{quotas.checkEmails.total}</span>
+                                        </div>
+                                        <Progress value={(quotas.checkEmails.used / quotas.checkEmails.total) * 100} className="h-1" />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="space-y-2 animate-pulse">
+                            <div className="h-4 bg-muted rounded w-full"></div>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import {
-    Search, Filter, Columns, Download, Building2, Mail, Phone, MapPin, Calendar, Loader2, Zap, CheckSquare
+    Search, Filter, Columns, Download, Building2, Mail, Phone, MapPin, Calendar, Loader2, Zap, CheckSquare, Sparkles, Square
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { createClient } from "@/lib/supabase/client"
@@ -49,6 +49,7 @@ export default function ProspectsPage() {
         contact: true,
         phone: true,
         city: true,
+        deep: true,
         date: true,
     })
 
@@ -366,6 +367,7 @@ export default function ProspectsPage() {
                                 <DropdownMenuCheckboxItem checked={visibleColumns.contact} onCheckedChange={(b) => setVisibleColumns(prev => ({ ...prev, contact: !!b }))}>Email</DropdownMenuCheckboxItem>
                                 <DropdownMenuCheckboxItem checked={visibleColumns.phone} onCheckedChange={(b) => setVisibleColumns(prev => ({ ...prev, phone: !!b }))}>Téléphone</DropdownMenuCheckboxItem>
                                 <DropdownMenuCheckboxItem checked={visibleColumns.city} onCheckedChange={(b) => setVisibleColumns(prev => ({ ...prev, city: !!b }))}>Ville</DropdownMenuCheckboxItem>
+                                <DropdownMenuCheckboxItem checked={visibleColumns.deep} onCheckedChange={(checked) => setVisibleColumns(prev => ({ ...prev, deep: checked }))}>Deep Search</DropdownMenuCheckboxItem>
                                 <DropdownMenuCheckboxItem checked={visibleColumns.date} onCheckedChange={(b) => setVisibleColumns(prev => ({ ...prev, date: !!b }))}>Date</DropdownMenuCheckboxItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
@@ -418,6 +420,7 @@ export default function ProspectsPage() {
                                     {visibleColumns.contact && <TableHead>Email</TableHead>}
                                     {visibleColumns.phone && <TableHead>Téléphone</TableHead>}
                                     {visibleColumns.city && <TableHead>Ville</TableHead>}
+                                    {visibleColumns.deep && <TableHead>Deep Search</TableHead>}
                                     {visibleColumns.date && <TableHead>Date</TableHead>}
                                 </TableRow>
                             </TableHeader>

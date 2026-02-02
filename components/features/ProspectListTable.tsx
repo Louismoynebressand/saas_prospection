@@ -5,7 +5,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
     MoreHorizontal, Mail, Phone, Building2, User, Loader2, ArrowUpDown,
-    Filter, Columns, Download, ChevronDown, Trash2, Share2, FileDown
+    Filter, Columns, Download, ChevronDown, Trash2, Share2, FileDown, Sparkles
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { ScrapeProspect } from "@/types"
@@ -84,6 +84,7 @@ export function ProspectListTable({ searchId, autoRefresh }: { searchId: string,
         contact: true,
         phone: true,
         city: true,
+        deep: true,
     })
 
     const fetchProspects = async (page: number = currentPage) => {
@@ -306,7 +307,9 @@ export function ProspectListTable({ searchId, autoRefresh }: { searchId: string,
                             <DropdownMenuCheckboxItem checked={visibleColumns.category} onCheckedChange={(b) => setVisibleColumns(prev => ({ ...prev, category: !!b }))}>Catégorie</DropdownMenuCheckboxItem>
                             <DropdownMenuCheckboxItem checked={visibleColumns.contact} onCheckedChange={(b) => setVisibleColumns(prev => ({ ...prev, contact: !!b }))}>Contact (Email)</DropdownMenuCheckboxItem>
                             <DropdownMenuCheckboxItem checked={visibleColumns.phone} onCheckedChange={(b) => setVisibleColumns(prev => ({ ...prev, phone: !!b }))}>Téléphone</DropdownMenuCheckboxItem>
+                            <DropdownMenuCheckboxItem checked={visibleColumns.phone} onCheckedChange={(b) => setVisibleColumns(prev => ({ ...prev, phone: !!b }))}>Téléphone</DropdownMenuCheckboxItem>
                             <DropdownMenuCheckboxItem checked={visibleColumns.city} onCheckedChange={(b) => setVisibleColumns(prev => ({ ...prev, city: !!b }))}>Ville</DropdownMenuCheckboxItem>
+                            <DropdownMenuCheckboxItem checked={visibleColumns.deep} onCheckedChange={(b) => setVisibleColumns(prev => ({ ...prev, deep: !!b }))}>Deep Search</DropdownMenuCheckboxItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
                 </div>
@@ -340,6 +343,9 @@ export function ProspectListTable({ searchId, autoRefresh }: { searchId: string,
                                 <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort('city')}>
                                     <div className="flex items-center gap-1">Ville <ArrowUpDown className="h-3 w-3" /></div>
                                 </TableHead>
+                            )}
+                            {visibleColumns.deep && (
+                                <TableHead>Deep Search</TableHead>
                             )}
                             <TableHead className="w-[50px]"></TableHead>
                         </TableRow>
@@ -393,6 +399,20 @@ export function ProspectListTable({ searchId, autoRefresh }: { searchId: string,
                                 )}
                                 {visibleColumns.city && (
                                     <TableCell className="max-w-[120px] truncate">{row.city}</TableCell>
+                                )}
+                                {visibleColumns.deep && (
+                                    <TableCell>
+                                        {row.original.deep_search && Object.keys(row.original.deep_search).length > 0 ? (
+                                            <div className="flex items-center gap-2">
+                                                <Sparkles className="w-4 h-4 text-purple-600 fill-purple-100" />
+                                                <span className="text-xs font-medium text-purple-700">Enrichi</span>
+                                            </div>
+                                        ) : (
+                                            <Badge variant="outline" className="text-muted-foreground font-normal">
+                                                Pas de données
+                                            </Badge>
+                                        )}
+                                    </TableCell>
                                 )}
                                 <TableCell className="text-right">
                                     <DropdownMenu>
