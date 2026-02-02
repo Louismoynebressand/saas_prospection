@@ -1,229 +1,144 @@
-"use server"
+import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
+import { createClient } from '@/lib/supabase/server'
+import { logInfo, logError } from '@/lib/logger'
 
-import { NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+// Schema pour valider le payload
+const deepSearchSchema = z.object({
+    prospectIds: z.array(z.number()).min(1),
+    userId: z.string(),
+    jobId: z.union([z.string(), z.number()]).optional()
+})
 
 /**
  * POST /api/prospects/deep-search
  * 
- * Déclenche un Deep Search manuel pour des prospects qui n'en ont pas encore.
- * Pattern copié de email-verifier/check qui fonctionne.
+ * Déclenche un Deep Search pour une liste de prospects.
+ * Pattern COPIÉ EXACTEMENT de /api/scrape/launch qui fonctionne.
  * 
- * Flow:
- * 1. Vérifier quota utilisateur (lecture directe)
- * 2. Décrémenter quota (UPDATE direct, pas RPC)
- * 3. Créer job dans deep_search_jobs (status='pending')
- * 4. Déclencher webhook n8n
- * 5. Si erreur webhook: rollback quota + job
+ * Flow simplifié:
+ * 1. Valider le payload
+ * 2. Appeler le webhook n8n
+ * 3. Retourner le résultat
+ * 
+ * Note: La gestion des quotas est faite AVANT cet appel, dans le client.
  */
 export async function POST(request: NextRequest) {
-    let jobToRollback: any = null
-    let quotaToRefund = 0
-    let userToRefund: string | null = null
+    const startTime = Date.now()
+    let userId: string | undefined = undefined
 
     try {
-        const supabase = await createClient()
+        // Parse and validate payload
         const body = await request.json()
-        const { prospectIds } = body
+        const validated = deepSearchSchema.parse(body)
+        userId = validated.userId
 
-        if (!prospectIds || !Array.isArray(prospectIds) || prospectIds.length === 0) {
-            return NextResponse.json({ error: 'prospect_ids required' }, { status: 400 })
-        }
+        logInfo('Deep Search job launch requested', {
+            userId,
+            prospectCount: validated.prospectIds.length,
+            jobId: validated.jobId
+        })
 
-        // Get user
+        // Get user for auth verification
+        const supabase = await createClient()
         const { data: { user }, error: authError } = await supabase.auth.getUser()
+
         if (authError || !user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        userToRefund = user.id
-        const prospectCount = prospectIds.length
-
-        console.log('🔍 Deep Search requested by user:', user.id, 'for', prospectCount, 'prospects')
-
-        // 1. Vérifier quota (lecture directe comme email-verifier)
-        const { data: quota, error: quotaFetchError } = await supabase
-            .from('quotas')
-            .select('deep_search_used, deep_search_limit')
-            .eq('user_id', user.id)
-            .single()
-
-        if (quotaFetchError || !quota) {
-            console.error('❌ Failed to fetch quota:', quotaFetchError)
-            return NextResponse.json({
-                error: 'Impossible de récupérer les quotas',
-                details: quotaFetchError?.message
-            }, { status: 500 })
+        // Vérifier que l'userId du payload correspond à l'utilisateur authentifié
+        if (user.id !== validated.userId) {
+            return NextResponse.json({ error: 'Unauthorized: user mismatch' }, { status: 403 })
         }
 
-        console.log('✅ Quota fetched:', quota)
-
-        const remaining = quota.deep_search_limit - quota.deep_search_used
-        if (remaining < prospectCount) {
-            return NextResponse.json({
-                error: `Crédits insuffisants. Il vous reste ${remaining} crédits, mais vous tentez d'en utiliser ${prospectCount}.`,
-                required: prospectCount,
-                available: remaining
-            }, { status: 403 })
-        }
-
-        // 2. Décrémenter quota (UPDATE direct comme email-verifier - PAS de RPC)
-        const { error: updateError } = await supabase
-            .from('quotas')
-            .update({
-                deep_search_used: quota.deep_search_used + prospectCount,
-                updated_at: new Date().toISOString()
-            })
-            .eq('user_id', user.id)
-
-        if (updateError) {
-            console.error('❌ Failed to update quota:', updateError)
-            return NextResponse.json({
-                error: 'Erreur lors du débit des crédits',
-                details: updateError.message
-            }, { status: 500 })
-        }
-
-        console.log('✅ Quota debited:', prospectCount)
-        quotaToRefund = prospectCount
-
-        // 3. Créer job AVANT webhook
-        const { data: job, error: jobError } = await supabase
-            .from('deep_search_jobs')
-            .insert({
-                user_id: user.id,
-                prospect_ids: prospectIds,
-                prospects_total: prospectCount,
-                status: 'pending'
-            })
-            .select('id')
-            .single()
-
-        if (jobError || !job) {
-            console.error('❌ Error creating job:', jobError)
-            // Rollback quota
-            await supabase
-                .from('quotas')
-                .update({ deep_search_used: quota.deep_search_used })
-                .eq('user_id', user.id)
-            return NextResponse.json({ error: 'Failed to create job' }, { status: 500 })
-        }
-
-        console.log('✅ Job created:', job.id)
-        jobToRollback = job
-
-        // 4. Déclencher webhook n8n
+        // Get webhook URL from server env (checking both secure and public for compatibility)
         const webhookUrl = process.env.N8N_DEEP_SEARCH_WEBHOOK || process.env.NEXT_PUBLIC_N8N_DEEP_SEARCH_WEBHOOK
+
         console.log('🔍 [DEBUG] Webhook URL from env:', webhookUrl ? `${webhookUrl.substring(0, 50)}...` : 'NOT FOUND')
 
         if (!webhookUrl) {
-            console.error('❌ N8N_DEEP_SEARCH_WEBHOOK not configured')
-            console.error('❌ Check .env.local for N8N_DEEP_SEARCH_WEBHOOK or NEXT_PUBLIC_N8N_DEEP_SEARCH_WEBHOOK')
-            // Rollback
-            await rollback(supabase, user.id, quota.deep_search_used, job.id)
-            return NextResponse.json({ error: 'Webhook not configured' }, { status: 500 })
+            throw new Error('N8N_DEEP_SEARCH_WEBHOOK not configured on server')
         }
 
-        console.log('📤 Triggering Deep Search webhook:', {
-            job_id: job.id,
-            prospects_count: prospectCount
-        })
+        // Préparer le payload pour n8n (format simple)
+        const webhookPayload = {
+            user_id: validated.userId,
+            job_id: validated.jobId || Date.now(), // Générer un ID si non fourni
+            prospect_ids: validated.prospectIds
+        }
+
+        // Call n8n webhook with timeout
+        console.log(`📤 [Deep Search] Calling webhook: ${webhookUrl}`)
+        console.log(`📦 [Deep Search] Payload:`, JSON.stringify(webhookPayload, null, 2))
+
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 30000) // 30s max
 
         try {
             const webhookResponse = await fetch(webhookUrl, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    user_id: user.id,
-                    job_id: job.id,
-                    prospect_ids: prospectIds
-                }),
-                signal: AbortSignal.timeout(10000) // 10s timeout
+                headers: {
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'SuperProspect/2.0'
+                },
+                body: JSON.stringify(webhookPayload),
+                signal: controller.signal
             })
+
+            clearTimeout(timeoutId)
+
+            console.log(`✅ [Deep Search] Webhook response: ${webhookResponse.status}`)
 
             if (!webhookResponse.ok) {
                 const errorText = await webhookResponse.text()
-                console.error('❌ Webhook failed:', webhookResponse.status, errorText)
+                console.error(`❌ [Deep Search] Webhook error body: ${errorText}`)
                 throw new Error(`Webhook returned ${webhookResponse.status}: ${errorText}`)
             }
 
-            console.log('✅ Deep Search webhook triggered successfully')
+            const duration = Date.now() - startTime
 
-            // Mettre à jour job à "processing"
-            await supabase
-                .from('deep_search_jobs')
-                .update({ status: 'processing', started_at: new Date().toISOString() })
-                .eq('id', job.id)
-
-            return NextResponse.json({
-                success: true,
-                job_id: job.id,
-                status: 'processing',
-                prospects_count: prospectCount,
-                message: 'Deep Search lancé avec succès'
+            logInfo('Deep Search job launched successfully', {
+                userId,
+                prospectCount: validated.prospectIds.length,
+                duration
             })
 
-        } catch (webhookError: any) {
-            console.error('❌ Webhook error:', webhookError)
-            // Rollback quota + mark job as failed
-            await rollback(supabase, user.id, quota.deep_search_used, job.id)
             return NextResponse.json({
-                error: `Erreur service Deep Search: ${webhookError.message}`
-            }, { status: 502 })
+                ok: true,
+                userId,
+                prospectCount: validated.prospectIds.length,
+                jobId: webhookPayload.job_id,
+                duration
+            })
+
+        } catch (fetchError: any) {
+            clearTimeout(timeoutId)
+
+            // Handle timeout
+            if (fetchError.name === 'AbortError') {
+                throw new Error('Webhook timeout after 30 seconds')
+            }
+
+            throw fetchError
         }
 
     } catch (error: any) {
-        console.error('❌ Deep Search API error:', error)
+        const duration = Date.now() - startTime
 
-        // Attempt rollback if we know who and how much
-        if (userToRefund && quotaToRefund > 0) {
-            try {
-                const supabase = await createClient()
-                const { data: currentQuota } = await supabase
-                    .from('quotas')
-                    .select('deep_search_used')
-                    .eq('user_id', userToRefund)
-                    .single()
+        logError('Deep Search job launch failed', error, {
+            userId,
+            duration
+        })
 
-                if (currentQuota) {
-                    await supabase
-                        .from('quotas')
-                        .update({ deep_search_used: Math.max(0, currentQuota.deep_search_used - quotaToRefund) })
-                        .eq('user_id', userToRefund)
-                }
-
-                if (jobToRollback) {
-                    await supabase
-                        .from('deep_search_jobs')
-                        .update({ status: 'failed', error_message: error.message })
-                        .eq('id', jobToRollback.id)
-                }
-            } catch (rollbackError) {
-                console.error('❌ Rollback error:', rollbackError)
-            }
-        }
-
-        return NextResponse.json({ error: error.message || 'Erreur serveur' }, { status: 500 })
-    }
-}
-
-// Helper function for rollback
-async function rollback(supabase: any, userId: string, originalUsed: number, jobId: string) {
-    try {
-        // Revert quota
-        await supabase
-            .from('quotas')
-            .update({ deep_search_used: originalUsed })
-            .eq('user_id', userId)
-
-        // Mark job as failed
-        await supabase
-            .from('deep_search_jobs')
-            .update({ status: 'failed', error_message: 'Webhook failed' })
-            .eq('id', jobId)
-
-        console.log('✅ Rollback completed')
-    } catch (rollbackError) {
-        console.error('❌ Rollback error:', rollbackError)
+        return NextResponse.json(
+            {
+                ok: false,
+                error: error.message || 'Internal server error',
+                userId,
+                duration
+            },
+            { status: 500 }
+        )
     }
 }
