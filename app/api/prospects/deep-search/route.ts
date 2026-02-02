@@ -5,9 +5,7 @@ import { logInfo, logError } from '@/lib/logger'
 
 // Schema pour valider le payload
 const deepSearchSchema = z.object({
-    prospectIds: z.array(z.number()).min(1),
-    userId: z.string(),
-    jobId: z.union([z.string(), z.number()]).optional()
+    prospectIds: z.array(z.number()).min(1)
 })
 
 /**
@@ -31,13 +29,6 @@ export async function POST(request: NextRequest) {
         // Parse and validate payload
         const body = await request.json()
         const validated = deepSearchSchema.parse(body)
-        userId = validated.userId
-
-        logInfo('Deep Search job launch requested', {
-            userId,
-            prospectCount: validated.prospectIds.length,
-            jobId: validated.jobId
-        })
 
         // Get user for auth verification
         const supabase = await createClient()
@@ -47,10 +38,12 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        // Vérifier que l'userId du payload correspond à l'utilisateur authentifié
-        if (user.id !== validated.userId) {
-            return NextResponse.json({ error: 'Unauthorized: user mismatch' }, { status: 403 })
-        }
+        userId = user.id
+
+        logInfo('Deep Search job launch requested', {
+            userId,
+            prospectCount: validated.prospectIds.length,
+        })
 
         // Get webhook URL from server env (checking both secure and public for compatibility)
         const webhookUrl = process.env.N8N_DEEP_SEARCH_WEBHOOK || process.env.NEXT_PUBLIC_N8N_DEEP_SEARCH_WEBHOOK
@@ -63,8 +56,8 @@ export async function POST(request: NextRequest) {
 
         // Préparer le payload pour n8n (format simple)
         const webhookPayload = {
-            user_id: validated.userId,
-            job_id: validated.jobId || Date.now(), // Générer un ID si non fourni
+            user_id: user.id,
+            job_id: Date.now(), // Générer un ID unique
             prospect_ids: validated.prospectIds
         }
 
