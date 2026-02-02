@@ -23,19 +23,43 @@ export function Topbar() {
 
     useEffect(() => {
         const fetchProfile = async () => {
-            const supabase = createClient()
-            const { data: { user } } = await supabase.auth.getUser()
+            try {
+                const supabase = createClient()
+                const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-            if (user) {
-                const { data: profile } = await supabase
+                console.log('🔍 [Topbar] Fetching profile for user:', user?.id)
+
+                if (authError) {
+                    console.error('❌ [Topbar] Auth error:', authError)
+                    return
+                }
+
+                if (!user) {
+                    console.warn('⚠️ [Topbar] No authenticated user')
+                    return
+                }
+
+                const { data: profile, error: profileError } = await supabase
                     .from('profiles')
                     .select('first_name, last_name, company_name')
                     .eq('id', user.id)
                     .single()
 
-                if (profile) setUserProfile(profile)
+                if (profileError) {
+                    console.error('❌ [Topbar] Profile fetch error:', profileError)
+                    return
+                }
+
+                console.log('✅ [Topbar] Profile loaded:', profile)
+
+                if (profile) {
+                    setUserProfile(profile)
+                }
+            } catch (error) {
+                console.error('❌ [Topbar] Unexpected error:', error)
             }
         }
+
         fetchProfile()
     }, [])
 

@@ -5,10 +5,12 @@ import { useRouter } from "next/navigation"
 import {
     Search, Filter, Columns, Download, Building2, Mail, Phone, MapPin, Calendar, Loader2, Zap, CheckSquare, Sparkles, Square
 } from "lucide-react"
+import { motion } from "framer-motion"
 import { supabase } from "@/lib/supabase"
 import { createClient } from "@/lib/supabase/client"
 import { ScrapeProspect } from "@/types"
 import { Button } from "@/components/ui/button"
+import { AIButton } from "@/components/ui/ai-button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -387,18 +389,28 @@ export default function ProspectsPage() {
                 </p>
 
                 {selectedProspects.size > 0 && (
-                    <Button
+                    <AIButton
                         onClick={handleBatchDeepSearch}
                         disabled={isLaunchingBatch}
-                        className="bg-orange-600 hover:bg-orange-700 text-white"
+                        loading={isLaunchingBatch}
+                        variant="primary"
+                        className="gap-2"
                     >
                         {isLaunchingBatch ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Lancement en cours...
+                            </>
                         ) : (
-                            <Zap className="mr-2 h-4 w-4" />
+                            <motion.div
+                                className="flex items-center gap-2"
+                                whileHover={{ scale: 1.05 }}
+                            >
+                                <Sparkles className="w-4 h-4" />
+                                <span>Lancer Deep Search ({selectedProspects.size})</span>
+                            </motion.div>
                         )}
-                        {isLaunchingBatch ? 'Lancement...' : `Lancer Deep Search (${selectedProspects.size})`}
-                    </Button>
+                    </AIButton>
                 )}
             </div>
 
