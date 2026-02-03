@@ -145,24 +145,51 @@ export default function ProspectPage() {
             setProspect(prospectData)
 
             // 2. Parse Scrapped Data JSON
-            if (prospectData.data && typeof prospectData.data === 'object') {
-                setScrapped(prospectData.data as ScrappedData)
-            } else {
-                setScrapped({})
+            let parsedScrapped: ScrappedData = {}
+            if (prospectData.data) {
+                if (typeof prospectData.data === 'string') {
+                    try {
+                        parsedScrapped = JSON.parse(prospectData.data)
+                    } catch (e) {
+                        console.error("Failed to parse prospect data", e)
+                    }
+                } else if (typeof prospectData.data === 'object') {
+                    parsedScrapped = prospectData.data as ScrappedData
+                }
             }
+            setScrapped(parsedScrapped)
 
             // 3. Fetch Deep Search Data
+            // Try fetch from dedicated table first
             const { data: deepRow } = await supabase
                 .from('prospect_deep_search_data')
                 .select('data')
                 .eq('id_prospect', targetId)
                 .single()
 
+            let parsedDeep: DeepSearchData = {}
+
+            // Priority 1: dedicated table
             if (deepRow && deepRow.data) {
-                setDeep(deepRow.data as DeepSearchData)
-            } else {
-                setDeep({})
+                if (typeof deepRow.data === 'string') {
+                    try {
+                        parsedDeep = JSON.parse(deepRow.data)
+                    } catch (e) { console.error("Failed to parse deep row", e) }
+                } else {
+                    parsedDeep = deepRow.data
+                }
             }
+            // Priority 2: column in scrape_prospect (fallback)
+            else if (prospectData.deep_search) {
+                if (typeof prospectData.deep_search === 'string') {
+                    try {
+                        parsedDeep = JSON.parse(prospectData.deep_search)
+                    } catch (e) { console.error("Failed to parse deep column", e) }
+                } else {
+                    parsedDeep = prospectData.deep_search
+                }
+            }
+            setDeep(parsedDeep)
 
             // 4. Navigation (previous/next)
             const { data: allIds } = await supabase
