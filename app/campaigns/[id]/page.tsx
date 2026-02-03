@@ -8,10 +8,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, Mail, Settings, Sparkles } from "lucide-react"
+import { ArrowLeft, Mail, Settings, Sparkles, Clock } from "lucide-react"
 import { motion } from "framer-motion"
 import { CampaignProspectsList } from "@/components/features/CampaignProspectsList"
 import { CampaignConfigEditor } from "@/components/features/CampaignConfigEditor"
+import { CampaignSchedulerModal } from "@/components/features/CampaignSchedulerModal"
+import { PlanningTab } from "@/components/features/PlanningTab"
 import { AIBadge } from "@/components/ui/ai-badge"
 import Link from "next/link"
 
@@ -24,6 +26,10 @@ export default function CampaignDetailPage() {
 
     const [campaign, setCampaign] = useState<Campaign | null>(null)
     const [loading, setLoading] = useState(true)
+
+    // State for Scheduling
+    const [schedule, setSchedule] = useState<any>(null)
+    const [queueStats, setQueueStats] = useState({ pending: 0, sent: 0, failed: 0, total: 0 })
 
     useEffect(() => {
         const fetchCampaign = async () => {
@@ -40,8 +46,40 @@ export default function CampaignDetailPage() {
             setLoading(false)
         }
 
+        const fetchSchedule = async () => {
+            const supabase = createClient()
+            const { data: sched } = await supabase
+                .from('campaign_schedules')
+                .select('*')
+                .eq('campaign_id', campaignId)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .single()
+
+            if (sched) {
+                setSchedule(sched)
+                // Fetch Queue Stats
+                const { count: pending } = await supabase.from('email_queue').select('*', { count: 'exact', head: true }).eq('campaign_id', campaignId).eq('status', 'pending')
+                const { count: sent } = await supabase.from('email_queue').select('*', { count: 'exact', head: true }).eq('campaign_id', campaignId).eq('status', 'sent')
+                const { count: failed } = await supabase.from('email_queue').select('*', { count: 'exact', head: true }).eq('campaign_id', campaignId).eq('status', 'failed')
+
+                setQueueStats({
+                    pending: pending || 0,
+                    sent: sent || 0,
+                    failed: failed || 0,
+                    total: (pending || 0) + (sent || 0) + (failed || 0)
+                })
+            }
+        }
+
         fetchCampaign()
+        fetchSchedule()
     }, [campaignId])
+
+    const handleScheduleUpdate = () => {
+        // Refresh page or re-fetch
+        window.location.reload()
+    }
 
     if (loading) {
         return (
@@ -99,6 +137,9 @@ export default function CampaignDetailPage() {
                         </p>
                     </div>
                     <div className="flex items-center gap-2">
+                        <div className="hidden md:block">
+                            <CampaignSchedulerModal campaignId={campaignId} onScheduled={handleScheduleUpdate} />
+                        </div>
                         <Badge variant={campaign.status === 'ACTIVE' ? 'default' : 'secondary'}>
                             {campaign.status}
                         </Badge>
@@ -113,10 +154,14 @@ export default function CampaignDetailPage() {
                 transition={{ duration: 0.4, delay: 0.1 }}
             >
                 <Tabs defaultValue={defaultTab} className="w-full">
-                    <TabsList className="grid w-full max-w-md grid-cols-2 mb-6">
+                    <TabsList className="grid w-full max-w-lg grid-cols-3 mb-6">
                         <TabsTrigger value="prospects" className="gap-2">
                             <Mail className="w-4 h-4" />
                             Prospects
+                        </TabsTrigger>
+                        <TabsTrigger value="planning" className="gap-2">
+                            <Clock className="w-4 h-4" />
+                            Planning
                         </TabsTrigger>
                         <TabsTrigger value="configuration" className="gap-2">
                             <Settings className="w-4 h-4" />
@@ -126,6 +171,13 @@ export default function CampaignDetailPage() {
 
                     <TabsContent value="prospects" className="space-y-4">
                         <CampaignProspectsList campaignId={campaignId} campaign={campaign} />
+                    </TabsContent>
+
+                    <TabsContent value="planning" className="space-y-4">
+                        <div className="mb-4 md:hidden">
+                            <CampaignSchedulerModal campaignId={campaignId} onScheduled={handleScheduleUpdate} />
+                        </div>
+                        <PlanningTab schedule={schedule} queueStats={queueStats} />
                     </TabsContent>
 
                     <TabsContent value="configuration" className="space-y-4">

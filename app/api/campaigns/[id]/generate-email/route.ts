@@ -53,6 +53,36 @@ export async function POST(
         const HARDCODED_URL = "https://n8n.srv903375.hstgr.cloud/webhook/neuraflow_scrappeur_generateur_cold_mail"
         const webhookUrl = process.env.N8N_WEBHOOK_COLD_EMAIL || process.env.NEXT_PUBLIC_N8N_WEBHOOK_COLD_EMAIL_URL || HARDCODED_URL
 
+        // 0. Safeguard: Filter out prospects who are already SENT or BOUNCED
+        // We don't want to regenerate emails for them or reset their status.
+        const { data: existingLinks, error: checkError } = await supabase
+            .from('campaign_prospects')
+            .select('prospect_id, email_status')
+            .eq('campaign_id', campaignId)
+            .in('prospect_id', prospectIds)
+
+        if (!checkError && existingLinks) {
+            const lockedIds = existingLinks
+                .filter(link => ['sent', 'bounced', 'replied'].includes(link.email_status))
+                .map(link => link.prospect_id)
+
+            if (lockedIds.length > 0) {
+                // Filter them out
+                const originalCount = prospectIds.length
+                prospectIds = prospectIds.filter(id => !lockedIds.includes(Number(id)) && !lockedIds.includes(String(id))) // Handle string/number mix
+                console.log(`🔒 Skipped ${originalCount - prospectIds.length} locked prospects (sent/bounced)`)
+            }
+        }
+
+        if (prospectIds.length === 0) {
+            return NextResponse.json({
+                success: true,
+                generated: 0,
+                message: "All selected prospects are locked (already sent/bounced)",
+                total: 0
+            })
+        }
+
         // 1. Création du Job (Tracking)
         const { data: job, error: jobError } = await supabase
             .from('cold_email_jobs')
