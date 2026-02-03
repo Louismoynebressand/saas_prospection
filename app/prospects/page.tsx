@@ -389,7 +389,11 @@ export default function ProspectsPage() {
                                                     📅 Date personnalisée
                                                 </Button>
                                             </PopoverTrigger>
-                                            <PopoverContent className="w-auto p-4" align="start" side="right">
+                                            <PopoverContent
+                                                className="w-auto p-4"
+                                                align="center"
+                                                sideOffset={4}
+                                            >
                                                 <div className="space-y-4">
                                                     <div className="flex items-center justify-between mb-2">
                                                         <p className="text-sm font-semibold">Sélection de période</p>
