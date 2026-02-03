@@ -874,7 +874,7 @@ export default function ProspectPage() {
                                             <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-indigo-50/50 gap-4">
                                                 <div className="flex items-center gap-3">
                                                     <Badge variant="outline" className="bg-white text-indigo-700 border-indigo-200 shadow-sm">
-                                                        Campagne: {link.campaign?.nom_campagne || "Inconnue"}
+                                                        Campagne: {link.campaign?.campaign_name || "Inconnue"}
                                                     </Badge>
                                                     <Badge
                                                         variant={link.email_status === 'generated' ? 'default' : 'secondary'}
@@ -894,7 +894,7 @@ export default function ProspectPage() {
                                                             className={link.email_status === 'not_generated' ? "bg-indigo-600 hover:bg-indigo-700 text-white" : "text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700"}
                                                         >
                                                             <Sparkles className="w-3 h-3 mr-2" />
-                                                            {link.email_status === 'generated' ? "Régénérer" : "Générer l'email"}
+                                                            {link.email_status === 'generated' ? "Regénérer" : "Générer l'email"}
                                                         </Button>
                                                     )}
 
