@@ -242,13 +242,13 @@ export function ProspectDetailModal({
                                 setTimeout(() => setCopied(false), 2000)
                             }}
                         >
-                            <span className="truncate">{text}</span>
+                            <span className="truncate break-words whitespace-normal">{text}</span>
                             {copied ? (
-                                <span className="text-xs text-green-600 font-bold bg-green-50 px-1.5 py-0.5 rounded animate-in fade-in zoom-in">
-                                    ✅ Copié
+                                <span className="text-xs text-green-600 font-bold bg-green-50 px-1.5 py-0.5 rounded animate-in fade-in zoom-in shrink-0">
+                                    ✅
                                 </span>
                             ) : (
-                                <Copy className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                                <Copy className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                             )}
                         </div>
                     </TooltipTrigger>
@@ -263,6 +263,19 @@ export function ProspectDetailModal({
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-[95vw] lg:max-w-7xl w-full max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
+                <style jsx global>{`
+                    @keyframes ai-pulse-border {
+                        0%, 100% { border-color: rgba(99, 102, 241, 0.3); box-shadow: 0 0 10px rgba(99, 102, 241, 0.1); }
+                        50% { border-color: rgba(168, 85, 247, 0.6); box-shadow: 0 0 20px rgba(168, 85, 247, 0.2); }
+                    }
+                    .ai-analysis-card {
+                        animation: ai-pulse-border 3s ease-in-out infinite;
+                        background: linear-gradient(135deg, rgba(255,255,255,0.8), rgba(245,243,255,0.5));
+                    }
+                    .dark .ai-analysis-card {
+                        background: linear-gradient(135deg, rgba(30,27,75,0.4), rgba(46,16,101,0.2));
+                    }
+                `}</style>
                 <DialogHeader className="p-6 border-b shrink-0 bg-white dark:bg-slate-950 z-10">
                     <DialogTitle className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                         <div className="flex flex-col gap-1 min-w-0">
@@ -386,15 +399,15 @@ export function ProspectDetailModal({
                                 </div>
                                 <div className="p-3 bg-white dark:bg-slate-900 border rounded-lg shadow-sm">
                                     <span className="text-[10px] items-center flex gap-1 font-bold text-muted-foreground uppercase mb-1"><FileDown className="w-3 h-3" /> Siret</span>
-                                    <div className="font-mono text-sm truncate"><CopyButton text={deep.siret_siege} label="Siret" /></div>
+                                    <div className="font-mono text-sm break-all"><CopyButton text={deep.siret_siege} label="Siret" /></div>
                                 </div>
                                 <div className="p-3 bg-white dark:bg-slate-900 border rounded-lg shadow-sm">
                                     <span className="text-[10px] items-center flex gap-1 font-bold text-muted-foreground uppercase mb-1">Code NAF</span>
-                                    <p className="font-mono text-sm">{deep.naf || "-"}</p>
+                                    <p className="font-mono text-sm break-normal"><CopyButton text={deep.naf || "-"} label="NAF" /></p>
                                 </div>
                                 <div className="p-3 bg-white dark:bg-slate-900 border rounded-lg shadow-sm">
                                     <span className="text-[10px] items-center flex gap-1 font-bold text-muted-foreground uppercase mb-1">Création</span>
-                                    <p className="text-sm">{deep.date_creation || "-"}</p>
+                                    <p className="text-sm"><CopyButton text={deep.date_creation || "-"} label="Date création" /></p>
                                 </div>
                                 <div className="p-3 bg-white dark:bg-slate-900 border rounded-lg shadow-sm">
                                     <span className="text-[10px] items-center flex gap-1 font-bold text-muted-foreground uppercase mb-1">Effectif</span>
@@ -416,19 +429,21 @@ export function ProspectDetailModal({
                                 </div>
                             </div>
 
-                            {/* 2. AI Analysis */}
+                            {/* 2. AI Analysis (Revamped) */}
                             {(deep.points_forts || deep.clients_cibles || deep.style_communication) && (
-                                <div className="p-5 rounded-xl border border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10 space-y-4">
-                                    <h4 className="flex items-center gap-2 text-primary font-bold text-sm tracking-wide">
-                                        <Sparkles className="w-4 h-4 fill-primary/20" /> ANALYSE IA
+                                <div className="p-5 rounded-xl border ai-analysis-card space-y-4 shadow-lg backdrop-blur-sm">
+                                    <h4 className="flex items-center gap-2 text-indigo-700 dark:text-indigo-400 font-bold text-sm tracking-wide">
+                                        <Sparkles className="w-4 h-4 fill-indigo-200 animate-pulse" /> ANALYSE IA
                                     </h4>
                                     <div className="grid md:grid-cols-2 gap-6">
-                                        {deep.points_forts && (
+                                        {deep.points_forts && deep.points_forts.length > 0 && (
                                             <div className="space-y-2">
                                                 <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Points Forts</span>
                                                 <div className="flex flex-wrap gap-2">
                                                     {deep.points_forts.map((pt, i) => (
-                                                        <Badge key={i} variant="secondary" className="bg-background/80 hover:bg-background text-xs border shadow-sm px-2 py-1">{pt}</Badge>
+                                                        <Badge key={i} variant="secondary" className="bg-white/80 dark:bg-slate-900/80 hover:bg-white text-xs border border-indigo-100 shadow-sm px-2 py-1 cursor-pointer" onClick={() => handleCopy(pt)}>
+                                                            {pt}
+                                                        </Badge>
                                                     ))}
                                                 </div>
                                             </div>
@@ -437,13 +452,17 @@ export function ProspectDetailModal({
                                             {deep.style_communication && (
                                                 <div className="space-y-1">
                                                     <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Ton & Style</span>
-                                                    <p className="text-sm italic text-foreground/80 bg-background/50 p-2 rounded border border-dashed">"{deep.style_communication}"</p>
+                                                    <p className="text-sm italic text-foreground/80 bg-white/60 dark:bg-slate-900/60 p-2 rounded border border-indigo-100/50 dark:border-indigo-800/50 border-dashed">
+                                                        <CopyButton text={deep.style_communication} label="Style" />
+                                                    </p>
                                                 </div>
                                             )}
                                             {deep.clients_cibles && (
-                                                <div className="space-y-1">
+                                                <div className="space-y-2">
                                                     <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Cible</span>
-                                                    <p className="text-sm text-foreground/90">{deep.clients_cibles}</p>
+                                                    <p className="text-sm text-foreground/90 bg-white/60 dark:bg-slate-900/60 p-2 rounded">
+                                                        <CopyButton text={deep.clients_cibles} label="Cible" />
+                                                    </p>
                                                 </div>
                                             )}
                                         </div>
@@ -460,19 +479,21 @@ export function ProspectDetailModal({
                                     <div className="grid sm:grid-cols-2 gap-3">
                                         {deep.dirigeants.map((d, i) => {
                                             const age = calculateAge(d.date_de_naissance)
+                                            const fullName = `${d.prenoms || ""} ${d.nom || ""}`.trim()
                                             return (
                                                 <div key={i} className="flex flex-col p-3 border rounded-lg bg-white dark:bg-slate-900 shadow-sm hover:border-primary/50 transition-colors">
                                                     <div className="font-bold flex items-center gap-2 text-sm text-foreground">
-                                                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs uppercase">
+                                                        <div className="h-8 w-8 shrink-0 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs uppercase">
                                                             {(d.prenoms?.[0] || "") + (d.nom?.[0] || "")}
                                                         </div>
-                                                        {d.prenoms} {d.nom}
+                                                        <CopyButton text={fullName} label="Nom dirigeant" />
                                                     </div>
                                                     <div className="text-xs text-muted-foreground flex flex-col gap-1 mt-2 ml-10">
-                                                        <Badge variant="outline" className="bg-muted/50 font-normal w-fit">{d.qualite || "Dirigeant"}</Badge>
+                                                        <Badge variant="outline" className="bg-muted/50 font-normal w-fit"><CopyButton text={d.qualite || "Dirigeant"} label="Qualité" /></Badge>
                                                         {d.date_de_naissance && (
                                                             <span className="text-[11px] text-muted-foreground">
-                                                                Né(e) en {d.date_de_naissance} {age ? `(${age} ans)` : ''}
+                                                                <CopyButton text={`Né(e) en ${d.date_de_naissance}`} label="Date naissance" />
+                                                                {age ? ` (${age} ans)` : ''}
                                                             </span>
                                                         )}
                                                     </div>
@@ -502,7 +523,7 @@ export function ProspectDetailModal({
                                                     return (
                                                         <div key={i} className="flex items-start gap-2 text-sm text-muted-foreground group">
                                                             <CheckCircle2 className="w-4 h-4 text-green-500/70 mt-0.5 shrink-0 group-hover:text-green-600 transition-colors" />
-                                                            <span className="group-hover:text-foreground transition-colors">{key}</span>
+                                                            <span className="group-hover:text-foreground transition-colors cursor-pointer" onClick={() => handleCopy(key)}>{key}</span>
                                                         </div>
                                                     )
                                                 })}
