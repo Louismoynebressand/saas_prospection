@@ -422,17 +422,23 @@ export default function ProspectPage() {
 
     // --- DATA HELPERS ---
     const getPhoneNumber = () => {
-        // Priority check for phone numbers
+        // 1. Direct checks (case insensitive for safety)
         if (scrapped["Téléphone"]) return scrapped["Téléphone"]
         if (scrapped["telephone"]) return scrapped["telephone"]
         if ((scrapped as any)["Phone"]) return (scrapped as any)["Phone"]
+        if ((scrapped as any)["phone"]) return (scrapped as any)["phone"]
+        if ((scrapped as any)["Tel"]) return (scrapped as any)["Tel"]
 
-        // Check in Infos array
+        // 2. Check in Infos array (recursive deep search)
         if (scrapped["Infos"]) {
             for (const key in scrapped["Infos"]) {
                 const items = scrapped["Infos"][key]
                 if (Array.isArray(items)) {
-                    const phoneItem = items.find(i => Object.keys(i).some(k => k.toLowerCase().includes("téléphone") || k.toLowerCase().includes("telephone")))
+                    // Look for key containing "téléphone" or "phone" or "mobile"
+                    const phoneItem = items.find(i => {
+                        const k = Object.keys(i)[0]?.toLowerCase() || ""
+                        return k.includes("téléphone") || k.includes("telephone") || k.includes("phone") || k.includes("mobile")
+                    })
                     if (phoneItem) return Object.values(phoneItem)[0]
                 }
             }
