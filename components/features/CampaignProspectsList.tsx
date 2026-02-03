@@ -12,13 +12,14 @@ import { AddProspectsToCampaignModal } from "./AddProspectsToCampaignModal"
 import { ProspectViewModal } from "./ProspectViewModal"
 import { ProspectDetailModal } from "./ProspectDetailModal"
 import { EmailViewerModal } from "./EmailViewerModal"
-import type { CampaignProspectLink, EmailStatus } from "@/types"
+import type { CampaignProspectLink, EmailStatus, Campaign } from "@/types"
 
 interface CampaignProspectsListProps {
     campaignId: string
+    campaign?: Campaign
 }
 
-export function CampaignProspectsList({ campaignId }: CampaignProspectsListProps) {
+export function CampaignProspectsList({ campaignId, campaign }: CampaignProspectsListProps) {
     const [prospects, setProspects] = useState<CampaignProspectLink[]>([])
     const [loading, setLoading] = useState(true)
     const [selectedProspects, setSelectedProspects] = useState<Set<string>>(new Set())
@@ -418,6 +419,7 @@ export function CampaignProspectsList({ campaignId }: CampaignProspectsListProps
                 open={!!viewingEmail}
                 onOpenChange={(open) => !open && setViewingEmail(null)}
                 email={viewingEmail}
+                campaign={campaign}
             />
 
             <ProspectViewModal

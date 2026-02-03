@@ -125,7 +125,7 @@ export default function CampaignDetailPage() {
                     </TabsList>
 
                     <TabsContent value="prospects" className="space-y-4">
-                        <CampaignProspectsList campaignId={campaignId} />
+                        <CampaignProspectsList campaignId={campaignId} campaign={campaign} />
                     </TabsContent>
 
                     <TabsContent value="configuration" className="space-y-4">

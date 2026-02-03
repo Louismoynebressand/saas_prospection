@@ -10,7 +10,7 @@ import {
 } from "lucide-react"
 import { motion } from "framer-motion"
 import { differenceInYears, isValid } from "date-fns"
-import { supabase } from "@/lib/supabase"
+import { createClient } from "@/lib/supabase/client"
 import { ScrapeProspect } from "@/types"
 import { Button } from "@/components/ui/button"
 import { AIButton } from "@/components/ui/ai-button"
@@ -132,6 +132,7 @@ export default function ProspectPage() {
     const fetchProspectData = async (targetId: string) => {
         try {
             setLoading(true)
+            const supabase = createClient()
 
             // 1. Fetch Prospect Core Data
             const { data: prospectData, error } = await supabase
@@ -171,7 +172,7 @@ export default function ProspectPage() {
                 .order('created_at', { ascending: false })
 
             if (allIds) {
-                const currentIndex = allIds.findIndex(x => x.id_prospect === targetId)
+                const currentIndex = allIds.findIndex((x: { id_prospect: string }) => x.id_prospect === targetId)
                 if (currentIndex !== -1) {
                     setPrevId(currentIndex < allIds.length - 1 ? allIds[currentIndex + 1].id_prospect : null)
                     setNextId(currentIndex > 0 ? allIds[currentIndex - 1].id_prospect : null)
@@ -188,6 +189,7 @@ export default function ProspectPage() {
 
     // Fetch campaign links
     const fetchCampaignLinks = async (targetId: string) => {
+        const supabase = createClient()
         const { data, error } = await supabase
             .from('campaign_prospects')
             .select(`
@@ -243,6 +245,7 @@ export default function ProspectPage() {
 
     const handleDelete = async () => {
         if (!confirm("Voulez-vous vraiment supprimer ce prospect ?")) return
+        const supabase = createClient()
         const { error } = await supabase.from('scrape_prospect').delete().eq('id_prospect', id)
         if (!error) {
             toast.success("Prospect supprimé")
