@@ -90,6 +90,28 @@ export async function POST(
             console.error('⚠️ Warning: Failed to upsert campaign links:', linksError)
         }
 
+        // 2.5. Mise à jour du Quota (Incrémentation)
+        const { data: quota } = await supabase
+            .from('quotas')
+            .select('cold_emails_used, cold_emails_limit')
+            .eq('user_id', user.id)
+            .single()
+
+        if (quota) {
+            const { error: usageError } = await supabase
+                .from('quotas')
+                .update({
+                    cold_emails_used: (quota.cold_emails_used || 0) + prospectIds.length
+                })
+                .eq('user_id', user.id)
+
+            if (usageError) {
+                console.error('❌ Failed to update quota usage:', usageError)
+            } else {
+                console.log(`✅ Quota updated: +${prospectIds.length} used`)
+            }
+        }
+
         // 3. Payload Webhook N8N
         const webhookPayload = {
             user_id: user.id,
