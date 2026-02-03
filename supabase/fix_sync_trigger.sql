@@ -1,58 +1,46 @@
--- Fonction pour synchroniser automatiquement les emails générés de campaign_prospects vers cold_email_generations
--- Cela permet de remplir le Dashboard même si N8N ne tape que dans campaign_prospects.
+-- Trigger pour synchroniser automatiquement les emails générés (via N8N)
+-- vers la table campaign_prospects utilisée par l'interface UI
 
-CREATE OR REPLACE FUNCTION public.sync_cold_email_generation()
+CREATE OR REPLACE FUNCTION public.sync_cold_email_to_campaign_link()
 RETURNS TRIGGER AS $$
-DECLARE
-  v_user_id uuid;
-  v_latest_job_id uuid;
 BEGIN
-  -- On ne déclenche que si le statut passe à 'generated' et qu'il y a du contenu
-  IF NEW.email_status = 'generated' AND NEW.generated_email_content IS NOT NULL THEN
-    
-    -- 1. Récupérer l'ID utilisateur via la campagne
-    SELECT user_id INTO v_user_id
-    FROM public.cold_email_campaigns
-    WHERE id = NEW.campaign_id;
-    
-    -- 2. Récupérer le Job ID le plus pertinent (le dernier actif pour cette campagne)
-    -- C'est une heuristique car campaign_prospects ne stocke pas le job_id directement
-    SELECT id INTO v_latest_job_id
-    FROM public.cold_email_jobs
-    WHERE campaign_id = NEW.campaign_id
-    ORDER BY created_at DESC
-    LIMIT 1;
-    
-    -- Si aucun job trouvé, on ne peut pas insérer (car job_id not null souvent), 
-    -- sauf si on a rendu job_id nullable. Dans le doute, on insert seulement si on a un job.
-    IF v_latest_job_id IS NOT NULL THEN
-        INSERT INTO public.cold_email_generations (
-          job_id,
-          user_id,
-          campaign_id,
-          prospect_id,
-          subject,
-          message,
-          created_at
-        ) VALUES (
-          v_latest_job_id,
-          v_user_id,
-          NEW.campaign_id,
-          NEW.prospect_id::text, -- Cast bigint to text
-          NEW.generated_email_subject,
-          NEW.generated_email_content,
-          NOW()
-        );
-    END IF;
+    -- 1. Mettre à jour le lien prospect-campagne avec le contenu généré
+    UPDATE public.campaign_prospects
+    SET 
+        email_status = 'generated',
+        generated_email_subject = NEW.subject,
+        generated_email_content = NEW.message,
+        email_generated_at = NOW(),
+        updated_at = NOW()
+    WHERE campaign_id = NEW.campaign_id 
+      AND prospect_id = NEW.prospect_id;
 
-  END IF;
-  RETURN NEW;
+    -- 2. Vérifier si tous les prospects du Job ont été générés pour passer le Job en 'completed'
+    -- (Optionnel mais recommandé pour la cohérence)
+    UPDATE public.cold_email_jobs
+    SET 
+        status = 'completed',
+        completed_at = NOW()
+    WHERE id = NEW.job_id
+      AND (
+          SELECT count(*) 
+          FROM public.cold_email_generations 
+          WHERE job_id = NEW.job_id
+      ) >= (
+          SELECT jsonb_array_length(prospect_ids) 
+          FROM public.cold_email_jobs 
+          WHERE id = NEW.job_id
+      );
+
+    RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Création du Trigger
-DROP TRIGGER IF EXISTS on_email_generated ON public.campaign_prospects;
-CREATE TRIGGER on_email_generated
-  AFTER UPDATE ON public.campaign_prospects
-  FOR EACH ROW
-  EXECUTE FUNCTION public.sync_cold_email_generation();
+-- Suppression du trigger s'il existe déjà pour éviter les doublons
+DROP TRIGGER IF EXISTS on_cold_email_generated ON public.cold_email_generations;
+
+-- Création du trigger
+CREATE TRIGGER on_cold_email_generated
+AFTER INSERT ON public.cold_email_generations
+FOR EACH ROW
+EXECUTE FUNCTION public.sync_cold_email_to_campaign_link();

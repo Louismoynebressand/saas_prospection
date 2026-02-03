@@ -359,9 +359,9 @@ export function ProspectDetailModal({
                                     {campaignLink.generated_email_content && (
                                         <div className="pt-2 border-t">
                                             <p className="text-xs text-muted-foreground mb-2">Aperçu email</p>
-                                            <div className="bg-gray-50 p-3 rounded text-xs max-h-40 overflow-y-auto">
+                                            <div className="bg-gray-50 p-3 rounded text-xs max-h-80 overflow-y-auto">
                                                 <p className="font-semibold mb-1">{campaignLink.generated_email_subject}</p>
-                                                <p className="whitespace-pre-wrap text-muted-foreground">{campaignLink.generated_email_content.substring(0, 200)}...</p>
+                                                <p className="whitespace-pre-wrap text-muted-foreground">{campaignLink.generated_email_content}</p>
                                             </div>
                                         </div>
                                     )}
