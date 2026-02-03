@@ -11,7 +11,7 @@ import {
 import { motion } from "framer-motion"
 import { differenceInYears, isValid } from "date-fns"
 import { createClient } from "@/lib/supabase/client"
-import { ScrapeProspect } from "@/types"
+import { ScrapeProspect, CampaignProspectLink, Campaign } from "@/types"
 import { Button } from "@/components/ui/button"
 import { AIButton } from "@/components/ui/ai-button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -216,30 +216,44 @@ export default function ProspectPage() {
 
     // Fetch campaign links
     const fetchCampaignLinks = async (targetId: string) => {
-        const supabase = createClient()
-        const { data, error } = await supabase
-            .from('campaign_prospects')
-            .select(`
-                *,
-                campaign:cold_email_campaigns (
-                    id,
-                    nom_campagne,
-                    closing_phrase,
-                    signature_name,
-                    signature_title,
-                    signature_company,
-                    signature_phone,
-                    signature_email,
-                    signature_website_text,
-                    signature_custom_link_text,
-                    signature_ps
-                )
-            `)
-            .eq('prospect_id', targetId)
-            .order('created_at', { ascending: false })
+        try {
+            const supabase = createClient()
 
-        if (data) {
-            setCampaignLinks(data)
+            // 1. Get links first (no complex join to avoid errors)
+            const { data: links, error: linkError } = await supabase
+                .from('campaign_prospects')
+                .select('*')
+                .eq('prospect_id', targetId)
+                .order('created_at', { ascending: false })
+
+            if (linkError) {
+                console.error("Link error:", linkError)
+                return
+            }
+
+            if (!links || links.length === 0) {
+                setCampaignLinks([])
+                return
+            }
+
+            // 2. Get campaigns details manually
+            const campaignIds = Array.from(new Set((links as CampaignProspectLink[]).map((l: CampaignProspectLink) => l.campaign_id)))
+            const { data: campaigns, error: campError } = await supabase
+                .from('cold_email_campaigns')
+                .select('*')
+                .in('id', campaignIds)
+
+            if (campError) console.error("Campaign error:", campError)
+
+            // 3. Merge data
+            const enriched = (links as CampaignProspectLink[]).map((link: CampaignProspectLink) => ({
+                ...link,
+                campaign: (campaigns as Campaign[])?.find((c: Campaign) => c.id === link.campaign_id)
+            }))
+
+            setCampaignLinks(enriched)
+        } catch (e) {
+            console.error("Error in fetchCampaignLinks", e)
         }
     }
 
@@ -509,14 +523,17 @@ export default function ProspectPage() {
                                 </AIButton>
                             ) : null}
 
-                            <Button
-                                variant="default"
-                                onClick={() => setIsEmailModalOpen(true)}
-                                className="bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-lg shadow-indigo-500/20"
-                            >
-                                <Sparkles className="mr-2 h-4 w-4" />
-                                Générer Email
-                            </Button>
+                            {/* Bouton Générer Email (Masqué si déjà généré) */}
+                            {!campaignLinks.some(l => l.email_status === 'generated' || l.email_status === 'sent') && (
+                                <Button
+                                    variant="default"
+                                    onClick={() => setIsEmailModalOpen(true)}
+                                    className="bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-lg shadow-indigo-500/20"
+                                >
+                                    <Sparkles className="mr-2 h-4 w-4" />
+                                    Générer Email
+                                </Button>
+                            )}
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button variant="outline">Actions <ChevronDown className="ml-2 h-4 w-4" /></Button>
