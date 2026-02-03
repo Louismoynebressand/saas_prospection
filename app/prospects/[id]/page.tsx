@@ -867,78 +867,108 @@ export default function ProspectPage() {
                                         <Mail className="w-4 h-4 text-indigo-600" /> Emails Générés & Campagnes
                                     </CardTitle>
                                 </CardHeader>
-                                <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                                <CardContent className="p-0 flex flex-col gap-0 divide-y divide-indigo-100">
                                     {campaignLinks.map((link) => (
-                                        <div key={link.id} className="bg-white p-4 rounded-lg border shadow-sm space-y-3">
-                                            <div className="flex justify-between items-start">
-                                                <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">
-                                                    Campagne: {link.campaign?.nom_campagne || "Inconnue"}
-                                                </Badge>
-                                                <Badge
-                                                    variant={link.email_status === 'generated' ? 'default' : 'secondary'}
-                                                    className={link.email_status === 'generated' ? 'bg-green-600' : ''}
-                                                >
-                                                    {link.email_status === 'generated' ? 'Généré' : link.email_status === 'sent' ? 'Envoyé' : 'En cours...'}
-                                                </Badge>
+                                        <div key={link.id} className="bg-white">
+                                            {/* Campaign Header & Actions */}
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-indigo-50/50 gap-4">
+                                                <div className="flex items-center gap-3">
+                                                    <Badge variant="outline" className="bg-white text-indigo-700 border-indigo-200 shadow-sm">
+                                                        Campagne: {link.campaign?.nom_campagne || "Inconnue"}
+                                                    </Badge>
+                                                    <Badge
+                                                        variant={link.email_status === 'generated' ? 'default' : 'secondary'}
+                                                        className={link.email_status === 'generated' ? 'bg-green-600 shadow-sm' : ''}
+                                                    >
+                                                        {link.email_status === 'generated' ? 'Généré' : link.email_status === 'sent' ? 'Envoyé' : 'En cours...'}
+                                                    </Badge>
+                                                </div>
+
+                                                <div className="flex items-center gap-2">
+                                                    {/* Generate / Regenerate Action */}
+                                                    {(link.email_status === 'not_generated' || link.email_status === 'generated') && (
+                                                        <Button
+                                                            variant={link.email_status === 'generated' ? "ghost" : "default"}
+                                                            size="sm"
+                                                            onClick={() => setIsEmailModalOpen(true)}
+                                                            className={link.email_status === 'not_generated' ? "bg-indigo-600 hover:bg-indigo-700 text-white" : "text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700"}
+                                                        >
+                                                            <Sparkles className="w-3 h-3 mr-2" />
+                                                            {link.email_status === 'generated' ? "Régénérer" : "Générer l'email"}
+                                                        </Button>
+                                                    )}
+
+                                                    {/* SEND Action */}
+                                                    {link.email_status === 'generated' && (
+                                                        <Button
+                                                            variant="default"
+                                                            size="sm"
+                                                            onClick={async () => {
+                                                                try {
+                                                                    const response = await fetch(`/api/campaigns/${link.campaign_id}/send-email`, {
+                                                                        method: 'POST',
+                                                                        headers: { 'Content-Type': 'application/json' },
+                                                                        body: JSON.stringify({ prospectIds: [id] })
+                                                                    })
+                                                                    if (!response.ok) throw new Error('Erreur envoi')
+                                                                    const res = await response.json()
+                                                                    toast.success("Email envoyé avec succès !")
+                                                                    fetchCampaignLinks(id)
+                                                                } catch (e) {
+                                                                    toast.error("Erreur lors de l'envoi de l'email")
+                                                                }
+                                                            }}
+                                                            className="bg-green-600 hover:bg-green-700 text-white shadow-sm transition-all hover:scale-105"
+                                                        >
+                                                            <Zap className="w-3 h-3 mr-2 fill-current" /> Envoyer maintenant
+                                                        </Button>
+                                                    )}
+                                                </div>
                                             </div>
 
-                                            {link.email_status === 'generated' && link.generated_email_content ? (
-                                                <div className="space-y-4">
-                                                    <p className="text-xs font-semibold border-b pb-2">{link.generated_email_subject}</p>
+                                            {/* Content Body */}
+                                            <div className="p-6">
+                                                {link.email_status === 'generated' && link.generated_email_content ? (
+                                                    <div className="max-w-4xl mx-auto border rounded-xl shadow-sm overflow-hidden bg-gray-50/50">
+                                                        <div className="border-b bg-white p-4">
+                                                            <p className="text-sm font-medium text-gray-500 mb-1">Objet</p>
+                                                            <p className="font-semibold text-lg text-gray-900">{link.generated_email_subject}</p>
+                                                        </div>
+                                                        <div className="p-6 md:p-8 bg-white min-h-[300px]">
+                                                            <div dangerouslySetInnerHTML={{ __html: link.generated_email_content }} className="prose prose-indigo max-w-none" />
 
-                                                    {/* Email Content Body */}
-                                                    <div
-                                                        className="text-xs text-muted-foreground bg-gray-50 p-3 rounded border space-y-4"
-                                                    >
-                                                        {/* Main Content (HTML rendered) */}
-                                                        <div dangerouslySetInnerHTML={{ __html: link.generated_email_content }} />
+                                                            {/* Signature Preview */}
+                                                            <div className="mt-8 pt-6 border-t border-gray-100">
+                                                                <p className="mb-4 text-gray-700">{link.campaign?.closing_phrase || "Cordialement,"}</p>
+                                                                <div>
+                                                                    <p className="font-bold text-gray-900">{link.campaign?.signature_name || "L'équipe"}</p>
+                                                                    {link.campaign?.signature_title && <p className="text-gray-600 text-sm">{link.campaign.signature_title}</p>}
+                                                                    {link.campaign?.signature_company && <p className="text-indigo-600 font-medium text-sm mt-0.5">{link.campaign.signature_company}</p>}
 
-                                                        {/* Signature Block */}
-                                                        <div className="pt-4 border-t border-gray-200 mt-4">
-                                                            <p className="mb-2">{link.campaign?.closing_phrase || "Cordialement,"}</p>
-
-                                                            <div className="font-medium text-gray-900">
-                                                                {link.campaign?.signature_name || "L'équipe"}
-                                                            </div>
-                                                            {link.campaign?.signature_title && (
-                                                                <div className="text-gray-600">{link.campaign.signature_title}</div>
-                                                            )}
-                                                            {link.campaign?.signature_company && (
-                                                                <div className="font-semibold text-indigo-700">{link.campaign.signature_company}</div>
-                                                            )}
-
-                                                            <div className="mt-2 space-y-0.5 text-xs text-gray-500">
-                                                                {link.campaign?.signature_email && (
-                                                                    <div>{link.campaign.signature_email}</div>
-                                                                )}
-                                                                {link.campaign?.signature_phone && (
-                                                                    <div>{link.campaign.signature_phone}</div>
-                                                                )}
-                                                                {link.campaign?.signature_website_text && (
-                                                                    <div>{link.campaign.signature_website_text}</div>
-                                                                )}
-                                                            </div>
-
-                                                            {link.campaign?.signature_ps && (
-                                                                <div className="mt-3 text-xs italic text-gray-500">
-                                                                    PS: {link.campaign.signature_ps}
+                                                                    <div className="mt-2 text-xs text-gray-500 space-y-0.5">
+                                                                        {link.campaign?.signature_email && <p>{link.campaign.signature_email}</p>}
+                                                                        {link.campaign?.signature_phone && <p>{link.campaign.signature_phone}</p>}
+                                                                    </div>
                                                                 </div>
-                                                            )}
+                                                            </div>
                                                         </div>
                                                     </div>
-
-                                                    <Button size="sm" variant="outline" className="w-full text-xs h-7" onClick={() => {
-                                                        // Fallback alert for raw content if needed, or better: open a modal
-                                                        alert("Contenu brut pour vérification:\n" + link.generated_email_content)
-                                                    }}>
-                                                        Voir brut (Debug)
-                                                    </Button>
-                                                </div>
-                                            ) : (
-                                                <div className="py-4 text-center text-xs text-muted-foreground flex items-center justify-center gap-2">
-                                                    <LoaderIcon className="w-3 h-3 animate-spin" /> Génération en cours...
-                                                </div>
-                                            )}
+                                                ) : (
+                                                    <div className="py-12 text-center text-muted-foreground bg-gray-50/50 rounded-lg border border-dashed flex flex-col items-center justify-center gap-3">
+                                                        {link.email_status === 'not_generated' ? (
+                                                            <>
+                                                                <Sparkles className="w-8 h-8 text-indigo-200" />
+                                                                <p>Aucun email généré pour cette campagne.</p>
+                                                                <Button variant="outline" onClick={() => setIsEmailModalOpen(true)}>Générer maintenant</Button>
+                                                            </>
+                                                        ) : (
+                                                            <div className="flex items-center gap-2">
+                                                                <LoaderIcon className="w-4 h-4 animate-spin" /> Chargement...
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     ))}
                                 </CardContent>
