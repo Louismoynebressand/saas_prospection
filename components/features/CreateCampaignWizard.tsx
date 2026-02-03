@@ -124,6 +124,7 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
         signature_phone: "",
         signature_email: "",
         signature_ps: "",
+        closing_phrase: "Cordialement,",
         desired_tone: "professional",
         formal: true,
         email_length: "STANDARD" as "CONCISE" | "STANDARD" | "DETAILED",
@@ -273,6 +274,7 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
                 signature_phone: data.signature_phone || prev.signature_phone,
                 signature_email: data.signature_email || prev.signature_email,
                 signature_ps: data.signature_ps || prev.signature_ps,
+                closing_phrase: data.closing_phrase || prev.closing_phrase,
 
                 // Smart Mapping for Enums
                 desired_tone: data.desired_tone ? mapTone(data.desired_tone) : prev.desired_tone,
@@ -321,6 +323,7 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
             signature_phone: formData.signature_phone,
             signature_email: formData.signature_email,
             signature_ps: formData.signature_ps,
+            closing_phrase: formData.closing_phrase,
             desired_tone: formData.desired_tone,
             formal: formData.formal,
             email_length: formData.email_length,
@@ -446,6 +449,7 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
                 signature_phone: "",
                 signature_email: "",
                 signature_ps: "",
+                closing_phrase: "Cordialement,",
                 desired_tone: "professional",
                 formal: true,
                 email_length: "STANDARD",
@@ -678,18 +682,32 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
     )
 
     const renderSignatureStep = () => (
-        <div className="py-4">
-            <EmailSignatureEditor
-                initialData={formData}
-                onSave={async (html, config) => {
-                    setFormData(prev => ({
-                        ...prev,
-                        ...config,
-                        signature_html: html
-                    }))
-                }}
-                showAIAssist={aiAnalysisComplete}
-            />
+        <div className="py-4 space-y-6">
+            <FieldWithTooltip
+                label="Formule de politesse"
+                tooltip="La phrase qui précède votre signature (ex: Cordialement, Bien à vous, A très vite...)"
+            >
+                <Input
+                    value={formData.closing_phrase}
+                    onChange={(e) => updateFormData('closing_phrase', e.target.value)}
+                    placeholder="ex: Cordialement,"
+                    className="h-11 border-2 focus:border-primary transition-all max-w-md"
+                />
+            </FieldWithTooltip>
+
+            <div className="border-t pt-2">
+                <EmailSignatureEditor
+                    initialData={formData}
+                    onSave={async (html, config) => {
+                        setFormData(prev => ({
+                            ...prev,
+                            ...config,
+                            signature_html: html
+                        }))
+                    }}
+                    showAIAssist={aiAnalysisComplete}
+                />
+            </div>
         </div>
     )
 

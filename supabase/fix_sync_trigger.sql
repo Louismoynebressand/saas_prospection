@@ -1,22 +1,27 @@
--- Trigger pour synchroniser automatiquement les emails générés (via N8N)
--- vers la table campaign_prospects utilisée par l'interface UI
+-- Trigger CORRIGÉ avec CAST (Text -> BigInt)
+-- Pour synchroniser cold_email_generations (prospect_id = text) -> campaign_prospects (prospect_id = int8)
 
 CREATE OR REPLACE FUNCTION public.sync_cold_email_to_campaign_link()
 RETURNS TRIGGER AS $$
 BEGIN
     -- 1. Mettre à jour le lien prospect-campagne avec le contenu généré
-    UPDATE public.campaign_prospects
-    SET 
-        email_status = 'generated',
-        generated_email_subject = NEW.subject,
-        generated_email_content = NEW.message,
-        email_generated_at = NOW(),
-        updated_at = NOW()
-    WHERE campaign_id = NEW.campaign_id 
-      AND prospect_id = NEW.prospect_id;
+    -- IMPORTANT: On cast NEW.prospect_id (text) en bigint pour matcher la table campaign_prospects
+    BEGIN
+        UPDATE public.campaign_prospects
+        SET 
+            email_status = 'generated',
+            generated_email_subject = NEW.subject,
+            generated_email_content = NEW.message,
+            email_generated_at = NOW(),
+            updated_at = NOW()
+        WHERE campaign_id = NEW.campaign_id 
+          AND prospect_id = (NEW.prospect_id)::bigint; -- CAST EXPLICTE ICI
+    EXCEPTION WHEN OTHERS THEN
+        -- Sécurité si jamais prospect_id n'est pas un nombre (ne devrait pas arriver avec ta data actuelle)
+        RAISE WARNING 'Echec conversion prospect_id % en bigint', NEW.prospect_id;
+    END;
 
     -- 2. Vérifier si tous les prospects du Job ont été générés pour passer le Job en 'completed'
-    -- (Optionnel mais recommandé pour la cohérence)
     UPDATE public.cold_email_jobs
     SET 
         status = 'completed',
@@ -36,10 +41,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Suppression du trigger s'il existe déjà pour éviter les doublons
+-- Re-création du trigger
 DROP TRIGGER IF EXISTS on_cold_email_generated ON public.cold_email_generations;
 
--- Création du trigger
 CREATE TRIGGER on_cold_email_generated
 AFTER INSERT ON public.cold_email_generations
 FOR EACH ROW

@@ -210,32 +210,46 @@ export function CampaignConfigEditor({ campaign, onUpdate }: CampaignConfigEdito
                             Personnalisez votre signature avec aperçu en temps réel
                         </CardDescription>
                     </CardHeader>
-                    <CardContent>
-                        <EmailSignatureEditor
-                            initialData={formData}
-                            onSave={async (html, config) => {
-                                const updated = {
-                                    ...formData,
-                                    ...config,
-                                    signature_html: html
-                                }
-                                setFormData(updated)
+                    <CardContent className="space-y-6">
+                        <div className="space-y-2">
+                            <Label htmlFor="closing_phrase">Formule de politesse</Label>
+                            <Input
+                                id="closing_phrase"
+                                value={formData.closing_phrase || ""}
+                                onChange={(e) => setFormData({ ...formData, closing_phrase: e.target.value })}
+                                placeholder="ex: Cordialement,"
+                                className="max-w-md"
+                            />
+                            <p className="text-sm text-muted-foreground">La phrase qui précède votre signature.</p>
+                        </div>
 
-                                // Also persist immediately to DB
-                                try {
-                                    const supabase = createClient()
-                                    const { error } = await supabase
-                                        .from('cold_email_campaigns')
-                                        .update(updated)
-                                        .eq('id', campaign.id)
+                        <div className="border-t pt-4">
+                            <EmailSignatureEditor
+                                initialData={formData}
+                                onSave={async (html, config) => {
+                                    const updated = {
+                                        ...formData,
+                                        ...config,
+                                        signature_html: html
+                                    }
+                                    setFormData(updated)
 
-                                    if (error) throw error
-                                } catch (error) {
-                                    console.error('Auto-save signature error:', error)
-                                    throw error
-                                }
-                            }}
-                        />
+                                    // Also persist immediately to DB
+                                    try {
+                                        const supabase = createClient()
+                                        const { error } = await supabase
+                                            .from('cold_email_campaigns')
+                                            .update(updated)
+                                            .eq('id', campaign.id)
+
+                                        if (error) throw error
+                                    } catch (error) {
+                                        console.error('Auto-save signature error:', error)
+                                        throw error
+                                    }
+                                }}
+                            />
+                        </div>
                     </CardContent>
                 </Card>
             </motion.div>

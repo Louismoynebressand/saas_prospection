@@ -154,6 +154,7 @@ export interface Campaign {
     signature_phone?: string;
     signature_email?: string;
     signature_ps?: string;
+    closing_phrase?: string;
 
     // Signature customization options
     signature_show_phone?: boolean;

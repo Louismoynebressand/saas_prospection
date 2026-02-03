@@ -1,29 +1,32 @@
--- SCRIPT DE RÉPARATION / BACKFILL
--- À exécuter UNE SEULE FOIS pour corriger les emails déjà générés
--- qui n'apparaissent pas encore dans l'interface.
+-- SCRIPT DE RÉPARATION CORRIGÉ (Text -> BigInt)
+-- À exécuter pour corriger le passé
 
 DO $$
 DECLARE
     gen RECORD;
 BEGIN
-    RAISE NOTICE 'Début de la synchronisation des emails existants...';
+    RAISE NOTICE 'Début de la synchronisation (CORRIGÉE)...';
 
     FOR gen IN SELECT * FROM public.cold_email_generations LOOP
-        -- 1. Sync dans campaign_prospects
-        UPDATE public.campaign_prospects
-        SET 
-            email_status = 'generated',
-            generated_email_subject = gen.subject,
-            generated_email_content = gen.message,
-            email_generated_at = gen.created_at,
-            updated_at = NOW()
-        WHERE campaign_id = gen.campaign_id 
-          AND prospect_id = gen.prospect_id; -- Attention: prospect_id doit être du même type (text vs uuid cast si besoin)
-        
-        RAISE NOTICE 'Email sync pour prospect % (Job %)', gen.prospect_id, gen.job_id;
+        BEGIN
+            -- 1. Sync dans campaign_prospects avec CAST
+            UPDATE public.campaign_prospects
+            SET 
+                email_status = 'generated',
+                generated_email_subject = gen.subject,
+                generated_email_content = gen.message,
+                email_generated_at = gen.created_at,
+                updated_at = NOW()
+            WHERE campaign_id = gen.campaign_id 
+              AND prospect_id = (gen.prospect_id)::bigint; -- CAST IMPORTANT
+            
+            -- RAISE NOTICE 'Email sync OK pour prospect %', gen.prospect_id;
+        EXCEPTION WHEN OTHERS THEN
+            RAISE WARNING 'Impossible de sync prospect % : erreur conversion ou lien manquant', gen.prospect_id;
+        END;
     END LOOP;
 
-    -- 2. Mettre à jour les status des Jobs (fix complet)
+    -- 2. Mettre à jour les status des Jobs
     UPDATE public.cold_email_jobs j
     SET 
         status = 'completed',

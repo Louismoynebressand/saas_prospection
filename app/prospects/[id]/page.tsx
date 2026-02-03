@@ -125,67 +125,114 @@ export default function ProspectPage() {
     // Deep Search State
     const [isLaunchingDeepSearch, setIsLaunchingDeepSearch] = useState(false)
 
-    const safeParse = (data: any) => {
-        if (!data) return {}
-        if (typeof data === 'string') {
-            try { return JSON.parse(data) } catch (e) { console.error("Parse Error", e); return {} }
+    // --- NEW: Campaign Links State ---
+    const [campaignLinks, setCampaignLinks] = useState<any[]>([])
+
+    // --- DATA FETCHING ---
+    const fetchProspectData = async (targetId: string) => {
+        try {
+            setLoading(true)
+
+            // 1. Fetch Prospect Core Data
+            const { data: prospectData, error } = await supabase
+                .from('scrape_prospect')
+                .select('*')
+                .eq('id_prospect', targetId)
+                .single()
+
+            if (error) throw error
+            setProspect(prospectData)
+
+            // 2. Parse Scrapped Data JSON
+            if (prospectData.data && typeof prospectData.data === 'object') {
+                setScrapped(prospectData.data as ScrappedData)
+            } else {
+                setScrapped({})
+            }
+
+            // 3. Fetch Deep Search Data
+            const { data: deepRow } = await supabase
+                .from('prospect_deep_search_data')
+                .select('data')
+                .eq('id_prospect', targetId)
+                .single()
+
+            if (deepRow && deepRow.data) {
+                setDeep(deepRow.data as DeepSearchData)
+            } else {
+                setDeep({})
+            }
+
+            // 4. Navigation (previous/next)
+            const { data: allIds } = await supabase
+                .from('scrape_prospect')
+                .select('id_prospect')
+                .eq('campagne_id', prospectData.campagne_id) // Assuming context of same import campaign
+                .order('created_at', { ascending: false })
+
+            if (allIds) {
+                const currentIndex = allIds.findIndex(x => x.id_prospect === targetId)
+                if (currentIndex !== -1) {
+                    setPrevId(currentIndex < allIds.length - 1 ? allIds[currentIndex + 1].id_prospect : null)
+                    setNextId(currentIndex > 0 ? allIds[currentIndex - 1].id_prospect : null)
+                }
+            }
+
+        } catch (error) {
+            console.error('Error fetching prospect:', error)
+            toast.error("Impossible de charger le prospect")
+        } finally {
+            setLoading(false)
         }
-        return data
     }
 
-    const fetchProspectData = async (targetId: string) => {
-        setLoading(true)
-        console.log('[DEBUG] Fetching prospect with id:', targetId, 'type:', typeof targetId)
+    // Fetch campaign links
+    const fetchCampaignLinks = async (targetId: string) => {
         const { data, error } = await supabase
-            .from('scrape_prospect')
-            .select('*')
-            .eq('id_prospect', targetId)
-            .maybeSingle()
-
-        console.log('[DEBUG] Prospect result:', { data, error })
-
-        if (error) {
-            console.error("Error fetching prospect:", error)
-        }
+            .from('campaign_prospects')
+            .select(`
+                *,
+                campaign:cold_email_campaigns (
+                    id,
+                    nom_campagne,
+                    closing_phrase,
+                    signature_name,
+                    signature_title,
+                    signature_company,
+                    signature_phone,
+                    signature_email,
+                    signature_website_text,
+                    signature_custom_link_text,
+                    signature_ps
+                )
+            `)
+            .eq('prospect_id', targetId)
+            .order('created_at', { ascending: false })
 
         if (data) {
-            setProspect(data as ScrapeProspect)
-            setScrapped(safeParse(data.data_scrapping))
-            setDeep(safeParse(data.deep_search))
-
-            // Fetch neighbors for navigation
-            fetchNeighbors(data.id_jobs, data.created_at)
+            setCampaignLinks(data)
         }
-        setLoading(false)
     }
 
-    const fetchNeighbors = async (jobId: string | number, currentCreatedAt: string) => {
-        // Find Prev: Created AFTER current (Desc order) -> First one > current date
-        const { data: nextData } = await supabase
-            .from('scrape_prospect')
-            .select('id_prospect')
-            .eq('id_jobs', jobId)
-            .lt('created_at', currentCreatedAt)
-            .order('created_at', { ascending: false })
-            .limit(1)
+    // Polling for updates if recently generated
+    useEffect(() => {
+        let interval: NodeJS.Timeout
 
-        if (nextData && nextData[0]) setNextId(nextData[0].id_prospect)
-        else setNextId(null)
+        // Active polling if any link is pending or if we just launched a generation
+        const needsPolling = campaignLinks.some(link => link.email_status === 'pending' || link.email_status === 'processing')
 
-        const { data: prevData } = await supabase
-            .from('scrape_prospect')
-            .select('id_prospect')
-            .eq('id_jobs', jobId)
-            .gt('created_at', currentCreatedAt)
-            .order('created_at', { ascending: true })
-            .limit(1)
+        if (needsPolling) {
+            interval = setInterval(() => {
+                fetchCampaignLinks(id)
+            }, 5000)
+        }
 
-        if (prevData && prevData[0]) setPrevId(prevData[0].id_prospect)
-        else setPrevId(null)
-    }
+        return () => clearInterval(interval)
+    }, [campaignLinks, id])
 
     useEffect(() => {
         fetchProspectData(id)
+        fetchCampaignLinks(id)
     }, [id])
 
     // --- ACTIONS ---
@@ -493,6 +540,92 @@ export default function ProspectPage() {
                             </div>
                         </div>
 
+                        {/* GENERATED EMAILS / CAMPAIGNS SECTION (NEW) */}
+                        {campaignLinks.length > 0 && (
+                            <Card className="border-indigo-100 bg-indigo-50/30">
+                                <CardHeader className="pb-3">
+                                    <CardTitle className="text-base flex items-center gap-2 text-indigo-900">
+                                        <Mail className="w-4 h-4 text-indigo-600" /> Emails Générés & Campagnes
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                                    {campaignLinks.map((link) => (
+                                        <div key={link.id} className="bg-white p-4 rounded-lg border shadow-sm space-y-3">
+                                            <div className="flex justify-between items-start">
+                                                <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">
+                                                    Campagne: {link.campaign?.nom_campagne || "Inconnue"}
+                                                </Badge>
+                                                <Badge
+                                                    variant={link.email_status === 'generated' ? 'default' : 'secondary'}
+                                                    className={link.email_status === 'generated' ? 'bg-green-600' : ''}
+                                                >
+                                                    {link.email_status === 'generated' ? 'Généré' : link.email_status === 'sent' ? 'Envoyé' : 'En cours...'}
+                                                </Badge>
+                                            </div>
+
+                                            {link.email_status === 'generated' && link.generated_email_content ? (
+                                                <div className="space-y-4">
+                                                    <p className="text-xs font-semibold border-b pb-2">{link.generated_email_subject}</p>
+
+                                                    {/* Email Content Body */}
+                                                    <div
+                                                        className="text-xs text-muted-foreground bg-gray-50 p-3 rounded border space-y-4"
+                                                    >
+                                                        {/* Main Content (HTML rendered) */}
+                                                        <div dangerouslySetInnerHTML={{ __html: link.generated_email_content }} />
+
+                                                        {/* Signature Block */}
+                                                        <div className="pt-4 border-t border-gray-200 mt-4">
+                                                            <p className="mb-2">{link.campaign?.closing_phrase || "Cordialement,"}</p>
+
+                                                            <div className="font-medium text-gray-900">
+                                                                {link.campaign?.signature_name || "L'équipe"}
+                                                            </div>
+                                                            {link.campaign?.signature_title && (
+                                                                <div className="text-gray-600">{link.campaign.signature_title}</div>
+                                                            )}
+                                                            {link.campaign?.signature_company && (
+                                                                <div className="font-semibold text-indigo-700">{link.campaign.signature_company}</div>
+                                                            )}
+
+                                                            <div className="mt-2 space-y-0.5 text-xs text-gray-500">
+                                                                {link.campaign?.signature_email && (
+                                                                    <div>{link.campaign.signature_email}</div>
+                                                                )}
+                                                                {link.campaign?.signature_phone && (
+                                                                    <div>{link.campaign.signature_phone}</div>
+                                                                )}
+                                                                {link.campaign?.signature_website_text && (
+                                                                    <div>{link.campaign.signature_website_text}</div>
+                                                                )}
+                                                            </div>
+
+                                                            {link.campaign?.signature_ps && (
+                                                                <div className="mt-3 text-xs italic text-gray-500">
+                                                                    PS: {link.campaign.signature_ps}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    <Button size="sm" variant="outline" className="w-full text-xs h-7" onClick={() => {
+                                                        // Fallback alert for raw content if needed, or better: open a modal
+                                                        alert("Contenu brut pour vérification:\n" + link.generated_email_content)
+                                                    }}>
+                                                        Voir brut (Debug)
+                                                    </Button>
+                                                </div>
+                                            ) : (
+                                                <div className="py-4 text-center text-xs text-muted-foreground flex items-center justify-center gap-2">
+                                                    <LoaderIcon className="w-3 h-3 animate-spin" /> Génération en cours...
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </CardContent>
+                            </Card>
+                        )}
+
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                             {/* LEFT COLUMN: CONTACT */}
                             <div className="space-y-6 lg:col-span-1">
@@ -746,6 +879,8 @@ export default function ProspectPage() {
                     prospect={prospect}
                     onSuccess={(jobId) => {
                         toast.success("Job de génération email lancé : " + jobId)
+                        // Trigger immediate refresh then let polling handle it
+                        setTimeout(() => fetchCampaignLinks(prospect.id_prospect), 1000)
                     }}
                 />
             )}
