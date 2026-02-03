@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { toast } from "sonner"
 
@@ -28,6 +27,8 @@ interface ScrappedData {
     "Email"?: string | null
     "Site web"?: string
     "Téléphone"?: string
+    "telephone"?: string
+    "Phone"?: string
     "Score total"?: number
     "Nombre d'avis"?: number
     "Heures d'ouverture"?: Array<{ day: string; hours: string }>
@@ -200,6 +201,28 @@ export function ProspectDetailModal({
         }
     }
 
+    // --- DATA HELPERS ---
+    const getPhoneNumber = () => {
+        // Priority check for phone numbers
+        if (scrapped["Téléphone"]) return scrapped["Téléphone"]
+        if (scrapped["telephone"]) return scrapped["telephone"]
+        if ((scrapped as any)["Phone"]) return (scrapped as any)["Phone"]
+
+        // Check in Infos array
+        if (scrapped["Infos"]) {
+            for (const key in scrapped["Infos"]) {
+                const items = scrapped["Infos"][key]
+                if (Array.isArray(items)) {
+                    const phoneItem = items.find(i => Object.keys(i).some(k => k.toLowerCase().includes("téléphone") || k.toLowerCase().includes("telephone")))
+                    if (phoneItem) return Object.values(phoneItem)[0]
+                }
+            }
+        }
+        return null
+    }
+
+    const phoneNumber = getPhoneNumber()
+
     // --- COMPONENTS ---
     const CopyButton = ({ text, label }: { text: string | undefined | null, label: string }) => {
         const [copied, setCopied] = useState(false)
@@ -297,7 +320,7 @@ export function ProspectDetailModal({
                                         <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Téléphone</span>
                                         <div className="flex items-center gap-2">
                                             <Phone className="w-4 h-4 text-muted-foreground" />
-                                            <CopyButton text={scrapped["Téléphone"]} label="Téléphone" />
+                                            <CopyButton text={phoneNumber} label="Téléphone" />
                                         </div>
                                     </div>
                                     {/* Address */}
@@ -351,192 +374,146 @@ export function ProspectDetailModal({
                                     </CardContent>
                                 </Card>
                             )}
-
-                            {/* Campaign Email Actions */}
-                            {campaignLink && (
-                                <Card className="border-indigo-100 bg-indigo-50/50 shadow-sm">
-                                    <CardHeader className="pb-2">
-                                        <CardTitle className="text-sm text-indigo-800">Actions Campagne</CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="space-y-3">
-                                        {onGenerateEmail && campaignLink.email_status === 'not_generated' && (
-                                            <Button onClick={onGenerateEmail} className="w-full bg-indigo-600 hover:bg-indigo-700" size="sm">
-                                                <Sparkles className="w-3 h-3 mr-2" /> Générer l'email
-                                            </Button>
-                                        )}
-                                        {onSendEmail && campaignLink.email_status === 'generated' && (
-                                            <Button onClick={onSendEmail} variant="default" className="w-full" size="sm">
-                                                ✉️ Envoyer
-                                            </Button>
-                                        )}
-                                        {campaignLink.generated_email_content && (
-                                            <div className="pt-2 border-t border-indigo-100">
-                                                <p className="text-xs text-indigo-700 font-semibold mb-2 flex items-center gap-1">
-                                                    <Mail className="w-3 h-3" /> Aperçu email
-                                                </p>
-                                                <div className="bg-white p-3 rounded-md border border-indigo-100 text-xs max-h-60 overflow-y-auto shadow-sm">
-                                                    <p className="font-semibold mb-2 text-indigo-900 border-b pb-1">{campaignLink.generated_email_subject}</p>
-                                                    <div dangerouslySetInnerHTML={{ __html: campaignLink.generated_email_content }} className="prose prose-xs max-w-none text-muted-foreground" />
-                                                </div>
-                                            </div>
-                                        )}
-                                    </CardContent>
-                                </Card>
-                            )}
                         </div>
 
                         {/* RIGHT COLUMN: DEEP SEARCH & DETAILS (Mobile: full, Desktop: 8/12) */}
-                        <div className="lg:col-span-8 space-y-4 min-w-0">
-                            <Tabs defaultValue="legal" className="w-full">
-                                <TabsList className="grid w-full grid-cols-2 bg-muted/40 p-1">
-                                    <TabsTrigger value="legal" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">Identité & Juridique</TabsTrigger>
-                                    <TabsTrigger value="infos" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">Détails & Services</TabsTrigger>
-                                </TabsList>
+                        <div className="lg:col-span-8 space-y-6 min-w-0">
+                            {/* 1. Deep Search Info Grid (Merged from Tab) */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                                <div className="p-3 bg-white dark:bg-slate-900 border rounded-lg sm:col-span-2 shadow-sm">
+                                    <span className="text-[10px] items-center flex gap-1 font-bold text-muted-foreground uppercase mb-1"><Briefcase className="w-3 h-3" /> Raison Sociale</span>
+                                    <div className="font-medium text-sm truncate"><CopyButton text={deep.nom_raison_sociale} label="Raison Sociale" /></div>
+                                </div>
+                                <div className="p-3 bg-white dark:bg-slate-900 border rounded-lg shadow-sm">
+                                    <span className="text-[10px] items-center flex gap-1 font-bold text-muted-foreground uppercase mb-1"><FileDown className="w-3 h-3" /> Siret</span>
+                                    <div className="font-mono text-sm truncate"><CopyButton text={deep.siret_siege} label="Siret" /></div>
+                                </div>
+                                <div className="p-3 bg-white dark:bg-slate-900 border rounded-lg shadow-sm">
+                                    <span className="text-[10px] items-center flex gap-1 font-bold text-muted-foreground uppercase mb-1">Code NAF</span>
+                                    <p className="font-mono text-sm">{deep.naf || "-"}</p>
+                                </div>
+                                <div className="p-3 bg-white dark:bg-slate-900 border rounded-lg shadow-sm">
+                                    <span className="text-[10px] items-center flex gap-1 font-bold text-muted-foreground uppercase mb-1">Création</span>
+                                    <p className="text-sm">{deep.date_creation || "-"}</p>
+                                </div>
+                                <div className="p-3 bg-white dark:bg-slate-900 border rounded-lg shadow-sm">
+                                    <span className="text-[10px] items-center flex gap-1 font-bold text-muted-foreground uppercase mb-1">Effectif</span>
+                                    <p className="font-medium flex items-center gap-1 text-sm text-foreground">
+                                        <Users className="w-3 h-3 text-muted-foreground" />
+                                        {deep.effectif || "Non renseigné"}
+                                    </p>
+                                </div>
+                                <div className="p-3 bg-white dark:bg-slate-900 border rounded-lg sm:col-span-2 shadow-sm">
+                                    <span className="text-[10px] items-center flex gap-1 font-bold text-muted-foreground uppercase mb-1">Établissements</span>
+                                    <div className="flex gap-4">
+                                        <div className="flex items-center gap-1 text-sm font-medium">
+                                            <Store className="w-3 h-3 text-muted-foreground" /> Total: {deep.nombre_etablissements || 1}
+                                        </div>
+                                        <div className="flex items-center gap-1 text-sm text-green-600 font-medium">
+                                            Ouverts: {deep.nombre_etablissements_ouverts || 1}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
 
-                                <TabsContent value="legal" className="mt-4 focus-visible:outline-none">
-                                    <Card className="border-none shadow-none bg-transparent">
-                                        <CardContent className="p-0 space-y-6">
-                                            {/* Deep Search Info Grid */}
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                                                <div className="p-3 bg-white dark:bg-slate-900 border rounded-lg sm:col-span-2 shadow-sm">
-                                                    <span className="text-[10px] items-center flex gap-1 font-bold text-muted-foreground uppercase mb-1"><Briefcase className="w-3 h-3" /> Raison Sociale</span>
-                                                    <div className="font-medium text-sm truncate"><CopyButton text={deep.nom_raison_sociale} label="Raison Sociale" /></div>
-                                                </div>
-                                                <div className="p-3 bg-white dark:bg-slate-900 border rounded-lg shadow-sm">
-                                                    <span className="text-[10px] items-center flex gap-1 font-bold text-muted-foreground uppercase mb-1"><FileDown className="w-3 h-3" /> Siret</span>
-                                                    <div className="font-mono text-sm truncate"><CopyButton text={deep.siret_siege} label="Siret" /></div>
-                                                </div>
-                                                <div className="p-3 bg-white dark:bg-slate-900 border rounded-lg shadow-sm">
-                                                    <span className="text-[10px] items-center flex gap-1 font-bold text-muted-foreground uppercase mb-1">Code NAF</span>
-                                                    <p className="font-mono text-sm">{deep.naf || "-"}</p>
-                                                </div>
-                                                <div className="p-3 bg-white dark:bg-slate-900 border rounded-lg shadow-sm">
-                                                    <span className="text-[10px] items-center flex gap-1 font-bold text-muted-foreground uppercase mb-1">Création</span>
-                                                    <p className="text-sm">{deep.date_creation || "-"}</p>
-                                                </div>
-                                                <div className="p-3 bg-white dark:bg-slate-900 border rounded-lg shadow-sm">
-                                                    <span className="text-[10px] items-center flex gap-1 font-bold text-muted-foreground uppercase mb-1">Effectif</span>
-                                                    <p className="font-medium flex items-center gap-1 text-sm text-foreground">
-                                                        <Users className="w-3 h-3 text-muted-foreground" />
-                                                        {deep.effectif || "Non renseigné"}
-                                                    </p>
-                                                </div>
-                                                <div className="p-3 bg-white dark:bg-slate-900 border rounded-lg sm:col-span-2 shadow-sm">
-                                                    <span className="text-[10px] items-center flex gap-1 font-bold text-muted-foreground uppercase mb-1">Établissements</span>
-                                                    <div className="flex gap-4">
-                                                        <div className="flex items-center gap-1 text-sm font-medium">
-                                                            <Store className="w-3 h-3 text-muted-foreground" /> Total: {deep.nombre_etablissements || 1}
-                                                        </div>
-                                                        <div className="flex items-center gap-1 text-sm text-green-600 font-medium">
-                                                            Ouverts: {deep.nombre_etablissements_ouverts || 1}
-                                                        </div>
-                                                    </div>
+                            {/* 2. AI Analysis */}
+                            {(deep.points_forts || deep.clients_cibles || deep.style_communication) && (
+                                <div className="p-5 rounded-xl border border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10 space-y-4">
+                                    <h4 className="flex items-center gap-2 text-primary font-bold text-sm tracking-wide">
+                                        <Sparkles className="w-4 h-4 fill-primary/20" /> ANALYSE IA
+                                    </h4>
+                                    <div className="grid md:grid-cols-2 gap-6">
+                                        {deep.points_forts && (
+                                            <div className="space-y-2">
+                                                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Points Forts</span>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {deep.points_forts.map((pt, i) => (
+                                                        <Badge key={i} variant="secondary" className="bg-background/80 hover:bg-background text-xs border shadow-sm px-2 py-1">{pt}</Badge>
+                                                    ))}
                                                 </div>
                                             </div>
+                                        )}
+                                        <div className="space-y-4">
+                                            {deep.style_communication && (
+                                                <div className="space-y-1">
+                                                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Ton & Style</span>
+                                                    <p className="text-sm italic text-foreground/80 bg-background/50 p-2 rounded border border-dashed">"{deep.style_communication}"</p>
+                                                </div>
+                                            )}
+                                            {deep.clients_cibles && (
+                                                <div className="space-y-1">
+                                                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Cible</span>
+                                                    <p className="text-sm text-foreground/90">{deep.clients_cibles}</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
 
-                                            {/* AI Analysis */}
-                                            {(deep.points_forts || deep.clients_cibles || deep.style_communication) && (
-                                                <div className="p-5 rounded-xl border border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10 space-y-4">
-                                                    <h4 className="flex items-center gap-2 text-primary font-bold text-sm tracking-wide">
-                                                        <Sparkles className="w-4 h-4 fill-primary/20" /> ANALYSE IA
-                                                    </h4>
-                                                    <div className="grid md:grid-cols-2 gap-6">
-                                                        {deep.points_forts && (
-                                                            <div className="space-y-2">
-                                                                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Points Forts</span>
-                                                                <div className="flex flex-wrap gap-2">
-                                                                    {deep.points_forts.map((pt, i) => (
-                                                                        <Badge key={i} variant="secondary" className="bg-background/80 hover:bg-background text-xs border shadow-sm px-2 py-1">{pt}</Badge>
-                                                                    ))}
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                        <div className="space-y-4">
-                                                            {deep.style_communication && (
-                                                                <div className="space-y-1">
-                                                                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Ton & Style</span>
-                                                                    <p className="text-sm italic text-foreground/80 bg-background/50 p-2 rounded border border-dashed">"{deep.style_communication}"</p>
-                                                                </div>
-                                                            )}
-                                                            {deep.clients_cibles && (
-                                                                <div className="space-y-1">
-                                                                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Cible</span>
-                                                                    <p className="text-sm text-foreground/90">{deep.clients_cibles}</p>
-                                                                </div>
-                                                            )}
+                            {/* 3. Dirigeants (Enhanced) */}
+                            {deep.dirigeants && deep.dirigeants.length > 0 && (
+                                <div className="pt-2">
+                                    <h4 className="font-semibold text-sm flex items-center gap-2 mb-3 text-foreground">
+                                        <Briefcase className="w-4 h-4 text-primary" /> Dirigeants
+                                    </h4>
+                                    <div className="grid sm:grid-cols-2 gap-3">
+                                        {deep.dirigeants.map((d, i) => {
+                                            const age = calculateAge(d.date_de_naissance)
+                                            return (
+                                                <div key={i} className="flex flex-col p-3 border rounded-lg bg-white dark:bg-slate-900 shadow-sm hover:border-primary/50 transition-colors">
+                                                    <div className="font-bold flex items-center gap-2 text-sm text-foreground">
+                                                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs uppercase">
+                                                            {(d.prenoms?.[0] || "") + (d.nom?.[0] || "")}
                                                         </div>
+                                                        {d.prenoms} {d.nom}
+                                                    </div>
+                                                    <div className="text-xs text-muted-foreground flex flex-col gap-1 mt-2 ml-10">
+                                                        <Badge variant="outline" className="bg-muted/50 font-normal w-fit">{d.qualite || "Dirigeant"}</Badge>
+                                                        {d.date_de_naissance && (
+                                                            <span className="text-[11px] text-muted-foreground">
+                                                                Né(e) en {d.date_de_naissance} {age ? `(${age} ans)` : ''}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </div>
-                                            )}
+                                            )
+                                        })}
+                                    </div>
+                                </div>
+                            )}
 
-                                            {/* Dirigeants */}
-                                            {deep.dirigeants && deep.dirigeants.length > 0 && (
-                                                <div className="pt-2">
-                                                    <h4 className="font-semibold text-sm flex items-center gap-2 mb-3 text-foreground">
-                                                        <Briefcase className="w-4 h-4 text-primary" /> Dirigeants
-                                                    </h4>
-                                                    <div className="grid sm:grid-cols-2 gap-3">
-                                                        {deep.dirigeants.map((d, i) => {
-                                                            const age = calculateAge(d.date_de_naissance)
-                                                            return (
-                                                                <div key={i} className="flex flex-col p-3 border rounded-lg bg-white dark:bg-slate-900 shadow-sm hover:border-primary/50 transition-colors">
-                                                                    <div className="font-bold flex items-center gap-2 text-sm text-foreground">
-                                                                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs uppercase">
-                                                                            {(d.prenoms?.[0] || "") + (d.nom?.[0] || "")}
-                                                                        </div>
-                                                                        {d.prenoms} {d.nom}
-                                                                    </div>
-                                                                    <div className="text-xs text-muted-foreground flex flex-wrap gap-2 items-center mt-2 ml-10">
-                                                                        <Badge variant="outline" className="bg-muted/50 font-normal">{d.qualite || "Dirigeant"}</Badge>
-                                                                        {age && (
-                                                                            <span className="text-[10px] text-muted-foreground">{age} ans</span>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-                                                            )
-                                                        })}
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </CardContent>
-                                    </Card>
-                                </TabsContent>
-
-                                <TabsContent value="infos" className="mt-4 focus-visible:outline-none">
-                                    <Card className="border-none shadow-none bg-transparent">
-                                        <CardContent className="p-0">
-                                            {scrapped["Infos"] ? Object.entries(scrapped["Infos"]).map(([category, items], idx) => (
-                                                <div key={idx} className="mb-6 last:mb-0 bg-white dark:bg-slate-900 p-4 rounded-lg border shadow-sm">
-                                                    <h4 className="font-bold mb-3 pb-2 border-b text-sm text-foreground flex items-center gap-2">
-                                                        <Info className="w-4 h-4 text-primary" /> {category}
-                                                    </h4>
-                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
-                                                        {items.map((item, i) => {
-                                                            const key = Object.keys(item)[0]
-                                                            const val = item[key]
-                                                            if (!val) return null
-                                                            return (
-                                                                <div key={i} className="flex items-start gap-2 text-sm text-muted-foreground group">
-                                                                    <CheckCircle2 className="w-4 h-4 text-green-500/70 mt-0.5 shrink-0 group-hover:text-green-600 transition-colors" />
-                                                                    <span className="group-hover:text-foreground transition-colors">{key}</span>
-                                                                </div>
-                                                            )
-                                                        })}
-                                                    </div>
-                                                </div>
-                                            )) : (
-                                                <div className="text-center py-12 text-muted-foreground text-sm bg-muted/20 rounded-lg border border-dashed">
-                                                    <Info className="w-10 h-10 mx-auto mb-3 opacity-20" />
-                                                    Aucune information détaillée disponible.
-                                                </div>
-                                            )}
-                                        </CardContent>
-                                    </Card>
-                                </TabsContent>
-                            </Tabs>
+                            {/* 4. Infos Details (Merged from Tab) */}
+                            {scrapped["Infos"] && Object.keys(scrapped["Infos"]).length > 0 && (
+                                <div className="space-y-4">
+                                    <h4 className="font-semibold text-sm flex items-center gap-2 mb-3 text-foreground pt-4 border-t">
+                                        <Info className="w-4 h-4 text-primary" /> Détails & Services
+                                    </h4>
+                                    {Object.entries(scrapped["Infos"]).map(([category, items], idx) => (
+                                        <div key={idx} className="mb-4 last:mb-0 bg-white dark:bg-slate-900 p-4 rounded-lg border shadow-sm">
+                                            <h5 className="font-bold mb-3 pb-2 border-b text-xs text-muted-foreground uppercase tracking-wider">
+                                                {category}
+                                            </h5>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
+                                                {items.map((item, i) => {
+                                                    const key = Object.keys(item)[0]
+                                                    const val = item[key]
+                                                    if (!val) return null
+                                                    return (
+                                                        <div key={i} className="flex items-start gap-2 text-sm text-muted-foreground group">
+                                                            <CheckCircle2 className="w-4 h-4 text-green-500/70 mt-0.5 shrink-0 group-hover:text-green-600 transition-colors" />
+                                                            <span className="group-hover:text-foreground transition-colors">{key}</span>
+                                                        </div>
+                                                    )
+                                                })}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
 
                             {/* JSON Debug */}
-                            <div className="pt-8 border-t mt-8">
+                            <div className="pt-4 border-t mt-4">
                                 <details className="group">
                                     <summary className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer hover:text-primary transition-colors select-none w-fit">
                                         <div className="px-3 py-1.5 border rounded-full group-open:bg-muted font-medium transition-colors">🛠️ Debug JSON</div>
@@ -553,6 +530,56 @@ export function ProspectDetailModal({
                                     </div>
                                 </details>
                             </div>
+                        </div>
+
+                        {/* BOTTOM ROW: Campaign Email Actions (Full Width) */}
+                        <div className="lg:col-span-12">
+                            {campaignLink && (
+                                <Card className="border-indigo-100 bg-indigo-50/50 shadow-sm overflow-hidden">
+                                    <CardHeader className="pb-3 border-b border-indigo-100/50 bg-indigo-50/80">
+                                        <div className="flex items-center justify-between">
+                                            <CardTitle className="text-sm font-bold text-indigo-900 flex items-center gap-2">
+                                                <Sparkles className="w-4 h-4 text-indigo-600" /> Actions Campagne & Email
+                                            </CardTitle>
+                                            <div className="flex gap-2">
+                                                {onGenerateEmail && campaignLink.email_status === 'not_generated' && (
+                                                    <Button onClick={onGenerateEmail} className="bg-indigo-600 hover:bg-indigo-700 h-8 text-xs">
+                                                        <Sparkles className="w-3 h-3 mr-2" /> Générer l'email
+                                                    </Button>
+                                                )}
+                                                {onSendEmail && displayEmail && (
+                                                    <Button onClick={onSendEmail} variant="default" className="h-8 text-xs bg-green-600 hover:bg-green-700">
+                                                        ✉️ Envoyer l'email
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent className="p-0">
+                                        {campaignLink.generated_email_content ? (
+                                            <div className="flex flex-col md:flex-row h-[500px]">
+                                                <div className="flex-1 p-6 bg-white overflow-y-auto">
+                                                    <div className="max-w-3xl mx-auto space-y-4">
+                                                        <div className="border-b pb-4">
+                                                            <p className="text-sm text-gray-500 mb-1">Objet</p>
+                                                            <p className="font-semibold text-lg text-gray-900">{campaignLink.generated_email_subject}</p>
+                                                        </div>
+                                                        <div
+                                                            dangerouslySetInnerHTML={{ __html: campaignLink.generated_email_content }}
+                                                            className="prose prose-sm max-w-none text-gray-700"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="p-12 text-center text-muted-foreground bg-white/50">
+                                                <Mail className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                                                <p>Aucun email généré pour le moment.</p>
+                                            </div>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                            )}
                         </div>
                     </div>
 
