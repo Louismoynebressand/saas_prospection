@@ -147,15 +147,15 @@ export default function ProspectPage() {
 
             // 2. Parse Scrapped Data JSON
             let parsedScrapped: ScrappedData = {}
-            if (prospectData.data) {
-                if (typeof prospectData.data === 'string') {
+            if (prospectData.data_scrapping) {
+                if (typeof prospectData.data_scrapping === 'string') {
                     try {
-                        parsedScrapped = JSON.parse(prospectData.data)
+                        parsedScrapped = JSON.parse(prospectData.data_scrapping)
                     } catch (e) {
                         console.error("Failed to parse prospect data", e)
                     }
-                } else if (typeof prospectData.data === 'object') {
-                    parsedScrapped = prospectData.data as ScrappedData
+                } else if (typeof prospectData.data_scrapping === 'object') {
+                    parsedScrapped = prospectData.data_scrapping as ScrappedData
                 }
             }
             setScrapped(parsedScrapped)
