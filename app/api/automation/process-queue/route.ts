@@ -121,17 +121,39 @@ export async function GET(req: NextRequest) {
                 }
 
                 // FETCH SMTP CONFIGURATION
-                const { data: smtpConfig, error: smtpError } = await supabase
-                    .from('smtp_configurations')
-                    .select('*')
-                    .eq('user_id', campaignData.user_id)
-                    .eq('is_active', true)
-                    .order('created_at', { ascending: false })
-                    .limit(1)
-                    .single()
+                // Use the one defined in the schedule, or fallback (if legacy)
+                let smtpConfig = null
 
-                if (smtpError || !smtpConfig) {
-                    await supabase.from('email_queue').update({ status: 'failed', error_message: 'No active SMTP configuration found for user' }).eq('id', item.id)
+                if (schedule.smtp_configuration_id) {
+                    const { data: specificConfig, error: specificError } = await supabase
+                        .from('smtp_configurations')
+                        .select('*')
+                        .eq('id', schedule.smtp_configuration_id)
+                        .single()
+
+                    if (!specificError && specificConfig) {
+                        smtpConfig = specificConfig
+                    }
+                }
+
+                // Fallback: If no specific config or it failed to load, try getting the user's default (first active)
+                if (!smtpConfig) {
+                    const { data: fallbackConfig, error: fallbackError } = await supabase
+                        .from('smtp_configurations')
+                        .select('*')
+                        .eq('user_id', campaignData.user_id)
+                        .eq('is_active', true)
+                        .order('created_at', { ascending: false })
+                        .limit(1)
+                        .single()
+
+                    if (!fallbackError && fallbackConfig) {
+                        smtpConfig = fallbackConfig
+                    }
+                }
+
+                if (!smtpConfig) {
+                    await supabase.from('email_queue').update({ status: 'failed', error_message: 'No active SMTP configuration found' }).eq('id', item.id)
                     continue
                 }
 

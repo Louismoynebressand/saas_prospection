@@ -1,23 +1,84 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Clock, Calendar as CalendarIcon, Send, CheckCircle2, AlertTriangle, MoreHorizontal } from "lucide-react"
+import { Clock, Calendar as CalendarIcon, Send, CheckCircle2, AlertTriangle, MoreHorizontal, Mail, XCircle, Loader2 } from "lucide-react"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
+import { createClient } from "@/lib/supabase/client"
+import { Button } from "@/components/ui/button"
+import { toast } from "sonner"
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 interface PlanningTabProps {
-    schedule: any // Type this properly if shared types available
+    schedule: any
     queueStats: {
         pending: number
         sent: number
         failed: number
         total: number
     }
+    onUpdate?: () => void // Callback to refresh parent
 }
 
-export function PlanningTab({ schedule, queueStats }: PlanningTabProps) {
+export function PlanningTab({ schedule, queueStats, onUpdate }: PlanningTabProps) {
+    const supabase = createClient()
+    const [smtpName, setSmtpName] = useState<string>("Chargement...")
+    const [canceling, setCanceling] = useState(false)
+
+    useEffect(() => {
+        if (schedule?.smtp_configuration_id) {
+            const fetchSmtp = async () => {
+                const { data } = await supabase
+                    .from('smtp_configurations')
+                    .select('from_email, provider')
+                    .eq('id', schedule.smtp_configuration_id)
+                    .single()
+                if (data) {
+                    setSmtpName(`${data.from_email} (${data.provider})`)
+                } else {
+                    setSmtpName("Inconnu")
+                }
+            }
+            fetchSmtp()
+        } else if (schedule) {
+            setSmtpName("Par défaut (1er disponible)")
+        }
+    }, [schedule, supabase])
+
+    const handleCancel = async () => {
+        setCanceling(true)
+        try {
+            const res = await fetch(`/api/campaigns/${schedule.campaign_id}/schedule`, {
+                method: 'DELETE'
+            })
+            const data = await res.json()
+            if (res.ok) {
+                toast.success("Planification annulée", { description: "La file d'attente a été vidée." })
+                if (onUpdate) onUpdate()
+            } else {
+                throw new Error(data.error || "Erreur lors de l'annulation")
+            }
+        } catch (error: any) {
+            console.error("Cancellation Error:", error)
+            toast.error("Erreur", { description: error.message })
+        } finally {
+            setCanceling(false)
+        }
+    }
+
     if (!schedule) {
         return (
             <div className="flex flex-col items-center justify-center p-12 text-center border-2 border-dashed rounded-xl bg-slate-50">
@@ -32,9 +93,9 @@ export function PlanningTab({ schedule, queueStats }: PlanningTabProps) {
         )
     }
 
-    const estimatedDays = Math.ceil(queueStats.pending / (schedule.daily_limit || 1))
+    const estimatedDays = schedule.daily_limit > 0 ? Math.ceil(queueStats.pending / schedule.daily_limit) : 0
     const endDate = new Date()
-    endDate.setDate(endDate.getDate() + estimatedDays) // Rough estimation, doesn't account for weekends yet
+    endDate.setDate(endDate.getDate() + estimatedDays) // Rough estimation
 
     return (
         <div className="space-y-6">
@@ -62,12 +123,15 @@ export function PlanningTab({ schedule, queueStats }: PlanningTabProps) {
                     <CardHeader className="pb-2">
                         <CardTitle className="text-sm font-medium text-slate-600 uppercase">Configuration</CardTitle>
                     </CardHeader>
-                    <CardContent>
-                        <div className="flex items-center gap-2 mb-1">
-                            <span className="font-bold text-slate-900">{schedule.daily_limit} / jour</span>
+                    <CardContent className="space-y-2">
+                        <div className="flex items-center gap-2">
+                            <span className="font-bold text-slate-900 text-lg">{schedule.daily_limit} / jour</span>
                         </div>
                         <div className="text-xs text-slate-500 flex items-center gap-2">
                             <Clock className="w-3 h-3" /> {schedule.time_window_start?.slice(0, 5)} - {schedule.time_window_end?.slice(0, 5)}
+                        </div>
+                        <div className="text-xs text-slate-500 flex items-center gap-2" title={smtpName}>
+                            <Mail className="w-3 h-3" /> <span className="truncate max-w-[150px]">{smtpName}</span>
                         </div>
                     </CardContent>
                 </Card>
@@ -75,14 +139,41 @@ export function PlanningTab({ schedule, queueStats }: PlanningTabProps) {
 
             {/* Timeline / Forecast */}
             <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <CalendarIcon className="w-5 h-5 text-indigo-600" />
-                        Prévisions d'envoi
-                    </CardTitle>
-                    <CardDescription>
-                        Basé sur votre limite de {schedule.daily_limit} mails/jour.
-                    </CardDescription>
+                <CardHeader className="flex flex-row items-center justify-between">
+                    <div>
+                        <CardTitle className="flex items-center gap-2">
+                            <CalendarIcon className="w-5 h-5 text-indigo-600" />
+                            Prévisions d'envoi
+                        </CardTitle>
+                        <CardDescription>
+                            Basé sur votre limite de {schedule.daily_limit} mails/jour.
+                        </CardDescription>
+                    </div>
+
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Button variant="destructive" size="sm" disabled={canceling}>
+                                {canceling ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <XCircle className="w-4 h-4 mr-2" />}
+                                Arrêter la campagne
+                            </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Arrêter la planification ?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    Cela supprimera la planification actuelle et retirera tous les prospects de la file d'attente.
+                                    Les emails déjà envoyés ne seront pas affectés.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Annuler</AlertDialogCancel>
+                                <AlertDialogAction onClick={handleCancel} className="bg-red-600 hover:bg-red-700">
+                                    Confirmer l'arrêt
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+
                 </CardHeader>
                 <CardContent>
                     <div className="space-y-6">

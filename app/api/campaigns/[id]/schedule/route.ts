@@ -8,7 +8,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     try {
         const body = await req.json()
-        const { start_date, daily_limit, time_window_start, time_window_end, days_of_week } = body
+        const { start_date, daily_limit, time_window_start, time_window_end, days_of_week, smtp_configuration_id } = body
+
+        if (!smtp_configuration_id) {
+            return NextResponse.json({ success: false, error: "SMTP Configuration ID is required" }, { status: 400 })
+        }
 
         // 1. Create Schedule
         const { data: schedule, error: schedError } = await supabase
@@ -20,7 +24,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                 time_window_start,
                 time_window_end,
                 days_of_week,
-                status: 'active'
+                status: 'active',
+                smtp_configuration_id
             })
             .select()
             .single()
@@ -126,6 +131,52 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     } catch (error: any) {
         console.error("Schedule Creation Error:", error)
+        return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    }
+}
+
+// DELETE /api/campaigns/[id]/schedule
+// Cancel a schedule: Delete the schedule record and remove pending items from queue
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+    const { id: campaignId } = await params
+    const supabase = await createClient()
+
+    try {
+        // 1. Get Active Schedule
+        const { data: schedule, error: schedError } = await supabase
+            .from('campaign_schedules')
+            .select('id')
+            .eq('campaign_id', campaignId)
+            .eq('status', 'active')
+            .single()
+
+        if (schedError || !schedule) {
+            return NextResponse.json({ success: false, error: "No active schedule found to cancel" }, { status: 404 })
+        }
+
+        // 2. Delete Pending Queue Items
+        const { error: queueError } = await supabase
+            .from('email_queue')
+            .delete()
+            .eq('campaign_id', campaignId)
+            .eq('status', 'pending')
+
+        if (queueError) throw queueError
+
+        // 3. Update Schedule Status to Cancelled (or Delete it)
+        // Let's delete it for now to keep it clean, or mark as cancelled.
+        // User asked to "supprimer annuler", so let's delete.
+        const { error: deleteError } = await supabase
+            .from('campaign_schedules')
+            .delete()
+            .eq('id', schedule.id)
+
+        if (deleteError) throw deleteError
+
+        return NextResponse.json({ success: true, message: "Planning annulé et file d'attente nettoyée" })
+
+    } catch (error: any) {
+        console.error("Schedule Cancellation Error:", error)
         return NextResponse.json({ success: false, error: error.message }, { status: 500 })
     }
 }

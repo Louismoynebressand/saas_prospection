@@ -9,6 +9,7 @@ import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
@@ -33,10 +34,11 @@ export function CampaignSchedulerModal({ campaignId, onScheduled }: CampaignSche
     const [dailyLimit, setDailyLimit] = useState([20])
     const [timeWindow, setTimeWindow] = useState({ start: "08:00", end: "18:00" })
     const [days, setDays] = useState<number[]>([1, 2, 3, 4, 5]) // Mon-Fri default
+    const [selectedSmtpId, setSelectedSmtpId] = useState<string>("")
 
     // SMTP Check State
     const [checkingSmtp, setCheckingSmtp] = useState(true)
-    const [hasSmtpConfig, setHasSmtpConfig] = useState(false)
+    const [smtpConfigs, setSmtpConfigs] = useState<any[]>([])
 
     useEffect(() => {
         if (open) {
@@ -47,19 +49,24 @@ export function CampaignSchedulerModal({ campaignId, onScheduled }: CampaignSche
     const checkSmtpConfig = async () => {
         setCheckingSmtp(true)
         try {
-            const { count, error } = await supabase
+            const { data, error } = await supabase
                 .from('smtp_configurations')
-                .select('*', { count: 'exact', head: true })
+                .select('*')
                 .eq('is_active', true)
+                .order('created_at', { ascending: false })
 
-            if (!error && count !== null && count > 0) {
-                setHasSmtpConfig(true)
+            if (!error && data && data.length > 0) {
+                setSmtpConfigs(data)
+                // Default to the first one if not already selected
+                if (!selectedSmtpId) {
+                    setSelectedSmtpId(data[0].id)
+                }
             } else {
-                setHasSmtpConfig(false)
+                setSmtpConfigs([])
             }
         } catch (err) {
             console.error("Failed to check SMTP config", err)
-            setHasSmtpConfig(false)
+            setSmtpConfigs([])
         } finally {
             setCheckingSmtp(false)
         }
@@ -71,8 +78,13 @@ export function CampaignSchedulerModal({ campaignId, onScheduled }: CampaignSche
             return
         }
 
-        if (!hasSmtpConfig) {
+        if (smtpConfigs.length === 0) {
             toast.error("Veuillez d'abord configurer un compte d'envoi (SMTP)")
+            return
+        }
+
+        if (!selectedSmtpId) {
+            toast.error("Veuillez sélectionner un compte d'envoi")
             return
         }
 
@@ -87,7 +99,8 @@ export function CampaignSchedulerModal({ campaignId, onScheduled }: CampaignSche
                     daily_limit: dailyLimit[0],
                     time_window_start: timeWindow.start,
                     time_window_end: timeWindow.end,
-                    days_of_week: days
+                    days_of_week: days,
+                    smtp_configuration_id: selectedSmtpId
                 })
             })
 
@@ -150,7 +163,7 @@ export function CampaignSchedulerModal({ campaignId, onScheduled }: CampaignSche
                     <div className="py-8 flex justify-center">
                         <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
                     </div>
-                ) : !hasSmtpConfig ? (
+                ) : smtpConfigs.length === 0 ? (
                     <div className="py-6 flex flex-col items-center text-center space-y-4">
                         <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center">
                             <AlertCircle className="w-6 h-6 text-amber-600" />
@@ -169,6 +182,24 @@ export function CampaignSchedulerModal({ campaignId, onScheduled }: CampaignSche
                     </div>
                 ) : (
                     <div className="space-y-6 py-4">
+
+                        {/* 0. SMTP Selection */}
+                        <div className="space-y-3">
+                            <Label className="font-semibold text-gray-700">Compte d'envoi</Label>
+                            <Select value={selectedSmtpId} onValueChange={setSelectedSmtpId}>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Choisir un email d'envoi" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {smtpConfigs.map(config => (
+                                        <SelectItem key={config.id} value={config.id}>
+                                            {config.from_email} ({config.provider})
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
                         {/* 1. Start Date */}
                         <div className="space-y-3">
                             <Label className="font-semibold text-gray-700">Date de début</Label>
@@ -272,7 +303,7 @@ export function CampaignSchedulerModal({ campaignId, onScheduled }: CampaignSche
                     <Button variant="outline" onClick={() => setOpen(false)}>Annuler</Button>
                     <Button
                         onClick={handleSchedule}
-                        disabled={loading || checkingSmtp || !hasSmtpConfig}
+                        disabled={loading || checkingSmtp || smtpConfigs.length === 0}
                         className="bg-emerald-600 hover:bg-emerald-700 gap-2"
                     >
                         {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
