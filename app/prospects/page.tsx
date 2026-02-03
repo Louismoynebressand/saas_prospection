@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import {
-    Search, Filter, Columns, Download, Upload, Building2, Mail, Phone, MapPin, Calendar, Loader2, Zap, CheckSquare, Sparkles, Square
+    Search, Filter, Columns, Download, Upload, Building2, Mail, Phone, MapPin, Calendar, Loader2, Zap, CheckSquare, Sparkles, Square, ExternalLink, Star
 } from "lucide-react"
 import { motion } from "framer-motion"
 import { supabase } from "@/lib/supabase"
@@ -23,6 +23,11 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover"
+import {
     Table,
     TableBody,
     TableCell,
@@ -31,6 +36,7 @@ import {
     TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
+import { Calendar as CalendarComponent } from "@/components/ui/calendar"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
 import { toast } from "sonner"
@@ -40,10 +46,16 @@ export default function ProspectsPage() {
     const [prospects, setProspects] = useState<ScrapeProspect[]>([])
     const [loading, setLoading] = useState(true)
     const [searchQuery, setSearchQuery] = useState("")
-    const [filterCategory, setFilterCategory] = useState<string | null>(null)
+
+    // Multi-category filter (changed from single to multiple)
+    const [filterCategories, setFilterCategories] = useState<Set<string>>(new Set())
     const [filterHasEmail, setFilterHasEmail] = useState(false)
     const [filterHasPhone, setFilterHasPhone] = useState(false)
-    const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month'>('all')
+    const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month' | 'custom'>('all')
+    const [customDateRange, setCustomDateRange] = useState<{ from: Date | undefined, to: Date | undefined }>({ from: undefined, to: undefined })
+
+    // Selection mode toggle
+    const [selectionMode, setSelectionMode] = useState(false)
 
     const [visibleColumns, setVisibleColumns] = useState({
         company: true,
@@ -53,6 +65,13 @@ export default function ProspectsPage() {
         city: true,
         deep: true,
         date: true,
+        website: false,
+        linkedin: false,
+        address: false,
+        rating: false,
+        siret: false,
+        sector: false,
+        emailStatus: false,
     })
 
     // Batch Deep Search
@@ -177,8 +196,10 @@ export default function ProspectsPage() {
             const company = deep.nom_complet || raw.Titre || raw.title || deep.nom_raison_sociale || "Société Inconnue";
 
             let email = null;
+            let emailStatus = 'inconnu';
             if (p.email_adresse_verified && p.email_adresse_verified.length > 0) {
                 email = Array.isArray(p.email_adresse_verified) ? p.email_adresse_verified[0] : p.email_adresse_verified;
+                emailStatus = 'verifié';
             } else if (raw.Email) {
                 email = raw.Email;
             } else if (deep.emails && deep.emails.length > 0) {
@@ -193,7 +214,16 @@ export default function ProspectsPage() {
                 phone: raw["Téléphone"] || raw.phone,
                 city: p.ville || raw.Ville || raw.address,
                 createdAt: new Date(p.created_at),
-                jobId: p.id_jobs
+                jobId: p.id_jobs,
+                // New fields for additional columns
+                website: raw["Site web"] || deep.socials?.website,
+                linkedin: deep.socials?.linkedin,
+                address: raw.address || raw.Rue,
+                rating: raw["Score total"],
+                siret: deep.siret_siege,
+                sector: p.secteur,
+                emailStatus,
+                reviews: raw["Nombre d'avis"]
             }
         });
 
@@ -207,9 +237,9 @@ export default function ProspectsPage() {
             );
         }
 
-        // Category filter
-        if (filterCategory) {
-            data = data.filter(item => item.category === filterCategory);
+        // Multi-Category filter (OR operator)
+        if (filterCategories.size > 0) {
+            data = data.filter(item => filterCategories.has(item.category));
         }
 
         // Email/Phone filters
@@ -233,10 +263,21 @@ export default function ProspectsPage() {
                 const diff = now.getTime() - item.createdAt.getTime();
                 return diff < 30 * 24 * 60 * 60 * 1000;
             });
+        } else if (dateFilter === 'custom' && (customDateRange.from || customDateRange.to)) {
+            data = data.filter(item => {
+                const itemDate = item.createdAt;
+                if (customDateRange.from && itemDate < customDateRange.from) return false;
+                if (customDateRange.to) {
+                    const endOfDay = new Date(customDateRange.to);
+                    endOfDay.setHours(23, 59, 59, 999);
+                    if (itemDate > endOfDay) return false;
+                }
+                return true;
+            });
         }
 
         return data;
-    }, [prospects, searchQuery, filterCategory, filterHasEmail, filterHasPhone, dateFilter]);
+    }, [prospects, searchQuery, filterCategories, filterHasEmail, filterHasPhone, dateFilter, customDateRange]);
 
     const categories = useMemo(() => {
         const cats = new Set(prospects.map(p => {
@@ -288,57 +329,120 @@ export default function ProspectsPage() {
                         </div>
 
                         {/* Date Filter */}
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
+                        <Popover>
+                            <PopoverTrigger asChild>
                                 <Button variant="outline" className="gap-2">
                                     <Calendar className="h-4 w-4" />
                                     {dateFilter === 'all' ? 'Toutes dates' :
                                         dateFilter === 'today' ? "Aujourd'hui" :
-                                            dateFilter === 'week' ? 'Cette semaine' : 'Ce mois'}
+                                            dateFilter === 'week' ? 'Cette semaine' :
+                                                dateFilter === 'month' ? 'Ce mois' :
+                                                    (customDateRange.from || customDateRange.to) ?
+                                                        `${customDateRange.from ? format(customDateRange.from, "d MMM", { locale: fr }) : '...'} - ${customDateRange.to ? format(customDateRange.to, "d MMM", { locale: fr }) : '...'}` :
+                                                        'Personnalisé'}
                                 </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuCheckboxItem checked={dateFilter === 'all'} onCheckedChange={() => setDateFilter('all')}>
-                                    Toutes dates
-                                </DropdownMenuCheckboxItem>
-                                <DropdownMenuCheckboxItem checked={dateFilter === 'today'} onCheckedChange={() => setDateFilter('today')}>
-                                    Aujourd'hui
-                                </DropdownMenuCheckboxItem>
-                                <DropdownMenuCheckboxItem checked={dateFilter === 'week'} onCheckedChange={() => setDateFilter('week')}>
-                                    Cette semaine
-                                </DropdownMenuCheckboxItem>
-                                <DropdownMenuCheckboxItem checked={dateFilter === 'month'} onCheckedChange={() => setDateFilter('month')}>
-                                    Ce mois
-                                </DropdownMenuCheckboxItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="end">
+                                <div className="p-3 space-y-2">
+                                    <div className="space-y-1">
+                                        <Button
+                                            variant={dateFilter === 'all' ? 'default' : 'ghost'}
+                                            size="sm"
+                                            className="w-full justify-start"
+                                            onClick={() => setDateFilter('all')}
+                                        >
+                                            Toutes dates
+                                        </Button>
+                                        <Button
+                                            variant={dateFilter === 'today' ? 'default' : 'ghost'}
+                                            size="sm"
+                                            className="w-full justify-start"
+                                            onClick={() => setDateFilter('today')}
+                                        >
+                                            Aujourd'hui
+                                        </Button>
+                                        <Button
+                                            variant={dateFilter === 'week' ? 'default' : 'ghost'}
+                                            size="sm"
+                                            className="w-full justify-start"
+                                            onClick={() => setDateFilter('week')}
+                                        >
+                                            Cette semaine
+                                        </Button>
+                                        <Button
+                                            variant={dateFilter === 'month' ? 'default' : 'ghost'}
+                                            size="sm"
+                                            className="w-full justify-start"
+                                            onClick={() => setDateFilter('month')}
+                                        >
+                                            Ce mois
+                                        </Button>
+                                    </div>
+                                    <div className="border-t pt-2">
+                                        <p className="text-sm font-medium mb-2 px-2">Période personnalisée</p>
+                                        <CalendarComponent
+                                            mode="range"
+                                            selected={{ from: customDateRange.from, to: customDateRange.to }}
+                                            onSelect={(range: any) => {
+                                                setCustomDateRange({ from: range?.from, to: range?.to })
+                                                setDateFilter('custom')
+                                            }}
+                                            numberOfMonths={2}
+                                        />
+                                    </div>
+                                </div>
+                            </PopoverContent>
+                        </Popover>
 
-                        {/* Category Filter */}
+                        {/* Category Filter - Multi-selection */}
                         {categories.length > 0 && (
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button variant="outline" className="gap-2">
                                         <Filter className="h-4 w-4" />
-                                        {filterCategory || 'Toutes catégories'}
+                                        {filterCategories.size === 0 ? 'Toutes catégories' :
+                                            filterCategories.size === 1 ? Array.from(filterCategories)[0] :
+                                                `${filterCategories.size} catégories`}
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="max-h-[300px] overflow-y-auto">
-                                    <DropdownMenuCheckboxItem
-                                        checked={!filterCategory}
-                                        onCheckedChange={() => setFilterCategory(null)}
-                                    >
-                                        Toutes catégories
-                                    </DropdownMenuCheckboxItem>
+                                    <DropdownMenuLabel>Sélection multiple</DropdownMenuLabel>
                                     <DropdownMenuSeparator />
-                                    {categories.map(cat => (
-                                        <DropdownMenuCheckboxItem
-                                            key={cat}
-                                            checked={filterCategory === cat}
-                                            onCheckedChange={() => setFilterCategory(cat)}
-                                        >
-                                            {cat}
-                                        </DropdownMenuCheckboxItem>
-                                    ))}
+                                    {filterCategories.size > 0 && (
+                                        <>
+                                            <div className="px-2 py-1.5">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="w-full text-xs"
+                                                    onClick={() => setFilterCategories(new Set())}
+                                                >
+                                                    Effacer la sélection
+                                                </Button>
+                                            </div>
+                                            <DropdownMenuSeparator />
+                                        </>
+                                    )}
+                                    {categories.map(cat => {
+                                        const isSelected = filterCategories.has(cat);
+                                        return (
+                                            <DropdownMenuCheckboxItem
+                                                key={cat}
+                                                checked={isSelected}
+                                                onCheckedChange={(checked) => {
+                                                    const newSet = new Set(filterCategories);
+                                                    if (checked) {
+                                                        newSet.add(cat);
+                                                    } else {
+                                                        newSet.delete(cat);
+                                                    }
+                                                    setFilterCategories(newSet);
+                                                }}
+                                            >
+                                                {cat}
+                                            </DropdownMenuCheckboxItem>
+                                        );
+                                    })}
                                 </DropdownMenuContent>
                             </DropdownMenu>
                         )}
@@ -371,7 +475,7 @@ export default function ProspectsPage() {
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                                <DropdownMenuLabel>Colonnes</DropdownMenuLabel>
+                                <DropdownMenuLabel>Colonnes visibles</DropdownMenuLabel>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuCheckboxItem checked={visibleColumns.company} onCheckedChange={(b) => setVisibleColumns(prev => ({ ...prev, company: !!b }))}>Société</DropdownMenuCheckboxItem>
                                 <DropdownMenuCheckboxItem checked={visibleColumns.category} onCheckedChange={(b) => setVisibleColumns(prev => ({ ...prev, category: !!b }))}>Catégorie</DropdownMenuCheckboxItem>
@@ -380,22 +484,53 @@ export default function ProspectsPage() {
                                 <DropdownMenuCheckboxItem checked={visibleColumns.city} onCheckedChange={(b) => setVisibleColumns(prev => ({ ...prev, city: !!b }))}>Ville</DropdownMenuCheckboxItem>
                                 <DropdownMenuCheckboxItem checked={visibleColumns.deep} onCheckedChange={(checked) => setVisibleColumns(prev => ({ ...prev, deep: checked }))}>Deep Search</DropdownMenuCheckboxItem>
                                 <DropdownMenuCheckboxItem checked={visibleColumns.date} onCheckedChange={(b) => setVisibleColumns(prev => ({ ...prev, date: !!b }))}>Date</DropdownMenuCheckboxItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuLabel className="text-xs text-muted-foreground">Colonnes supplémentaires</DropdownMenuLabel>
+                                <DropdownMenuCheckboxItem checked={visibleColumns.website} onCheckedChange={(b) => setVisibleColumns(prev => ({ ...prev, website: !!b }))}>Site Web</DropdownMenuCheckboxItem>
+                                <DropdownMenuCheckboxItem checked={visibleColumns.linkedin} onCheckedChange={(b) => setVisibleColumns(prev => ({ ...prev, linkedin: !!b }))}>LinkedIn</DropdownMenuCheckboxItem>
+                                <DropdownMenuCheckboxItem checked={visibleColumns.address} onCheckedChange={(b) => setVisibleColumns(prev => ({ ...prev, address: !!b }))}>Adresse</DropdownMenuCheckboxItem>
+                                <DropdownMenuCheckboxItem checked={visibleColumns.rating} onCheckedChange={(b) => setVisibleColumns(prev => ({ ...prev, rating: !!b }))}>Score/Avis</DropdownMenuCheckboxItem>
+                                <DropdownMenuCheckboxItem checked={visibleColumns.siret} onCheckedChange={(b) => setVisibleColumns(prev => ({ ...prev, siret: !!b }))}>SIRET</DropdownMenuCheckboxItem>
+                                <DropdownMenuCheckboxItem checked={visibleColumns.sector} onCheckedChange={(b) => setVisibleColumns(prev => ({ ...prev, sector: !!b }))}>Secteur</DropdownMenuCheckboxItem>
+                                <DropdownMenuCheckboxItem checked={visibleColumns.emailStatus} onCheckedChange={(b) => setVisibleColumns(prev => ({ ...prev, emailStatus: !!b }))}>Statut Email</DropdownMenuCheckboxItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
                     </div>
                 </CardContent>
             </Card>
 
-            {/* Results Count */}
+            {/* Results Count and Selection Mode */}
             <div className="flex items-center justify-between">
-                <p className="text-sm text-muted-foreground">
-                    {processedData.length} prospect{processedData.length > 1 ? 's' : ''} trouvé{processedData.length > 1 ? 's' : ''}
-                    {selectedProspects.size > 0 && (
-                        <span className="ml-2 text-primary font-medium">
-                            • {selectedProspects.size} sélectionné{selectedProspects.size > 1 ? 's' : ''}
-                        </span>
-                    )}
-                </p>
+                <div className="flex items-center gap-4">
+                    <p className="text-sm text-muted-foreground">
+                        {processedData.length} prospect{processedData.length > 1 ? 's' : ''} trouvé{processedData.length > 1 ? 's' : ''}
+                        {selectedProspects.size > 0 && (
+                            <span className="ml-2 text-primary font-medium">
+                                • {selectedProspects.size} sélectionné{selectedProspects.size > 1 ? 's' : ''}
+                            </span>
+                        )}
+                    </p>
+
+                    {/* Selection Mode Toggle */}
+                    <Button
+                        variant={selectionMode || selectedProspects.size > 0 ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => {
+                            setSelectionMode(!selectionMode);
+                            if (selectionMode && selectedProspects.size === 0) {
+                                // If turning off and no selections, just toggle
+                            }
+                        }}
+                        className="gap-2"
+                    >
+                        {selectionMode || selectedProspects.size > 0 ? (
+                            <CheckSquare className="h-4 w-4" />
+                        ) : (
+                            <Square className="h-4 w-4" />
+                        )}
+                        Mode Sélection
+                    </Button>
+                </div>
 
                 {selectedProspects.size > 0 && (
                     <AIButton
@@ -405,20 +540,7 @@ export default function ProspectsPage() {
                         variant="primary"
                         className="gap-2"
                     >
-                        {isLaunchingBatch ? (
-                            <>
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                                Lancement en cours...
-                            </>
-                        ) : (
-                            <motion.div
-                                className="flex items-center gap-2"
-                                whileHover={{ scale: 1.05 }}
-                            >
-                                <Sparkles className="w-4 h-4" />
-                                <span>Lancer Deep Search ({selectedProspects.size})</span>
-                            </motion.div>
-                        )}
+                        Lancer Deep Search ({selectedProspects.size})
                     </AIButton>
                 )}
             </div>
@@ -430,12 +552,14 @@ export default function ProspectsPage() {
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead className="w-12">
-                                        <Checkbox
-                                            checked={selectedProspects.size === processedData.length && processedData.length > 0}
-                                            onCheckedChange={toggleSelectAll}
-                                        />
-                                    </TableHead>
+                                    {(selectionMode || selectedProspects.size > 0) && (
+                                        <TableHead className="w-12">
+                                            <Checkbox
+                                                checked={selectedProspects.size === processedData.length && processedData.length > 0}
+                                                onCheckedChange={toggleSelectAll}
+                                            />
+                                        </TableHead>
+                                    )}
                                     {visibleColumns.company && <TableHead>Société</TableHead>}
                                     {visibleColumns.category && <TableHead>Catégorie</TableHead>}
                                     {visibleColumns.contact && <TableHead>Email</TableHead>}
@@ -443,6 +567,13 @@ export default function ProspectsPage() {
                                     {visibleColumns.city && <TableHead>Ville</TableHead>}
                                     {visibleColumns.deep && <TableHead>Deep Search</TableHead>}
                                     {visibleColumns.date && <TableHead>Date</TableHead>}
+                                    {visibleColumns.website && <TableHead>Site Web</TableHead>}
+                                    {visibleColumns.linkedin && <TableHead>LinkedIn</TableHead>}
+                                    {visibleColumns.address && <TableHead>Adresse</TableHead>}
+                                    {visibleColumns.rating && <TableHead>Score/Avis</TableHead>}
+                                    {visibleColumns.siret && <TableHead>SIRET</TableHead>}
+                                    {visibleColumns.sector && <TableHead>Secteur</TableHead>}
+                                    {visibleColumns.emailStatus && <TableHead>Statut Email</TableHead>}
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -459,17 +590,19 @@ export default function ProspectsPage() {
                                             className="cursor-pointer hover:bg-muted/50 transition-colors"
                                             onClick={() => router.push(`/prospects/${row.id}`)}
                                         >
-                                            <TableCell onClick={(e) => e.stopPropagation()}>
-                                                <Checkbox
-                                                    checked={selectedProspects.has(row.id)}
-                                                    onCheckedChange={() => toggleProspect(row.id)}
-                                                />
-                                            </TableCell>
+                                            {(selectionMode || selectedProspects.size > 0) && (
+                                                <TableCell onClick={(e) => e.stopPropagation()}>
+                                                    <Checkbox
+                                                        checked={selectedProspects.has(row.id)}
+                                                        onCheckedChange={() => toggleProspect(row.id)}
+                                                    />
+                                                </TableCell>
+                                            )}
                                             {visibleColumns.company && (
                                                 <TableCell className="font-medium">
                                                     <div className="flex items-center gap-2">
                                                         <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
-                                                        <span className="truncate">{row.company}</span>
+                                                        <span className="line-clamp-2 text-sm">{row.company}</span>
                                                     </div>
                                                 </TableCell>
                                             )}
@@ -529,6 +662,83 @@ export default function ProspectsPage() {
                                             {visibleColumns.date && (
                                                 <TableCell className="text-sm text-muted-foreground">
                                                     {format(row.createdAt, "d MMM yyyy", { locale: fr })}
+                                                </TableCell>
+                                            )}
+                                            {visibleColumns.website && (
+                                                <TableCell>
+                                                    {row.website ? (
+                                                        <a
+                                                            href={row.website.startsWith('http') ? row.website : `https://${row.website}`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="flex items-center gap-1 text-sm text-blue-600 hover:underline"
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        >
+                                                            <ExternalLink className="h-3 w-3" />
+                                                            Site
+                                                        </a>
+                                                    ) : (
+                                                        <span className="text-muted-foreground text-sm">-</span>
+                                                    )}
+                                                </TableCell>
+                                            )}
+                                            {visibleColumns.linkedin && (
+                                                <TableCell>
+                                                    {row.linkedin ? (
+                                                        <a
+                                                            href={row.linkedin}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="flex items-center gap-1 text-sm text-blue-600 hover:underline"
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        >
+                                                            <ExternalLink className="h-3 w-3" />
+                                                            Voir
+                                                        </a>
+                                                    ) : (
+                                                        <span className="text-muted-foreground text-sm">-</span>
+                                                    )}
+                                                </TableCell>
+                                            )}
+                                            {visibleColumns.address && (
+                                                <TableCell className="max-w-[200px]">
+                                                    <span className="text-sm line-clamp-2">{row.address || "-"}</span>
+                                                </TableCell>
+                                            )}
+                                            {visibleColumns.rating && (
+                                                <TableCell>
+                                                    {row.rating ? (
+                                                        <div className="flex items-center gap-1 text-sm">
+                                                            <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                                                            <span>{row.rating}</span>
+                                                            {row.reviews && <span className="text-muted-foreground">({row.reviews})</span>}
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-muted-foreground text-sm">-</span>
+                                                    )}
+                                                </TableCell>
+                                            )}
+                                            {visibleColumns.siret && (
+                                                <TableCell>
+                                                    <span className="text-sm font-mono">{row.siret || "-"}</span>
+                                                </TableCell>
+                                            )}
+                                            {visibleColumns.sector && (
+                                                <TableCell>
+                                                    {row.sector ? (
+                                                        <Badge variant="secondary">{row.sector}</Badge>
+                                                    ) : (
+                                                        <span className="text-muted-foreground text-sm">-</span>
+                                                    )}
+                                                </TableCell>
+                                            )}
+                                            {visibleColumns.emailStatus && (
+                                                <TableCell>
+                                                    {row.emailStatus === 'verifié' ? (
+                                                        <Badge variant="default" className="bg-green-600">Vérifié</Badge>
+                                                    ) : (
+                                                        <Badge variant="outline">Non vérifié</Badge>
+                                                    )}
                                                 </TableCell>
                                             )}
                                         </TableRow>

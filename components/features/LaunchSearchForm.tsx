@@ -15,7 +15,7 @@ import { createClient } from "@/lib/supabase/client"
 import { authenticatedFetch } from "@/lib/fetch-client"
 import { toast } from "sonner"
 import { ScrapingProgressWidget } from "./ScrapingProgressWidget"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
 
 export function LaunchSearchForm() {
     const router = useRouter()
@@ -253,8 +253,8 @@ export function LaunchSearchForm() {
                     background: linear-gradient(
                         90deg, 
                         transparent, 
-                        rgba(99, 102, 241, 0.8), 
-                        rgba(236, 72, 153, 0.8), 
+                        rgba(99, 102, 241, 0.15), 
+                        rgba(236, 72, 153, 0.2), 
                         transparent
                     );
                     transform: skewX(-20deg);
@@ -367,43 +367,42 @@ export function LaunchSearchForm() {
                                 transition={{ delay: 0.4 }}
                                 className="flex items-center justify-between py-4 px-4 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border-2 border-indigo-200"
                             >
-                                <label className="flex items-center gap-3 text-sm font-medium cursor-pointer group">
-                                    <input
-                                        type="checkbox"
-                                        className="accent-indigo-600 h-5 w-5 rounded border-gray-300 cursor-pointer"
-                                        checked={formData.enrichmentEnabled}
-                                        onChange={(e) => setFormData({ ...formData, enrichmentEnabled: e.target.checked })}
-                                        onFocus={() => setIsCardFocused(true)}
-                                        onBlur={() => setIsCardFocused(false)}
-                                        disabled={loading}
-                                    />
-                                    <span className="flex items-center gap-2">
-                                        <Sparkles className="w-4 h-4 text-indigo-600" />
-                                        <span className="font-semibold">Enrichissement Intelligent (IA)</span>
-                                    </span>
-                                </label>
-
-                                <TooltipProvider>
-                                    <Tooltip delayDuration={200}>
-                                        <TooltipTrigger asChild>
-                                            <button type="button" className="text-indigo-600 hover:text-indigo-700 transition-colors">
-                                                <Info className="w-5 h-5" />
-                                            </button>
-                                        </TooltipTrigger>
-                                        <TooltipContent className="max-w-xs p-4 bg-gradient-to-br from-indigo-900 to-purple-900 text-white border-indigo-400">
-                                            <p className="font-semibold mb-2">🚀 Deep Search + Email Enrichment</p>
-                                            <p className="text-sm leading-relaxed mb-2">
+                                <HoverCard openDelay={200}>
+                                    <HoverCardTrigger asChild>
+                                        <label className="flex items-center gap-3 text-sm font-medium cursor-pointer group">
+                                            <input
+                                                type="checkbox"
+                                                className="accent-indigo-600 h-5 w-5 rounded border-gray-300 cursor-pointer"
+                                                checked={formData.enrichmentEnabled}
+                                                onChange={(e) => setFormData({ ...formData, enrichmentEnabled: e.target.checked })}
+                                                onFocus={() => setIsCardFocused(true)}
+                                                onBlur={() => setIsCardFocused(false)}
+                                                disabled={loading}
+                                            />
+                                            <span className="flex items-center gap-2">
+                                                <Sparkles className="w-4 h-4 text-purple-600 fill-purple-100" />
+                                                <span className="font-semibold">Deep Search IA</span>
+                                            </span>
+                                        </label>
+                                    </HoverCardTrigger>
+                                    <HoverCardContent className="w-80 backdrop-blur-md bg-white/90 dark:bg-slate-900/90 border-purple-200 shadow-xl">
+                                        <div className="space-y-3">
+                                            <div className="flex items-center gap-2">
+                                                <Sparkles className="w-5 h-5 text-purple-600 fill-purple-100" />
+                                                <p className="font-semibold text-purple-900 dark:text-purple-100">Deep Search + Email Enrichment</p>
+                                            </div>
+                                            <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300">
                                                 L'IA va extraire des <strong>informations détaillées</strong> sur chaque prospect en analysant leur site web et leurs données publiques.
                                             </p>
-                                            <p className="text-sm leading-relaxed mb-2">
+                                            <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300">
                                                 Si un email existe, il sera <strong>vérifié automatiquement</strong>. Sinon, plusieurs <strong>combinaisons intelligentes</strong> seront générées pour trouver une adresse email valide.
                                             </p>
-                                            <p className="text-xs text-indigo-200 border-t border-indigo-400 pt-2 mt-2">
+                                            <p className="text-xs text-purple-700 dark:text-purple-300 border-t border-purple-200 dark:border-purple-700 pt-2 mt-2">
                                                 ⚠️ <strong>Obligatoire</strong> pour générer des emails de prospection par la suite.
                                             </p>
-                                        </TooltipContent>
-                                    </Tooltip>
-                                </TooltipProvider>
+                                        </div>
+                                    </HoverCardContent>
+                                </HoverCard>
                             </motion.div>
 
                             {formData.enrichmentEnabled && (
