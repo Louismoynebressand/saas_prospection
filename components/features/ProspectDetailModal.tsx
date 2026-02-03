@@ -4,7 +4,7 @@ import { useState } from "react"
 import {
     Building2, Mail, Phone, MapPin, Globe, User,
     Star, Clock, CheckCircle2, XCircle, AlertCircle, Sparkles, Users, Store,
-    Briefcase, Copy, Facebook, Instagram, Linkedin, Twitter, ChevronDown, Info, X
+    Briefcase, Copy, Facebook, Instagram, Linkedin, Twitter, ChevronDown, Info, X, FileDown
 } from "lucide-react"
 import { differenceInYears, isValid } from "date-fns"
 import type { ScrapeProspect, CampaignProspectLink } from "@/types"
@@ -239,297 +239,324 @@ export function ProspectDetailModal({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-6xl max-h-[85vh] overflow-y-auto">
-                <DialogHeader>
-                    <DialogTitle className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <span className="text-2xl font-bold">{companyName}</span>
-                            {renderDeepScanBadge()}
-                            {campaignLink && (
-                                <Badge className={getStatusColor(campaignLink.email_status)}>
-                                    {getStatusLabel(campaignLink.email_status)}
-                                </Badge>
-                            )}
+            <DialogContent className="max-w-[95vw] lg:max-w-7xl w-full max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
+                <DialogHeader className="p-6 border-b shrink-0 bg-white dark:bg-slate-950 z-10">
+                    <DialogTitle className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div className="flex flex-col gap-1 min-w-0">
+                            <div className="flex items-center gap-3 flex-wrap">
+                                <span className="text-xl md:text-2xl font-bold truncate">{companyName}</span>
+                                {renderDeepScanBadge()}
+                                {campaignLink && (
+                                    <Badge className={getStatusColor(campaignLink.email_status)}>
+                                        {getStatusLabel(campaignLink.email_status)}
+                                    </Badge>
+                                )}
+                            </div>
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
+                                <span className="flex items-center gap-1 min-w-0 truncate"><Building2 className="w-4 h-4 shrink-0" /> {category}</span>
+                                {rating && (
+                                    <>
+                                        <span className="hidden sm:inline text-gray-300">|</span>
+                                        <span className="flex items-center gap-1 text-amber-500 font-medium whitespace-nowrap">
+                                            <Star className="w-4 h-4 fill-current" /> {rating} <span className="text-muted-foreground font-normal">({reviewCount})</span>
+                                        </span>
+                                    </>
+                                )}
+                            </div>
                         </div>
+                        <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)} className="md:hidden self-end absolute top-4 right-4">
+                            <X className="w-5 h-5" />
+                        </Button>
                     </DialogTitle>
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                        <span className="flex items-center gap-1"><Building2 className="w-4 h-4" /> {category}</span>
-                        {rating && (
-                            <span className="flex items-center gap-1 text-amber-500 font-medium">
-                                <Star className="w-4 h-4 fill-current" /> {rating} <span className="text-muted-foreground font-normal">({reviewCount})</span>
-                            </span>
-                        )}
-                    </div>
                 </DialogHeader>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 py-4">
-                    {/* LEFT COLUMN: CONTACT */}
-                    <div className="space-y-4 lg:col-span-1">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="text-base flex items-center gap-2"><User className="w-4 h-4 text-primary" /> Coordonnées</CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                {/* Email */}
-                                <div className="space-y-2 p-3 bg-muted/30 rounded-lg border">
-                                    <div className="flex items-center justify-between mb-1">
-                                        <span className="text-xs font-semibold text-muted-foreground uppercase">Email</span>
-                                        {renderEmailBadge()}
-                                    </div>
-                                    <div className="flex items-center gap-2 font-medium overflow-hidden">
-                                        <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
-                                        <CopyButton text={displayEmail} label="Email" />
-                                    </div>
-                                </div>
-                                {/* Phone */}
-                                <div className="space-y-1">
-                                    <span className="text-xs font-semibold text-muted-foreground uppercase">Téléphone</span>
-                                    <div className="flex items-center gap-2">
-                                        <Phone className="w-4 h-4 text-muted-foreground" />
-                                        <CopyButton text={scrapped["Téléphone"]} label="Téléphone" />
-                                    </div>
-                                </div>
-                                {/* Address */}
-                                <div className="space-y-1">
-                                    <span className="text-xs font-semibold text-muted-foreground uppercase">Adresse</span>
-                                    <div className="flex items-start gap-2">
-                                        <MapPin className="w-4 h-4 text-muted-foreground mt-1 shrink-0" />
-                                        <CopyButton text={address} label="Adresse" />
-                                    </div>
-                                </div>
-                                {/* Socials */}
-                                {deep.socials && Object.keys(deep.socials).length > 0 && (
-                                    <div className="pt-4 border-t">
-                                        <div className="flex gap-2 flex-wrap justify-center">
-                                            {Object.entries(deep.socials).map(([net, link]) => link && (
-                                                <Button key={net} variant="outline" size="icon" asChild title={net} className="h-9 w-9">
-                                                    <a href={link} target="_blank" rel="noopener noreferrer">
-                                                        {getSocialIcon(net)}
-                                                    </a>
-                                                </Button>
-                                            ))}
-                                            {website && (
-                                                <Button variant="outline" size="icon" asChild title="Site Web" className="h-9 w-9">
-                                                    <a href={website} target="_blank" rel="noopener noreferrer">
-                                                        <Globe className="w-4 h-4 text-gray-700" />
-                                                    </a>
-                                                </Button>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
-
-                        {scrapped["Heures d'ouverture"] && (
-                            <Card>
+                <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-50 dark:bg-slate-950/50">
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                        {/* LEFT COLUMN: CONTACT (Mobile: full, Desktop: 4/12) */}
+                        <div className="space-y-4 lg:col-span-4 h-fit">
+                            <Card className="border-l-4 border-l-primary/50 shadow-sm">
                                 <CardHeader className="pb-3">
-                                    <CardTitle className="text-sm flex items-center gap-2"><Clock className="w-4 h-4 text-primary" /> Horaires</CardTitle>
+                                    <CardTitle className="text-base flex items-center gap-2"><User className="w-4 h-4 text-primary" /> Coordonnées</CardTitle>
                                 </CardHeader>
-                                <CardContent className="text-sm">
-                                    <ul className="space-y-1">
-                                        {scrapped["Heures d'ouverture"].map((day, idx) => (
-                                            <li key={idx} className="flex justify-between py-1 border-b last:border-0 border-dashed">
-                                                <span className="font-medium capitalize">{day.day}</span>
-                                                <span className="text-muted-foreground text-xs">{formatHours(day.hours)}</span>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </CardContent>
-                            </Card>
-                        )}
-
-                        {/* Campaign Email Actions */}
-                        {campaignLink && (
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle className="text-sm">Actions Campagne</CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-2">
-                                    {onGenerateEmail && campaignLink.email_status === 'not_generated' && (
-                                        <Button onClick={onGenerateEmail} className="w-full" size="sm">
-                                            📧 Générer l'email
-                                        </Button>
-                                    )}
-                                    {onSendEmail && campaignLink.email_status === 'generated' && (
-                                        <Button onClick={onSendEmail} variant="default" className="w-full" size="sm">
-                                            ✉️ Envoyer
-                                        </Button>
-                                    )}
-                                    {campaignLink.generated_email_content && (
-                                        <div className="pt-2 border-t">
-                                            <p className="text-xs text-muted-foreground mb-2">Aperçu email</p>
-                                            <div className="bg-gray-50 p-3 rounded text-xs max-h-80 overflow-y-auto">
-                                                <p className="font-semibold mb-1">{campaignLink.generated_email_subject}</p>
-                                                <p className="whitespace-pre-wrap text-muted-foreground">{campaignLink.generated_email_content}</p>
+                                <CardContent className="space-y-4">
+                                    {/* Email */}
+                                    <div className="space-y-2 p-3 bg-muted/30 rounded-lg border">
+                                        <div className="flex items-center justify-between mb-1">
+                                            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Email</span>
+                                            {renderEmailBadge()}
+                                        </div>
+                                        <div className="flex items-center gap-2 font-medium overflow-hidden">
+                                            <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
+                                            <div className="min-w-0 flex-1">
+                                                <CopyButton text={displayEmail} label="Email" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {/* Phone */}
+                                    <div className="space-y-1">
+                                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Téléphone</span>
+                                        <div className="flex items-center gap-2">
+                                            <Phone className="w-4 h-4 text-muted-foreground" />
+                                            <CopyButton text={scrapped["Téléphone"]} label="Téléphone" />
+                                        </div>
+                                    </div>
+                                    {/* Address */}
+                                    <div className="space-y-1">
+                                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Adresse</span>
+                                        <div className="flex items-start gap-2">
+                                            <MapPin className="w-4 h-4 text-muted-foreground mt-1 shrink-0" />
+                                            <div className="break-words">
+                                                <CopyButton text={address} label="Adresse" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {/* Socials */}
+                                    {deep.socials && Object.keys(deep.socials).length > 0 && (
+                                        <div className="pt-4 border-t">
+                                            <div className="flex gap-2 flex-wrap text-muted-foreground">
+                                                {Object.entries(deep.socials).map(([net, link]) => link && (
+                                                    <Button key={net} variant="outline" size="icon" asChild title={net} className="h-8 w-8 rounded-full">
+                                                        <a href={link} target="_blank" rel="noopener noreferrer">
+                                                            {getSocialIcon(net)}
+                                                        </a>
+                                                    </Button>
+                                                ))}
+                                                {website && (
+                                                    <Button variant="outline" size="icon" asChild title="Site Web" className="h-8 w-8 rounded-full">
+                                                        <a href={website} target="_blank" rel="noopener noreferrer">
+                                                            <Globe className="w-4 h-4 text-gray-700" />
+                                                        </a>
+                                                    </Button>
+                                                )}
                                             </div>
                                         </div>
                                     )}
                                 </CardContent>
                             </Card>
-                        )}
-                    </div>
 
-                    {/* RIGHT COLUMN: DEEP SEARCH & DETAILS */}
-                    <div className="lg:col-span-2 space-y-4">
-                        <Tabs defaultValue="legal" className="w-full">
-                            <TabsList className="grid w-full grid-cols-2">
-                                <TabsTrigger value="legal">Identité & Juridique</TabsTrigger>
-                                <TabsTrigger value="infos">Détails & Services</TabsTrigger>
-                            </TabsList>
+                            {scrapped["Heures d'ouverture"] && (
+                                <Card className="shadow-sm">
+                                    <CardHeader className="pb-3">
+                                        <CardTitle className="text-sm flex items-center gap-2"><Clock className="w-4 h-4 text-primary" /> Horaires</CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="text-sm p-4 pt-0">
+                                        <ul className="space-y-1">
+                                            {scrapped["Heures d'ouverture"].map((day, idx) => (
+                                                <li key={idx} className="flex justify-between py-1 border-b last:border-0 border-dashed text-xs">
+                                                    <span className="font-medium capitalize">{day.day}</span>
+                                                    <span className="text-muted-foreground">{formatHours(day.hours)}</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </CardContent>
+                                </Card>
+                            )}
 
-                            <TabsContent value="legal" className="mt-4">
-                                <Card>
-                                    <CardContent className="pt-6 space-y-6">
-                                        {/* Deep Search Info Grid */}
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                                            <div className="p-3 bg-muted/20 rounded-lg col-span-1 md:col-span-2">
-                                                <span className="text-xs text-muted-foreground uppercase block mb-1">Raison Sociale</span>
-                                                <CopyButton text={deep.nom_raison_sociale} label="Raison Sociale" />
-                                            </div>
-                                            <div className="p-3 bg-muted/20 rounded-lg">
-                                                <span className="text-xs text-muted-foreground uppercase block mb-1">Siret</span>
-                                                <CopyButton text={deep.siret_siege} label="Siret" />
-                                            </div>
-                                            <div className="p-3 bg-muted/20 rounded-lg">
-                                                <span className="text-xs text-muted-foreground uppercase block mb-1">Code NAF</span>
-                                                <p className="font-mono text-sm">{deep.naf || "-"}</p>
-                                            </div>
-                                            <div className="p-3 bg-muted/20 rounded-lg">
-                                                <span className="text-xs text-muted-foreground uppercase block mb-1">Création</span>
-                                                <p className="text-sm">{deep.date_creation || "-"}</p>
-                                            </div>
-                                            <div className="p-3 bg-muted/20 rounded-lg">
-                                                <span className="text-xs text-muted-foreground uppercase block mb-1">Effectif</span>
-                                                <p className="font-medium flex items-center gap-1 text-sm">
-                                                    <Users className="w-3 h-3 text-muted-foreground" />
-                                                    {deep.effectif || "Non renseigné"}
+                            {/* Campaign Email Actions */}
+                            {campaignLink && (
+                                <Card className="border-indigo-100 bg-indigo-50/50 shadow-sm">
+                                    <CardHeader className="pb-2">
+                                        <CardTitle className="text-sm text-indigo-800">Actions Campagne</CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="space-y-3">
+                                        {onGenerateEmail && campaignLink.email_status === 'not_generated' && (
+                                            <Button onClick={onGenerateEmail} className="w-full bg-indigo-600 hover:bg-indigo-700" size="sm">
+                                                <Sparkles className="w-3 h-3 mr-2" /> Générer l'email
+                                            </Button>
+                                        )}
+                                        {onSendEmail && campaignLink.email_status === 'generated' && (
+                                            <Button onClick={onSendEmail} variant="default" className="w-full" size="sm">
+                                                ✉️ Envoyer
+                                            </Button>
+                                        )}
+                                        {campaignLink.generated_email_content && (
+                                            <div className="pt-2 border-t border-indigo-100">
+                                                <p className="text-xs text-indigo-700 font-semibold mb-2 flex items-center gap-1">
+                                                    <Mail className="w-3 h-3" /> Aperçu email
                                                 </p>
-                                            </div>
-                                            <div className="p-3 bg-muted/20 rounded-lg md:col-span-2">
-                                                <span className="text-xs text-muted-foreground uppercase block mb-1">Établissements</span>
-                                                <div className="flex gap-4">
-                                                    <div className="flex items-center gap-1 text-sm">
-                                                        <Store className="w-3 h-3 text-muted-foreground" /> Total: {deep.nombre_etablissements || 1}
-                                                    </div>
-                                                    <div className="flex items-center gap-1 text-sm text-green-600">
-                                                        Ouverts: {deep.nombre_etablissements_ouverts || 1}
-                                                    </div>
+                                                <div className="bg-white p-3 rounded-md border border-indigo-100 text-xs max-h-60 overflow-y-auto shadow-sm">
+                                                    <p className="font-semibold mb-2 text-indigo-900 border-b pb-1">{campaignLink.generated_email_subject}</p>
+                                                    <div dangerouslySetInnerHTML={{ __html: campaignLink.generated_email_content }} className="prose prose-xs max-w-none text-muted-foreground" />
                                                 </div>
                                             </div>
-                                        </div>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                            )}
+                        </div>
 
-                                        {/* AI Analysis */}
-                                        {(deep.points_forts || deep.clients_cibles || deep.style_communication) && (
-                                            <div className="p-4 rounded-lg border-primary/20 bg-primary/5 space-y-3">
-                                                <h4 className="flex items-center gap-2 text-primary font-semibold text-sm">
-                                                    <Sparkles className="w-4 h-4" /> Analyse IA
-                                                </h4>
-                                                <div className="grid md:grid-cols-2 gap-4">
-                                                    {deep.points_forts && (
-                                                        <div className="space-y-2">
-                                                            <span className="text-xs font-semibold text-muted-foreground uppercase">Points Forts</span>
-                                                            <div className="flex flex-wrap gap-1">
-                                                                {deep.points_forts.map((pt, i) => (
-                                                                    <Badge key={i} variant="secondary" className="bg-background/80 text-xs">{pt}</Badge>
-                                                                ))}
-                                                            </div>
+                        {/* RIGHT COLUMN: DEEP SEARCH & DETAILS (Mobile: full, Desktop: 8/12) */}
+                        <div className="lg:col-span-8 space-y-4 min-w-0">
+                            <Tabs defaultValue="legal" className="w-full">
+                                <TabsList className="grid w-full grid-cols-2 bg-muted/40 p-1">
+                                    <TabsTrigger value="legal" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">Identité & Juridique</TabsTrigger>
+                                    <TabsTrigger value="infos" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">Détails & Services</TabsTrigger>
+                                </TabsList>
+
+                                <TabsContent value="legal" className="mt-4 focus-visible:outline-none">
+                                    <Card className="border-none shadow-none bg-transparent">
+                                        <CardContent className="p-0 space-y-6">
+                                            {/* Deep Search Info Grid */}
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                                                <div className="p-3 bg-white dark:bg-slate-900 border rounded-lg sm:col-span-2 shadow-sm">
+                                                    <span className="text-[10px] items-center flex gap-1 font-bold text-muted-foreground uppercase mb-1"><Briefcase className="w-3 h-3" /> Raison Sociale</span>
+                                                    <div className="font-medium text-sm truncate"><CopyButton text={deep.nom_raison_sociale} label="Raison Sociale" /></div>
+                                                </div>
+                                                <div className="p-3 bg-white dark:bg-slate-900 border rounded-lg shadow-sm">
+                                                    <span className="text-[10px] items-center flex gap-1 font-bold text-muted-foreground uppercase mb-1"><FileDown className="w-3 h-3" /> Siret</span>
+                                                    <div className="font-mono text-sm truncate"><CopyButton text={deep.siret_siege} label="Siret" /></div>
+                                                </div>
+                                                <div className="p-3 bg-white dark:bg-slate-900 border rounded-lg shadow-sm">
+                                                    <span className="text-[10px] items-center flex gap-1 font-bold text-muted-foreground uppercase mb-1">Code NAF</span>
+                                                    <p className="font-mono text-sm">{deep.naf || "-"}</p>
+                                                </div>
+                                                <div className="p-3 bg-white dark:bg-slate-900 border rounded-lg shadow-sm">
+                                                    <span className="text-[10px] items-center flex gap-1 font-bold text-muted-foreground uppercase mb-1">Création</span>
+                                                    <p className="text-sm">{deep.date_creation || "-"}</p>
+                                                </div>
+                                                <div className="p-3 bg-white dark:bg-slate-900 border rounded-lg shadow-sm">
+                                                    <span className="text-[10px] items-center flex gap-1 font-bold text-muted-foreground uppercase mb-1">Effectif</span>
+                                                    <p className="font-medium flex items-center gap-1 text-sm text-foreground">
+                                                        <Users className="w-3 h-3 text-muted-foreground" />
+                                                        {deep.effectif || "Non renseigné"}
+                                                    </p>
+                                                </div>
+                                                <div className="p-3 bg-white dark:bg-slate-900 border rounded-lg sm:col-span-2 shadow-sm">
+                                                    <span className="text-[10px] items-center flex gap-1 font-bold text-muted-foreground uppercase mb-1">Établissements</span>
+                                                    <div className="flex gap-4">
+                                                        <div className="flex items-center gap-1 text-sm font-medium">
+                                                            <Store className="w-3 h-3 text-muted-foreground" /> Total: {deep.nombre_etablissements || 1}
                                                         </div>
-                                                    )}
-                                                    <div className="space-y-2">
-                                                        {deep.style_communication && (
-                                                            <div className="mb-2">
-                                                                <span className="text-xs font-semibold text-muted-foreground uppercase">Ton</span>
-                                                                <p className="text-sm italic">"{deep.style_communication}"</p>
-                                                            </div>
-                                                        )}
-                                                        {deep.clients_cibles && (
-                                                            <div>
-                                                                <span className="text-xs font-semibold text-muted-foreground uppercase">Cible</span>
-                                                                <p className="text-sm">{deep.clients_cibles}</p>
-                                                            </div>
-                                                        )}
+                                                        <div className="flex items-center gap-1 text-sm text-green-600 font-medium">
+                                                            Ouverts: {deep.nombre_etablissements_ouverts || 1}
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
-                                        )}
 
-                                        {/* Dirigeants */}
-                                        {deep.dirigeants && deep.dirigeants.length > 0 && (
-                                            <div className="pt-2">
-                                                <h4 className="font-semibold text-sm flex items-center gap-2 mb-3">
-                                                    <Briefcase className="w-4 h-4 text-primary" /> Dirigeants
-                                                </h4>
-                                                <div className="space-y-2">
-                                                    {deep.dirigeants.map((d, i) => {
-                                                        const age = calculateAge(d.date_de_naissance)
-                                                        return (
-                                                            <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 border rounded-md bg-muted/10 hover:bg-muted/20 transition-colors">
-                                                                <div className="font-medium flex items-center gap-2 text-sm">
-                                                                    <User className="h-4 w-4 text-muted-foreground" />
-                                                                    {d.prenoms} {d.nom}
-                                                                </div>
-                                                                <div className="text-sm text-muted-foreground flex gap-2 items-center mt-2 sm:mt-0">
-                                                                    <Badge variant="outline" className="bg-background text-xs">{d.qualite || "Dirigeant"}</Badge>
-                                                                    {age && (
-                                                                        <span className="text-xs border px-2 py-0.5 rounded-full bg-background">{age} ans</span>
-                                                                    )}
+                                            {/* AI Analysis */}
+                                            {(deep.points_forts || deep.clients_cibles || deep.style_communication) && (
+                                                <div className="p-5 rounded-xl border border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10 space-y-4">
+                                                    <h4 className="flex items-center gap-2 text-primary font-bold text-sm tracking-wide">
+                                                        <Sparkles className="w-4 h-4 fill-primary/20" /> ANALYSE IA
+                                                    </h4>
+                                                    <div className="grid md:grid-cols-2 gap-6">
+                                                        {deep.points_forts && (
+                                                            <div className="space-y-2">
+                                                                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Points Forts</span>
+                                                                <div className="flex flex-wrap gap-2">
+                                                                    {deep.points_forts.map((pt, i) => (
+                                                                        <Badge key={i} variant="secondary" className="bg-background/80 hover:bg-background text-xs border shadow-sm px-2 py-1">{pt}</Badge>
+                                                                    ))}
                                                                 </div>
                                                             </div>
-                                                        )
-                                                    })}
+                                                        )}
+                                                        <div className="space-y-4">
+                                                            {deep.style_communication && (
+                                                                <div className="space-y-1">
+                                                                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Ton & Style</span>
+                                                                    <p className="text-sm italic text-foreground/80 bg-background/50 p-2 rounded border border-dashed">"{deep.style_communication}"</p>
+                                                                </div>
+                                                            )}
+                                                            {deep.clients_cibles && (
+                                                                <div className="space-y-1">
+                                                                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Cible</span>
+                                                                    <p className="text-sm text-foreground/90">{deep.clients_cibles}</p>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        )}
-                                    </CardContent>
-                                </Card>
-                            </TabsContent>
+                                            )}
 
-                            <TabsContent value="infos" className="mt-4">
-                                <Card>
-                                    <CardContent className="pt-6">
-                                        {scrapped["Infos"] ? Object.entries(scrapped["Infos"]).map(([category, items], idx) => (
-                                            <div key={idx} className="mb-6 last:mb-0">
-                                                <h4 className="font-semibold mb-3 pb-2 border-b text-sm">{category}</h4>
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                                    {items.map((item, i) => {
-                                                        const key = Object.keys(item)[0]
-                                                        const val = item[key]
-                                                        if (!val) return null
-                                                        return (
-                                                            <div key={i} className="flex items-center gap-2 text-sm text-muted-foreground">
-                                                                <CheckCircle2 className="w-4 h-4 text-green-500/70" /> {key}
-                                                            </div>
-                                                        )
-                                                    })}
+                                            {/* Dirigeants */}
+                                            {deep.dirigeants && deep.dirigeants.length > 0 && (
+                                                <div className="pt-2">
+                                                    <h4 className="font-semibold text-sm flex items-center gap-2 mb-3 text-foreground">
+                                                        <Briefcase className="w-4 h-4 text-primary" /> Dirigeants
+                                                    </h4>
+                                                    <div className="grid sm:grid-cols-2 gap-3">
+                                                        {deep.dirigeants.map((d, i) => {
+                                                            const age = calculateAge(d.date_de_naissance)
+                                                            return (
+                                                                <div key={i} className="flex flex-col p-3 border rounded-lg bg-white dark:bg-slate-900 shadow-sm hover:border-primary/50 transition-colors">
+                                                                    <div className="font-bold flex items-center gap-2 text-sm text-foreground">
+                                                                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs uppercase">
+                                                                            {(d.prenoms?.[0] || "") + (d.nom?.[0] || "")}
+                                                                        </div>
+                                                                        {d.prenoms} {d.nom}
+                                                                    </div>
+                                                                    <div className="text-xs text-muted-foreground flex flex-wrap gap-2 items-center mt-2 ml-10">
+                                                                        <Badge variant="outline" className="bg-muted/50 font-normal">{d.qualite || "Dirigeant"}</Badge>
+                                                                        {age && (
+                                                                            <span className="text-[10px] text-muted-foreground">{age} ans</span>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            )
+                                                        })}
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        )) : (
-                                            <div className="text-center py-8 text-muted-foreground text-sm">Aucune information détaillée disponible.</div>
-                                        )}
-                                    </CardContent>
-                                </Card>
-                            </TabsContent>
-                        </Tabs>
+                                            )}
+                                        </CardContent>
+                                    </Card>
+                                </TabsContent>
 
-                        {/* JSON Debug */}
-                        <details className="group pt-4">
-                            <summary className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer hover:text-primary transition-colors select-none">
-                                <div className="p-2 border rounded group-open:bg-muted">🔍 Voir JSON complet</div>
-                            </summary>
-                            <div className="grid md:grid-cols-2 gap-4 mt-4">
-                                <div className="space-y-1">
-                                    <span className="text-xs text-muted-foreground font-mono">Data Scrapping</span>
-                                    <pre className="bg-slate-950 text-slate-50 p-4 rounded-lg overflow-x-auto max-h-[300px] text-[10px]">{JSON.stringify(scrapped, null, 2)}</pre>
-                                </div>
-                                <div className="space-y-1">
-                                    <span className="text-xs text-muted-foreground font-mono">Deep Search</span>
-                                    <pre className="bg-slate-950 text-slate-50 p-4 rounded-lg overflow-x-auto max-h-[300px] text-[10px]">{JSON.stringify(deep, null, 2)}</pre>
-                                </div>
+                                <TabsContent value="infos" className="mt-4 focus-visible:outline-none">
+                                    <Card className="border-none shadow-none bg-transparent">
+                                        <CardContent className="p-0">
+                                            {scrapped["Infos"] ? Object.entries(scrapped["Infos"]).map(([category, items], idx) => (
+                                                <div key={idx} className="mb-6 last:mb-0 bg-white dark:bg-slate-900 p-4 rounded-lg border shadow-sm">
+                                                    <h4 className="font-bold mb-3 pb-2 border-b text-sm text-foreground flex items-center gap-2">
+                                                        <Info className="w-4 h-4 text-primary" /> {category}
+                                                    </h4>
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
+                                                        {items.map((item, i) => {
+                                                            const key = Object.keys(item)[0]
+                                                            const val = item[key]
+                                                            if (!val) return null
+                                                            return (
+                                                                <div key={i} className="flex items-start gap-2 text-sm text-muted-foreground group">
+                                                                    <CheckCircle2 className="w-4 h-4 text-green-500/70 mt-0.5 shrink-0 group-hover:text-green-600 transition-colors" />
+                                                                    <span className="group-hover:text-foreground transition-colors">{key}</span>
+                                                                </div>
+                                                            )
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            )) : (
+                                                <div className="text-center py-12 text-muted-foreground text-sm bg-muted/20 rounded-lg border border-dashed">
+                                                    <Info className="w-10 h-10 mx-auto mb-3 opacity-20" />
+                                                    Aucune information détaillée disponible.
+                                                </div>
+                                            )}
+                                        </CardContent>
+                                    </Card>
+                                </TabsContent>
+                            </Tabs>
+
+                            {/* JSON Debug */}
+                            <div className="pt-8 border-t mt-8">
+                                <details className="group">
+                                    <summary className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer hover:text-primary transition-colors select-none w-fit">
+                                        <div className="px-3 py-1.5 border rounded-full group-open:bg-muted font-medium transition-colors">🛠️ Debug JSON</div>
+                                    </summary>
+                                    <div className="grid md:grid-cols-2 gap-4 mt-4 animate-in fade-in slide-in-from-top-2">
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] text-muted-foreground font-mono uppercase tracking-wider">Data Scrapping</span>
+                                            <pre className="bg-slate-950 text-slate-50 p-4 rounded-lg overflow-x-auto max-h-[300px] text-[10px] border border-slate-800 shadow-inner">{JSON.stringify(scrapped, null, 2)}</pre>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] text-muted-foreground font-mono uppercase tracking-wider">Deep Search</span>
+                                            <pre className="bg-slate-950 text-slate-50 p-4 rounded-lg overflow-x-auto max-h-[300px] text-[10px] border border-slate-800 shadow-inner">{JSON.stringify(deep, null, 2)}</pre>
+                                        </div>
+                                    </div>
+                                </details>
                             </div>
-                        </details>
+                        </div>
                     </div>
-                </div>
+
+                </div> {/* End Scrollable Content */}
             </DialogContent>
         </Dialog>
     )

@@ -303,13 +303,25 @@ export function CampaignProspectsList({ campaignId, campaign }: CampaignProspect
                                 <tbody>
                                     {prospects.map((cp) => {
                                         const prospect = (cp as any).scrape_prospect as any
-                                        const data = typeof prospect?.data_scrapping === 'string'
-                                            ? JSON.parse(prospect.data_scrapping)
-                                            : prospect?.data_scrapping || {}
+                                        let data: any = {}
+                                        try {
+                                            data = typeof prospect?.data_scrapping === 'string'
+                                                ? JSON.parse(prospect.data_scrapping)
+                                                : prospect?.data_scrapping || {}
+                                        } catch (e) {
+                                            console.error("Error parsing scrape data", e)
+                                        }
 
-                                        const name = data.title || data.name || 'Prospect'
-                                        const company = data.company || data.companyName || prospect?.secteur || '-'
-                                        const email = prospect?.email_adresse_verified || '-'
+                                        // Robust name extraction
+                                        const name = data.title || data.nom_complet || data.name || data.Titre || (data.nom ? `${data.prenom || ''} ${data.nom}`.trim() : null) || 'Prospect'
+
+                                        // Robust company extraction
+                                        const company = data.company || data.companyName || data.societe || prospect?.secteur || '-'
+
+                                        // Email extraction
+                                        const email = (Array.isArray(prospect?.email_adresse_verified) && prospect.email_adresse_verified.length > 0)
+                                            ? prospect.email_adresse_verified[0]
+                                            : (typeof prospect?.email_adresse_verified === 'string' ? prospect.email_adresse_verified : '-')
 
                                         return (
                                             <tr key={cp.id} className="border-b hover:bg-gray-50">
