@@ -385,7 +385,12 @@ export function LaunchSearchForm() {
                                             </span>
                                         </label>
                                     </HoverCardTrigger>
-                                    <HoverCardContent className="w-80 backdrop-blur-md bg-white/90 dark:bg-slate-900/90 border-purple-200 shadow-xl">
+                                    <HoverCardContent
+                                        className="w-80 backdrop-blur-lg bg-white/95 dark:bg-slate-900/95 border border-purple-200/50 dark:border-purple-700/50 shadow-xl"
+                                        align="center"
+                                        side="top"
+                                        sideOffset={8}
+                                    >
                                         <div className="space-y-3">
                                             <div className="flex items-center gap-2">
                                                 <Sparkles className="w-5 h-5 text-purple-600 fill-purple-100" />

@@ -377,18 +377,69 @@ export default function ProspectsPage() {
                                         >
                                             Ce mois
                                         </Button>
-                                    </div>
-                                    <div className="border-t pt-2">
-                                        <p className="text-sm font-medium mb-2 px-2">Période personnalisée</p>
-                                        <CalendarComponent
-                                            mode="range"
-                                            selected={{ from: customDateRange.from, to: customDateRange.to }}
-                                            onSelect={(range: any) => {
-                                                setCustomDateRange({ from: range?.from, to: range?.to })
-                                                setDateFilter('custom')
-                                            }}
-                                            numberOfMonths={2}
-                                        />
+
+                                        {/* Custom Date Button */}
+                                        <Popover>
+                                            <PopoverTrigger asChild>
+                                                <Button
+                                                    variant={dateFilter === 'custom' ? 'default' : 'ghost'}
+                                                    size="sm"
+                                                    className="w-full justify-start"
+                                                >
+                                                    📅 Date personnalisée
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-auto p-4" align="start" side="right">
+                                                <div className="space-y-4">
+                                                    <div className="flex items-center justify-between mb-2">
+                                                        <p className="text-sm font-semibold">Sélection de période</p>
+                                                    </div>
+
+                                                    {/* Text Inputs for Date Selection */}
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <div>
+                                                            <label className="text-xs text-gray-600 dark:text-gray-400 mb-1 block">Date de début</label>
+                                                            <Input
+                                                                type="date"
+                                                                value={customDateRange.from ? format(customDateRange.from, "yyyy-MM-dd") : ''}
+                                                                onChange={(e) => {
+                                                                    const newDate = e.target.value ? new Date(e.target.value) : undefined
+                                                                    setCustomDateRange({ ...customDateRange, from: newDate })
+                                                                    setDateFilter('custom')
+                                                                }}
+                                                                className="h-9 text-sm"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="text-xs text-gray-600 dark:text-gray-400 mb-1 block">Date de fin</label>
+                                                            <Input
+                                                                type="date"
+                                                                value={customDateRange.to ? format(customDateRange.to, "yyyy-MM-dd") : ''}
+                                                                onChange={(e) => {
+                                                                    const newDate = e.target.value ? new Date(e.target.value) : undefined
+                                                                    setCustomDateRange({ ...customDateRange, to: newDate })
+                                                                    setDateFilter('custom')
+                                                                }}
+                                                                className="h-9 text-sm"
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Calendar Component */}
+                                                    <div className="border-t pt-3">
+                                                        <CalendarComponent
+                                                            mode="range"
+                                                            selected={{ from: customDateRange.from, to: customDateRange.to }}
+                                                            onSelect={(range: any) => {
+                                                                setCustomDateRange({ from: range?.from, to: range?.to })
+                                                                setDateFilter('custom')
+                                                            }}
+                                                            numberOfMonths={2}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </PopoverContent>
+                                        </Popover>
                                     </div>
                                 </div>
                             </PopoverContent>
