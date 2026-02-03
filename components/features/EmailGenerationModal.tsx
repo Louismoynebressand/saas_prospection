@@ -83,7 +83,13 @@ export function EmailGenerationModal({ open, onOpenChange, prospect, onSuccess }
 
             if (!user) throw new Error("Non connecté")
 
-            const response = await authenticatedFetch('/api/cold-email/generate', {
+            console.log("🚀 Lancement génération Email...", {
+                userId: user.id,
+                campaignId: selectedCampaignId,
+                prospectId: prospect.id_prospect
+            })
+
+            const response = await fetch('/api/cold-email/generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
