@@ -6,12 +6,12 @@ import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
-import { Loader2, UserPlus, Mail, Send, Eye, RefreshCw } from "lucide-react"
+import { Loader2, UserPlus, Mail, Send, Eye } from "lucide-react"
 import { AddProspectsToCampaignModal } from "./AddProspectsToCampaignModal"
 import { ProspectViewModal } from "./ProspectViewModal"
 import { ProspectDetailModal } from "./ProspectDetailModal"
+import { EmailViewerModal } from "./EmailViewerModal"
 import type { CampaignProspectLink, EmailStatus } from "@/types"
 
 interface CampaignProspectsListProps {
@@ -24,16 +24,31 @@ export function CampaignProspectsList({ campaignId }: CampaignProspectsListProps
     const [selectedProspects, setSelectedProspects] = useState<Set<string>>(new Set())
     const [showAddModal, setShowAddModal] = useState(false)
     const [viewingProspect, setViewingProspect] = useState<any>(null)
+    const [viewingEmail, setViewingEmail] = useState<{ subject: string | null, content: string | null } | null>(null)
     const [detailProspect, setDetailProspect] = useState<any>(null)
     const [batchActionLoading, setBatchActionLoading] = useState(false)
+
+    // Polling only when not doing actions
+    useEffect(() => {
+        let intervalId: NodeJS.Timeout
+
+        const poll = () => {
+            if (!batchActionLoading) {
+                loadProspects(false)
+            }
+        }
+
+        intervalId = setInterval(poll, 5000)
+        return () => clearInterval(intervalId)
+    }, [campaignId, batchActionLoading])
 
     useEffect(() => {
         loadProspects()
     }, [campaignId])
 
-    const loadProspects = async () => {
+    const loadProspects = async (showLoading = true) => {
         try {
-            setLoading(true)
+            if (showLoading) setLoading(true)
             const response = await fetch(`/api/campaigns/${campaignId}/prospects`)
             if (response.ok) {
                 const data = await response.json()
@@ -41,9 +56,9 @@ export function CampaignProspectsList({ campaignId }: CampaignProspectsListProps
             }
         } catch (error) {
             console.error('Error loading prospects:', error)
-            toast.error('Erreur lors du chargement des prospects')
+            if (showLoading) toast.error('Erreur lors du chargement des prospects')
         } finally {
-            setLoading(false)
+            if (showLoading) setLoading(false)
         }
     }
 
@@ -106,7 +121,7 @@ export function CampaignProspectsList({ campaignId }: CampaignProspectsListProps
             if (!response.ok) throw new Error('Erreur mise à jour')
 
             toast.success('Statut mis à jour')
-            loadProspects()
+            loadProspects(false)
         } catch (error: any) {
             toast.error(error.message)
         }
@@ -336,31 +351,41 @@ export function CampaignProspectsList({ campaignId }: CampaignProspectsListProps
                                                 </td>
                                                 <td className="p-4">
                                                     <div className="flex justify-end gap-2">
-                                                        {cp.email_status === 'not_generated' && (
+                                                        {cp.email_status === 'not_generated' ? (
                                                             <Button
                                                                 size="sm"
                                                                 variant="outline"
                                                                 onClick={() => handleGenerateEmail(cp.prospect_id)}
+                                                                title="Générer l'email"
                                                             >
                                                                 <Mail className="w-4 h-4" />
                                                             </Button>
+                                                        ) : (
+                                                            <Button
+                                                                size="sm"
+                                                                variant="ghost"
+                                                                className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                                                onClick={() => setViewingEmail({
+                                                                    subject: cp.generated_email_subject || null,
+                                                                    content: cp.generated_email_content || null
+                                                                })}
+                                                                title="Voir l'email généré"
+                                                            >
+                                                                <Eye className="w-4 h-4" />
+                                                            </Button>
                                                         )}
+
                                                         {cp.email_status === 'generated' && (
                                                             <Button
                                                                 size="sm"
                                                                 onClick={() => handleSendEmail(cp.prospect_id)}
+                                                                className="bg-green-600 hover:bg-green-700 text-white"
+                                                                title="Envoyer l'email"
                                                             >
                                                                 <Send className="w-4 h-4" />
                                                             </Button>
                                                         )}
-                                                        <Button
-                                                            size="sm"
-                                                            variant="ghost"
-                                                            onClick={() => setViewingProspect({ ...prospect, campaignLink: cp })}
-                                                            title="Aperçu rapide"
-                                                        >
-                                                            <Eye className="w-4 h-4" />
-                                                        </Button>
+
                                                         <Button
                                                             size="sm"
                                                             variant="outline"
@@ -386,7 +411,13 @@ export function CampaignProspectsList({ campaignId }: CampaignProspectsListProps
                 open={showAddModal}
                 onOpenChange={setShowAddModal}
                 campaignId={campaignId}
-                onSuccess={loadProspects}
+                onSuccess={() => loadProspects()}
+            />
+
+            <EmailViewerModal
+                open={!!viewingEmail}
+                onOpenChange={(open) => !open && setViewingEmail(null)}
+                email={viewingEmail}
             />
 
             <ProspectViewModal
