@@ -1,124 +1,183 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
+import { createClient } from '@/lib/supabase/server'
+import { logInfo, logError } from '@/lib/logger'
 
-import { createClient } from "@/lib/supabase/server"
-import { NextRequest, NextResponse } from "next/server"
+// Schema pour valider le payload
+const generateEmailSchema = z.object({
+    campaignId: z.string().uuid(),
+    prospectIds: z.array(z.union([z.string(), z.number()])).min(1)
+})
 
-const WEBHOOK_URL = process.env.N8N_WEBHOOK_COLD_EMAIL || process.env.NEXT_PUBLIC_N8N_WEBHOOK_COLD_EMAIL_URL
+/**
+ * POST /api/cold-email/generate
+ * 
+ * Déclenche la génération de Cold Emails via Webhook N8N.
+ * 
+ * Process:
+ * 1. Auth Check
+ * 2. Payload Validation
+ * 3. Quota Check (Optional - Soft limit for now)
+ * 4. Job Creation (cold_email_jobs)
+ * 5. Campaign-Prospect Links Upsert (campaign_prospect_links)
+ * 6. Webhook Trigger (N8N)
+ */
+export async function POST(request: NextRequest) {
+    const startTime = Date.now()
+    let userId: string | undefined = undefined
 
-export async function POST(req: NextRequest) {
     try {
+        // 1. Validations
+        const body = await request.json()
+        const validated = generateEmailSchema.parse(body)
+
         const supabase = await createClient()
-        const body = await req.json()
-        const { campaignId, prospectIds, userId } = body
+        const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-        if (!campaignId || !prospectIds || !userId) {
-            return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
+        if (authError || !user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        if (!WEBHOOK_URL) {
-            return NextResponse.json({ error: "Webhook URL not configured" }, { status: 500 })
+        userId = user.id
+
+        logInfo('Cold Email generation requested', {
+            userId,
+            campaignId: validated.campaignId,
+            prospectCount: validated.prospectIds.length
+        })
+
+        // Webhook URL (Environment or Hardcoded Fallback)
+        const HARDCODED_URL = "https://n8n.srv903375.hstgr.cloud/webhook/neuraflow_scrappeur_generateur_cold_mail"
+        const webhookUrl = process.env.N8N_WEBHOOK_COLD_EMAIL || process.env.NEXT_PUBLIC_N8N_WEBHOOK_COLD_EMAIL_URL || HARDCODED_URL
+
+        if (!webhookUrl) {
+            throw new Error('Webhook URL not configured')
         }
 
-        // 1. Verify Quotas
+        // 2. Vérification Quotas (Lecture seule pour l'instant)
         const { data: quota, error: quotaError } = await supabase
             .from('quotas')
-            .select('*')
-            .eq('user_id', userId)
+            .select('cold_emails_used, cold_emails_limit')
+            .eq('user_id', user.id)
             .single()
 
-        if (quotaError || !quota) {
-            return NextResponse.json({ error: "Impossible de vérifier les quotas" }, { status: 400 })
+        // Note: On ne bloque pas strictement ici si pas de quota trouvé pour éviter de bloquer l'UX 
+        // si la migration n'est pas parfaite, mais on loggue l'info.
+        // N8N gérera la décrémentation réelle ou le blocage si nécessaire.
+        if (quota) {
+            // Basic check capable logic could go here
         }
 
-        // Optional: Block if quota exceeded (soft or hard limit)
-        // For now, we just proceed and increment later.
-
-        // 2. Fetch Campaign Details
-        const { data: campaign, error: campError } = await supabase
-            .from('cold_email_campaigns')
-            .select('*')
-            .eq('id', campaignId)
-            .single()
-
-        if (campError || !campaign) {
-            return NextResponse.json({ error: "Campagne introuvable" }, { status: 404 })
-        }
-
-        // 3. Create Job
+        // 3. Création du Job (Tracking)
         const { data: job, error: jobError } = await supabase
             .from('cold_email_jobs')
             .insert({
-                user_id: userId,
-                campaign_id: campaignId,
-                status: 'queued',
-                prospect_ids: prospectIds,
+                user_id: user.id,
+                campaign_id: validated.campaignId,
+                prospect_ids: validated.prospectIds, // Stocké en jsonb
+                status: 'pending',
                 started_at: new Date().toISOString()
             })
             .select()
             .single()
 
-        if (jobError) {
-            console.error(jobError)
-            return NextResponse.json({ error: "Erreur création job" }, { status: 500 })
+        if (jobError || !job) {
+            console.error('❌ Failed to create cold email job:', jobError)
+            throw new Error('Failed to create tracking job')
         }
 
-        // 4. Fetch Prospects Data for Payload
-        // We need to send rich data to the webhook so it can generate the email
-        const { data: prospects } = await supabase
-            .from('scrape_prospect')
-            .select('*')
-            .in('id_prospect', prospectIds)
+        // 4. Initialisation des liens Prospect-Campagne
+        const linksToUpsert = validated.prospectIds.map(prospectId => ({
+            campaign_id: validated.campaignId,
+            prospect_id: prospectId, // Table campaign_prospects utilise prospect_id
+            email_status: 'not_generated', // Status initial
+            updated_at: new Date().toISOString()
+        }))
 
-        if (!prospects || prospects.length === 0) {
-            return NextResponse.json({ error: "Aucun prospect trouvé" }, { status: 404 })
-        }
-
-        // 5. Trigger Webhook
-        const payload = {
-            job_id: job.id,
-            user_id: userId,
-            campaign: {
-                name: campaign.nom_campagne,
-                my_company: campaign.nom_entreprise_client,
-                my_offer: campaign.offre_principale_client,
-                tone: campaign.ton_souhaite,
-                constraints: campaign.contraintes,
-                // Add all other relevant fields...
-                website: campaign.site_web_client,
-                pitch: campaign.phrase_positionnement_client
-            },
-            prospects: prospects.map((p: any) => ({
-                id: p.id_prospect,
-                data: typeof p.data_scrapping === 'string' ? JSON.parse(p.data_scrapping) : p.data_scrapping,
-                deep_search: typeof p.deep_search === 'string' ? JSON.parse(p.deep_search) : p.deep_search
-            }))
-        }
-
-        // Fire and forget mechanism for speed, or await? 
-        // Better to await to confirm receipt.
-        try {
-            const webhookRes = await fetch(WEBHOOK_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+        const { error: linksError } = await supabase
+            .from('campaign_prospects')
+            .upsert(linksToUpsert, {
+                onConflict: 'campaign_id,prospect_id',
+                ignoreDuplicates: false
             })
 
-            if (!webhookRes.ok) {
-                console.error("Webhook Error", await webhookRes.text())
-                // Only log, don't fail the job yet, maybe N8N is busy
-            }
-        } catch (e) {
-            console.error("Webhook Network Error", e)
+        if (linksError) {
+            // On loggue mais on ne bloque pas tout le process, N8N pourra gérer ou retry
+            console.error('⚠️ Warning: Failed to upsert campaign links:', linksError)
         }
 
-        // 6. Update Job Status to Running
-        await supabase
-            .from('cold_email_jobs')
-            .update({ status: 'running' })
-            .eq('id', job.id)
+        // 5. Payload Webhook N8N
+        const webhookPayload = {
+            user_id: user.id,
+            job_id: job.id,
+            campaign_id: validated.campaignId,
+            prospect_ids: validated.prospectIds
+        }
 
-        return NextResponse.json({ success: true, jobId: job.id })
+        // 6. Appel Webhook (avec Timeout)
+        console.log(`📤 [Cold Email] Calling webhook: ${webhookUrl}`)
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 30000) // 30s max
 
-    } catch (e: any) {
-        return NextResponse.json({ error: e.message }, { status: 500 })
+        try {
+            const webhookResponse = await fetch(webhookUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'NeuraFlow/1.0'
+                },
+                body: JSON.stringify(webhookPayload),
+                signal: controller.signal
+            })
+
+            clearTimeout(timeoutId)
+
+            if (!webhookResponse.ok) {
+                const errorText = await webhookResponse.text()
+                throw new Error(`Webhook returned ${webhookResponse.status}: ${errorText}`)
+            }
+
+            console.log(`✅ [Cold Email] Webhook triggered successfully`)
+
+            // Update Job status to 'running' implies webhook received it
+            await supabase
+                .from('cold_email_jobs')
+                .update({ status: 'running' })
+                .eq('id', job.id)
+
+            return NextResponse.json({
+                success: true,
+                jobId: job.id,
+                prospectCount: validated.prospectIds.length
+            })
+
+        } catch (fetchError: any) {
+            clearTimeout(timeoutId)
+            console.error('❌ Webhook call failed:', fetchError)
+
+            // Mark job as failed
+            await supabase
+                .from('cold_email_jobs')
+                .update({
+                    status: 'failed',
+                    error_message: fetchError.message
+                })
+                .eq('id', job.id)
+
+            throw fetchError
+        }
+
+    } catch (error: any) {
+        logError('Cold email generation check failed', error, { userId })
+
+        // Zod validation error
+        if (error instanceof z.ZodError) {
+            return NextResponse.json({ error: 'Invalid payload', details: (error as any).errors }, { status: 400 })
+        }
+
+        return NextResponse.json(
+            { error: error.message || 'Internal server error' },
+            { status: 500 }
+        )
     }
 }
