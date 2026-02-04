@@ -14,6 +14,7 @@ import { CampaignProspectsList } from "@/components/features/CampaignProspectsLi
 import { CampaignConfigEditor } from "@/components/features/CampaignConfigEditor"
 import { CampaignSchedulerModal } from "@/components/features/CampaignSchedulerModal"
 import { PlanningTab } from "@/components/features/PlanningTab"
+import { AddProspectsToCampaignModal } from "@/components/features/AddProspectsToCampaignModal"
 import { AIBadge } from "@/components/ui/ai-badge"
 import Link from "next/link"
 
@@ -30,6 +31,10 @@ export default function CampaignDetailPage() {
     // State for Scheduling
     const [schedule, setSchedule] = useState<any>(null)
     const [queueStats, setQueueStats] = useState({ pending: 0, sent: 0, failed: 0, total: 0 })
+
+    // Lifted State for Add Prospects
+    const [showAddProspectModal, setShowAddProspectModal] = useState(false)
+    const [prospectsRefreshTrigger, setProspectsRefreshTrigger] = useState(0)
 
     useEffect(() => {
         const fetchCampaign = async () => {
@@ -74,7 +79,7 @@ export default function CampaignDetailPage() {
 
         fetchCampaign()
         fetchSchedule()
-    }, [campaignId])
+    }, [campaignId, prospectsRefreshTrigger]) // Refresh stats when prospects added
 
     const handleScheduleUpdate = () => {
         // Refresh page or re-fetch
@@ -116,15 +121,16 @@ export default function CampaignDetailPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4 }}
             >
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => router.push('/emails')}
-                    className="mb-4"
-                >
-                    <ArrowLeft className="w-4 h-4 mr-2" />
-                    Retour aux campagnes
-                </Button>
+                <div className="flex justify-between items-start mb-4">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => router.push('/emails')}
+                    >
+                        <ArrowLeft className="w-4 h-4 mr-2" />
+                        Retour aux campagnes
+                    </Button>
+                </div>
 
                 <div className="flex items-start justify-between">
                     <div>
@@ -170,14 +176,23 @@ export default function CampaignDetailPage() {
                     </TabsList>
 
                     <TabsContent value="prospects" className="space-y-4">
-                        <CampaignProspectsList campaignId={campaignId} campaign={campaign} />
+                        <CampaignProspectsList
+                            campaignId={campaignId}
+                            campaign={campaign}
+                            onAddProspects={() => setShowAddProspectModal(true)}
+                            refreshTrigger={prospectsRefreshTrigger}
+                        />
                     </TabsContent>
 
                     <TabsContent value="planning" className="space-y-4">
                         <div className="mb-4 md:hidden">
                             <CampaignSchedulerModal campaignId={campaignId} onScheduled={handleScheduleUpdate} />
                         </div>
-                        <PlanningTab schedule={schedule} queueStats={queueStats} />
+                        <PlanningTab
+                            schedule={schedule}
+                            queueStats={queueStats}
+                            onAddProspects={() => setShowAddProspectModal(true)}
+                        />
                     </TabsContent>
 
                     <TabsContent value="configuration" className="space-y-4">
@@ -188,6 +203,14 @@ export default function CampaignDetailPage() {
                     </TabsContent>
                 </Tabs>
             </motion.div>
-        </div >
+
+            {/* Global Modals */}
+            <AddProspectsToCampaignModal
+                open={showAddProspectModal}
+                onOpenChange={setShowAddProspectModal}
+                campaignId={campaignId}
+                onSuccess={() => setProspectsRefreshTrigger(prev => prev + 1)}
+            />
+        </div>
     )
 }
