@@ -98,7 +98,7 @@ export default function CampaignDetailPage() {
                 <div className="text-center">
                     <p className="text-2xl font-bold mb-2">Campagne introuvable</p>
                     <Button asChild variant="outline">
-                        <Link href="/prospection-mail">
+                        <Link href="/emails">
                             <ArrowLeft className="w-4 h-4 mr-2" />
                             Retour aux campagnes
                         </Link>
@@ -119,7 +119,7 @@ export default function CampaignDetailPage() {
                 <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => router.push('/prospection-mail')}
+                    onClick={() => router.push('/emails')}
                     className="mb-4"
                 >
                     <ArrowLeft className="w-4 h-4 mr-2" />
