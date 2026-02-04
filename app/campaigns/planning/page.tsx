@@ -6,6 +6,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
+import { cn } from "@/lib/utils"
 
 export default async function GlobalPlanningPage() {
     const supabase = await createClient()
