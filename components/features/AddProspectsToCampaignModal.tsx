@@ -233,30 +233,37 @@ export function AddProspectsToCampaignModal({
     })
 
     return (
-        {/* WARNING ALERT */ }
-                {
-        hasActiveSchedule && (
-            <div className="bg-amber-50 border-l-4 border-amber-500 p-4 mb-4 rounded-md">
-                <div className="flex">
-                    <div className="flex-shrink-0">
-                        <Search className="h-5 w-5 text-amber-500" aria-hidden="true" /> {/* Using Search as fallback icon if AlertTriangle not imported, let's fix imports */}
-                    </div>
-                    <div className="ml-3">
-                        <h3 className="text-sm font-medium text-amber-800">
-                            Campagne Active détectée
-                        </h3>
-                        <div className="mt-2 text-sm text-amber-700">
-                            <p>
-                                Cette campagne a une planification en cours. L'ajout de prospects déclenchera <strong>automatiquement la génération de leur email</strong> pour les ajouter à la file d'attente.
-                                Cela utilisera vos crédits "Cold Email".
-                            </p>
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
+                <DialogHeader>
+                    <DialogTitle>Ajouter des prospects à la campagne</DialogTitle>
+                    <DialogDescription>
+                        Sélectionnez les prospects individuellement ou importez tous les prospects d'une recherche
+                    </DialogDescription>
+                </DialogHeader>
+
+                {/* WARNING ALERT */}
+                {hasActiveSchedule && (
+                    <div className="bg-amber-50 border-l-4 border-amber-500 p-4 mb-4 rounded-md">
+                        <div className="flex">
+                            <div className="flex-shrink-0">
+                                <Search className="h-5 w-5 text-amber-500" aria-hidden="true" />
+                            </div>
+                            <div className="ml-3">
+                                <h3 className="text-sm font-medium text-amber-800">
+                                    Campagne Active détectée
+                                </h3>
+                                <div className="mt-2 text-sm text-amber-700">
+                                    <p>
+                                        Cette campagne a une planification en cours. L'ajout de prospects déclenchera <strong>automatiquement la génération de leur email</strong> pour les ajouter à la file d'attente.
+                                        Cela utilisera vos crédits "Cold Email".
+                                    </p>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </div>
-            </div>
-        )
-    }
-                
+                )}
+
                 <Tabs value={mode} onValueChange={(v) => setMode(v as any)} className="flex-1 flex flex-col">
                     {/* ... Tabs List ... */}
                     <TabsList className="grid w-full grid-cols-2">
@@ -270,7 +277,7 @@ export function AddProspectsToCampaignModal({
                         </TabsTrigger>
                     </TabsList>
 
-                   {/* ... Content ... */}
+                    {/* ... Content ... */}
                     <TabsContent value="prospects" className="flex-1 flex flex-col mt-4 space-y-4">
                         {/* ... Search Bar ... */}
                         <div className="flex items-center gap-2">
@@ -290,21 +297,21 @@ export function AddProspectsToCampaignModal({
 
                         <div className="flex justify-between items-center text-sm text-muted-foreground">
                             <span>{selectedProspectIds.size} prospect(s) sélectionné(s)</span>
-                           {/* QUOTA DISPLAY */}
-                           {hasActiveSchedule && quotas && (
+                            {/* QUOTA DISPLAY */}
+                            {hasActiveSchedule && quotas && (
                                 <span className={cn(
-                                    "font-semibold", 
+                                    "font-semibold",
                                     (quotas.limit - quotas.used) < selectedProspectIds.size ? "text-red-600" : "text-green-600"
                                 )}>
                                     Crédits restants : {quotas.limit - quotas.used}
                                 </span>
-                           )}
+                            )}
                         </div>
 
                         <ScrollArea className="h-[350px] border rounded-lg">
                             <div className="p-4 space-y-2">
                                 {filteredProspects.map((prospect) => {
-                                      // ... prospect mapping ...
+                                    // ... prospect mapping ...
                                     const data = typeof prospect.data_scrapping === 'string'
                                         ? JSON.parse(prospect.data_scrapping)
                                         : prospect.data_scrapping || {}
@@ -338,7 +345,7 @@ export function AddProspectsToCampaignModal({
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-2 flex-wrap">
                                                     <div className="font-semibold text-gray-900">{name}</div>
-                                                     {jobTitle && (
+                                                    {jobTitle && (
                                                         <Badge variant="secondary" className="text-xs">
                                                             {jobTitle}
                                                         </Badge>
@@ -388,17 +395,17 @@ export function AddProspectsToCampaignModal({
                             </Button>
                         </div>
 
-                         {/* QUOTA DISPLAY FOR SEARCHES */}
-                         {hasActiveSchedule && quotas && (
-                             <div className="text-right text-sm">
+                        {/* QUOTA DISPLAY FOR SEARCHES */}
+                        {hasActiveSchedule && quotas && (
+                            <div className="text-right text-sm">
                                 <span className={cn(
-                                    "font-semibold", 
-                                     // estimating usage is hard for searches without summing, assume block on execution or warn here
+                                    "font-semibold",
+                                    // estimating usage is hard for searches without summing, assume block on execution or warn here
                                     "text-muted-foreground"
                                 )}>
                                     Crédits restants : {quotas.limit - quotas.used}
                                 </span>
-                             </div>
+                            </div>
                         )}
 
                         <ScrollArea className="h-[350px] border rounded-lg">
@@ -465,14 +472,14 @@ export function AddProspectsToCampaignModal({
                     <Button onClick={() => onOpenChange(false)} variant="outline">
                         Annuler
                     </Button>
-                    
+
                     {hasActiveSchedule && quotas && (mode === 'prospects' ? selectedProspectIds.size : 0) > (quotas.limit - quotas.used) ? (
-                         <Button
+                        <Button
                             onClick={() => window.open('/billing', '_blank')}
                             className="bg-purple-600 hover:bg-purple-700"
-                         >
+                        >
                             Augmenter mon quota
-                         </Button>
+                        </Button>
                     ) : (
                         <Button
                             onClick={handleAddProspects}
