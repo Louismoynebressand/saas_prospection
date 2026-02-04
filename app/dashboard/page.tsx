@@ -83,24 +83,26 @@ export default function DashboardPage() {
                     .select('*', { count: 'exact', head: true })
                     .eq('id_user', user.id),
 
-                // Emails generated (from cold email generation)
+                // Emails generated (from campaign_prospects status)
                 supabase
-                    .from('cold_email_generations')
-                    .select('*', { count: 'exact', head: true })
-                    .eq('user_id', user.id),
+                    .from('campaign_prospects')
+                    .select('*, campaigns!inner(user_id)', { count: 'exact', head: true })
+                    .eq('campaigns.user_id', user.id)
+                    .eq('email_status', 'generated'),
 
-                // Active Campaigns
+                // Active Campaigns (Check multiple status variations)
                 supabase
                     .from('campaigns')
                     .select('*', { count: 'exact', head: true })
                     .eq('user_id', user.id)
-                    .eq('status', 'ACTIVE'),
+                    .or('status.eq.ACTIVE,status.eq.active,status.eq.Running,is_active.eq.true'),
 
-                // Emails Sent (via campaign links)
+                // Emails Sent (via campaign_prospects)
                 supabase
-                    .from('campaign_prospect_links')
-                    .select('*', { count: 'exact', head: true })
-                    .in('email_status', ['sent', 'opened', 'clicked', 'replied']), // Count any interaction as sent initially
+                    .from('campaign_prospects')
+                    .select('*, campaigns!inner(user_id)', { count: 'exact', head: true })
+                    .eq('campaigns.user_id', user.id)
+                    .in('email_status', ['sent', 'opened', 'clicked', 'replied']),
 
                 // Scheduled Emails
                 supabase
@@ -117,23 +119,13 @@ export default function DashboardPage() {
                 totalSearches: searchesResult.count || 0,
                 activeSearches: activeSearchesResult.count || 0,
                 emailsScanned: emailsScannedResult.count || 0,
-                // Fix: Count prospects with generated status
-                emailsGenerated: 0,
-                // Fix: Count active campaigns by status
+                emailsGenerated: emailsGeneratedResult.count || 0,
                 activeCampaigns: activeCampaignsResult.count || 0,
                 emailsSent: emailsSentResult.count || 0,
                 emailsScheduled: emailsScheduledResult.count || 0
             }
 
-            // 2. Generated: check scrape_prospects with email_status='generated'
-            const { count: generatedCount } = await supabase
-                .from('scrape_prospect')
-                .select('*', { count: 'exact', head: true })
-                .eq('id_user', user.id)
-                .eq('email_status', 'generated')
-
-            if (generatedCount !== null) newStats.emailsGenerated = generatedCount
-
+            // Remove manual re-runs as the main queries are now corrected
             setStats(newStats)
             setLoading(false)
         } catch (err: any) {
