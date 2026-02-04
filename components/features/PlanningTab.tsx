@@ -189,9 +189,9 @@ export function PlanningTab({ schedule, queueStats, onUpdate, onAddProspects }: 
     const timelineData = []
     let daysToFinish = 0
 
-    for (let i = 0; i < 365; i++) {
-        // Stop if done (and we have shown at least 15 days for visual context)
-        if (simulatedRemaining <= 0 && i > 15) break
+    for (let i = 0; i < 180; i++) {
+        // Show at least 180 days for "long term" visibility
+        // if (simulatedRemaining <= 0 && i > 15) break // REMOVED to show long term
 
         const dayOfWeek = simulationDate.getDay() || 7 // 1-7
         const isBeforeStart = isBefore(simulationDate, scheduleStart)
