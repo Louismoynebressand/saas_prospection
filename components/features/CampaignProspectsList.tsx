@@ -25,7 +25,6 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
     const [prospects, setProspects] = useState<CampaignProspectLink[]>([])
     const [loading, setLoading] = useState(true)
     const [selectedProspects, setSelectedProspects] = useState<Set<string>>(new Set())
-    // const [showAddModal, setShowAddModal] = useState(false) // Moved to parent
     const [viewingProspect, setViewingProspect] = useState<any>(null)
     const [viewingEmail, setViewingEmail] = useState<{ subject: string | null, content: string | null } | null>(null)
     const [detailProspect, setDetailProspect] = useState<any>(null)
@@ -281,10 +280,12 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
                     ) : prospects.length === 0 ? (
                         <div className="text-center py-12">
                             <p className="text-muted-foreground mb-4">Aucun prospect dans cette campagne</p>
-                            <Button onClick={() => setShowAddModal(true)}>
-                                <UserPlus className="w-4 h-4 mr-2" />
-                                Ajouter des prospects
-                            </Button>
+                            {onAddProspects && (
+                                <Button onClick={onAddProspects}>
+                                    <UserPlus className="w-4 h-4 mr-2" />
+                                    Ajouter des prospects
+                                </Button>
+                            )}
                         </div>
                     ) : (
                         <div className="overflow-x-auto">
