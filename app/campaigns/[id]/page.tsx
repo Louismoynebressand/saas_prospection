@@ -144,7 +144,7 @@ export default function CampaignDetailPage() {
                     </div>
                     <div className="flex items-center gap-2">
                         <div className="hidden md:block">
-                            <CampaignSchedulerModal campaignId={campaignId} onScheduled={handleScheduleUpdate} />
+                            <CampaignSchedulerModal campaignId={campaignId} onScheduled={handleScheduleUpdate} hasSchedule={!!schedule} />
                         </div>
                         <Badge variant={campaign.status === 'ACTIVE' ? 'default' : 'secondary'}>
                             {campaign.status}
@@ -186,7 +186,7 @@ export default function CampaignDetailPage() {
 
                     <TabsContent value="planning" className="space-y-4">
                         <div className="mb-4 md:hidden">
-                            <CampaignSchedulerModal campaignId={campaignId} onScheduled={handleScheduleUpdate} />
+                            <CampaignSchedulerModal campaignId={campaignId} onScheduled={handleScheduleUpdate} hasSchedule={!!schedule} />
                         </div>
                         <PlanningTab
                             schedule={schedule}

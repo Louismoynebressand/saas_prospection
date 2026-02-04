@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
-import { CalendarIcon, Clock, Mail, Play, AlertCircle, Loader2, ArrowRight } from "lucide-react"
+import { CalendarIcon, Clock, Mail, Play, AlertCircle, Loader2, ArrowRight, CheckCircle2, Sparkles } from "lucide-react"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import Link from "next/link"

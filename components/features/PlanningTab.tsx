@@ -59,7 +59,13 @@ export function PlanningTab({ schedule, queueStats, onUpdate, onAddProspects }: 
     const [editTimeWindow, setEditTimeWindow] = useState({ start: "08:00", end: "18:00" })
     const [editDays, setEditDays] = useState<number[]>([])
     const [editSmtpId, setEditSmtpId] = useState<string>("")
+    const [editTimeWindow, setEditTimeWindow] = useState({ start: "08:00", end: "18:00" })
+    const [editDays, setEditDays] = useState<number[]>([])
+    const [editSmtpId, setEditSmtpId] = useState<string>("")
     const [smtpConfigs, setSmtpConfigs] = useState<any[]>([])
+
+    // Timeline State
+    const [daysToShow, setDaysToShow] = useState(30)
 
     useEffect(() => {
         if (schedule) {
@@ -189,9 +195,8 @@ export function PlanningTab({ schedule, queueStats, onUpdate, onAddProspects }: 
     const timelineData = []
     let daysToFinish = 0
 
-    for (let i = 0; i < 180; i++) {
-        // Show at least 180 days for "long term" visibility
-        // if (simulatedRemaining <= 0 && i > 15) break // REMOVED to show long term
+    for (let i = 0; i < daysToShow; i++) {
+        // Dynamic limit controlled by "Load More"
 
         const dayOfWeek = simulationDate.getDay() || 7 // 1-7
         const isBeforeStart = isBefore(simulationDate, scheduleStart)
@@ -204,16 +209,14 @@ export function PlanningTab({ schedule, queueStats, onUpdate, onAddProspects }: 
             simulatedRemaining -= sentCount
         }
 
-        if (i < 30) {
-            timelineData.push({
-                date: new Date(simulationDate),
-                sent: sentCount,
-                isActive,
-                isBeforeStart,
-                isOffDay,
-                isToday: isSameDay(simulationDate, today),
-            })
-        }
+        timelineData.push({
+            date: new Date(simulationDate),
+            sent: sentCount,
+            isActive,
+            isBeforeStart,
+            isOffDay,
+            isToday: isSameDay(simulationDate, today),
+        })
 
         if (sentCount > 0 || simulatedRemaining > 0) {
             if (simulatedRemaining > 0) daysToFinish = i
@@ -427,7 +430,7 @@ export function PlanningTab({ schedule, queueStats, onUpdate, onAddProspects }: 
                         <AlertDialogTrigger asChild>
                             <Button variant="ghost" size="sm" disabled={canceling} className="text-red-600 hover:text-red-700 hover:bg-red-50">
                                 {canceling ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <XCircle className="w-4 h-4 mr-2" />}
-                                Arrêter la campagne
+                                Arrêter la programmation d'envoi automatique
                             </Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent>
