@@ -95,7 +95,81 @@ export function AddProspectsToCampaignModal({
         setQuotaLoading(false)
     }
 
-    // ... (loadProspects and loadSearches remain same)
+    const loadProspects = async () => {
+        try {
+            const supabase = createClient()
+            const { data: { user } } = await supabase.auth.getUser()
+            if (!user) return
+
+            const { data, error } = await supabase
+                .from('scrape_prospect')
+                .select('*')
+                .eq('id_user', user.id)
+                .order('created_at', { ascending: false })
+                .limit(100)
+
+            if (error) throw error
+
+            // Enrichir avec flags email et deep search
+            const enrichedProspects: ProspectWithFlags[] = (data || []).map((p: ScrapeProspect) => {
+                const hasEmail = !!p.email_adresse_verified
+                const deepSearch = typeof p.deep_search === 'string'
+                    ? JSON.parse(p.deep_search)
+                    : p.deep_search
+                const hasDeepSearch = !!(deepSearch && Object.keys(deepSearch).length > 0)
+
+                return {
+                    ...p,
+                    hasEmail,
+                    hasDeepSearch
+                }
+            })
+
+            setProspects(enrichedProspects)
+        } catch (error: any) {
+            console.error('Error loading prospects:', error)
+            toast.error('Erreur lors du chargement des prospects')
+        }
+    }
+
+    const loadSearches = async () => {
+        try {
+            const supabase = createClient()
+            const { data: { user } } = await supabase.auth.getUser()
+            if (!user) return
+
+            // Get searches for this user only
+            const { data: searchData, error: searchError } = await supabase
+                .from('scrape_jobs')
+                .select('id_jobs, request_search, request_count, statut, created_at')
+                .eq('id_user', user.id)
+                .order('created_at', { ascending: false })
+                .limit(50)
+
+            if (searchError) throw searchError
+
+            // Get prospect count for each search
+            const searchesWithCounts = await Promise.all(
+                (searchData || []).map(async (search: SearchJob) => {
+                    const { count } = await supabase
+                        .from('scrape_prospect')
+                        .select('*', { count: 'exact', head: true })
+                        .eq('id_jobs', search.id_jobs)
+                        .eq('id_user', user.id)
+
+                    return {
+                        ...search,
+                        prospectCount: count || 0
+                    }
+                })
+            )
+
+            setSearches(searchesWithCounts)
+        } catch (error: any) {
+            console.error('Error loading searches:', error)
+            toast.error('Erreur lors du chargement des recherches')
+        }
+    }
 
     const handleAddProspects = async () => {
         try {
