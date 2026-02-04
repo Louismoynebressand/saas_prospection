@@ -53,6 +53,30 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Validation failed", details: validation.error.format() }, { status: 400 })
         }
 
+        // --- SMTP VERIFICATION STEP ---
+        // Import locally to avoid top-level issues if any
+        const { verifySmtpWithWebhook } = await import("@/lib/smtp-verification")
+
+        console.log("Verifying SMTP before save...")
+        const verificationResult = await verifySmtpWithWebhook({
+            smtp_host: validation.data.smtp_host,
+            smtp_port: validation.data.smtp_port,
+            smtp_user: validation.data.smtp_user,
+            smtp_password: validation.data.smtp_password,
+            from_email: validation.data.from_email,
+            from_name: validation.data.from_name,
+            provider: validation.data.provider
+        })
+
+        if (!verificationResult.success) {
+            console.log("SMTP Verification Failed:", verificationResult.message)
+            return NextResponse.json({
+                error: verificationResult.message || "Vérification SMTP échouée",
+                verification_failed: true
+            }, { status: 400 })
+        }
+        // ------------------------------
+
         const { data, error } = await supabase
             .from("smtp_configurations")
             .insert({

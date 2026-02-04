@@ -1,69 +1,47 @@
 import { NextRequest, NextResponse } from "next/server"
-import nodemailer from "nodemailer"
+import { verifySmtpWithWebhook } from "@/lib/smtp-verification"
 
-// Export a robust POST handler for testing SMTP
+// Export a robust POST handler for testing SMTP via Webhook
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json()
-        const { host, port, user, pass } = body
+        const { host, port, user, pass, from_email, from_name, provider } = body
 
-        console.log("Testing SMTP Connection:", { host, port, user })
+        console.log("Testing SMTP Connection via Webhook:", { host, port, user })
 
         if (!host || !port || !user || !pass) {
             return NextResponse.json({ success: false, error: "Paramètres manquants" }, { status: 400 })
         }
 
-        // Determine security settings based on port
-        // Port 465 is typical for implicit SSL/TLS
-        // Port 587 is typical for STARTTLS
-        const safePort = parseInt(port.toString()) || 587
-        const isSecure = safePort === 465
-
-        const transporter = nodemailer.createTransport({
-            host: host,
-            port: safePort,
-            secure: isSecure,
-            auth: {
-                user: user,
-                pass: pass,
-            },
-            tls: {
-                // In production, we should be strict, but for testing, let's allow self-signed if needed
-                // But generally big providers have valid certs.
-                // We'll set rejectUnauthorized to false just to be safe during "test" phase unless it's critical.
-                // Actually, let's default to true for security, but maybe allow an override env var?
-                // For now, false to avoid "Self signed cert" errors on custom hosting.
-                rejectUnauthorized: false
-            },
-            connectionTimeout: 10000, // 10s timeout
-            debug: true,
-            logger: true
+        // Use the shared verification logic
+        const result = await verifySmtpWithWebhook({
+            smtp_host: host,
+            smtp_port: parseInt(port.toString()),
+            smtp_user: user,
+            smtp_password: pass,
+            from_email,
+            from_name,
+            provider
         })
 
-        // Verify connection configuration
-        await transporter.verify()
-
-        console.log(`SMTP Connection verified successfully for ${user} on ${host}:${safePort}`)
-        return NextResponse.json({ success: true, message: "Connexion réussie" })
-
-    } catch (error: any) {
-        console.error("SMTP Test Failed:", error)
-
-        let userMessage = "Erreur de connexion inconnue"
-
-        if (error.code === 'EAUTH') {
-            userMessage = "Authentification échouée. Vérifiez votre email et mot de passe (ou mot de passe d'application)."
-        } else if (error.code === 'ESOCKET') {
-            userMessage = "Impossible de se connecter au serveur. Vérifiez l'hôte et le port."
-        } else if (error.code === 'ETIMEDOUT') {
-            userMessage = "Le serveur ne répond pas (Délai dépassé)."
-        } else if (error.message) {
-            userMessage = error.message
+        if (result.success) {
+            return NextResponse.json({
+                success: true,
+                message: result.message || "Connexion validée par le système de test"
+            })
+        } else {
+            return NextResponse.json({
+                success: false,
+                error: result.message || "Echec de connexion",
+                details: result.details
+            }, { status: 400 }) // Return 400 on logical failure
         }
 
+    } catch (error: any) {
+        console.error("SMTP Test Route Error:", error)
         return NextResponse.json({
             success: false,
-            error: userMessage,
+            error: "Erreur interne lors du test",
             details: error.message
         }, { status: 500 })
     }
