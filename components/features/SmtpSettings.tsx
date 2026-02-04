@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { toast } from "sonner"
-import { Loader2, Plus, Trash2, CheckCircle2, AlertCircle, Server, Mail, Shield, BookOpen, ExternalLink, RefreshCw } from "lucide-react"
+import { Loader2, Plus, Trash2, CheckCircle2, AlertCircle, Server, Mail, Shield, BookOpen, ExternalLink, RefreshCw, Info } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface SmtpConfig {
@@ -22,6 +23,32 @@ interface SmtpConfig {
     is_active: boolean
 }
 
+// Comprehensive SMTP Provider Presets
+const SMTP_PRESETS = {
+    // Grand Public
+    gmail: { name: "Gmail / Google Workspace", host: "smtp.gmail.com", port: 465, category: "public", note: "Nécessite un mot de passe d'application si 2FA activé" },
+    outlook: { name: "Microsoft 365 / Outlook", host: "smtp.office365.com", port: 587, category: "public", note: "Utilisez votre compte professionnel ou personnel" },
+
+    // Hébergeurs Français Pro
+    ovh_mx: { name: "OVH - MX Plan", host: "ssl0.ovh.net", port: 587, category: "pro", note: "Serveur : ssl0.ovh.net ou smtp.mail.ovh.net" },
+    ovh_pro: { name: "OVH - Email Pro", host: "pro1.mail.ovh.net", port: 587, category: "pro", note: "Le chiffre peut varier (pro1, pro2...)" },
+    ovh_exchange: { name: "OVH - Exchange", host: "ex3.mail.ovh.net", port: 587, category: "pro", note: "Le chiffre peut varier (ex1, ex2, ex3...)" },
+    ionos: { name: "IONOS (1&1)", host: "smtp.ionos.com", port: 587, category: "pro" },
+    o2switch: { name: "o2switch", host: "mail.votre-domaine.o2switch.net", port: 465, category: "pro", note: "Remplacez 'votre-domaine' par votre identifiant o2switch (ex: mail.niaouli.o2switch.net)" },
+
+    // Services SMTP Pro
+    brevo: { name: "Brevo (ex-Sendinblue)", host: "smtp-relay.brevo.com", port: 587, category: "relay", note: "Utilisez vos identifiants SMTP Brevo (pas votre mot de passe compte)" },
+    sendgrid: { name: "SendGrid", host: "smtp.sendgrid.net", port: 587, category: "relay", note: "User: 'apikey', Password: votre clé API" },
+    mailgun_us: { name: "Mailgun (US)", host: "smtp.mailgun.org", port: 587, category: "relay" },
+    mailgun_eu: { name: "Mailgun (EU)", host: "smtp.eu.mailgun.org", port: 587, category: "relay" },
+    zoho: { name: "Zoho Mail", host: "smtp.zoho.com", port: 465, category: "public" },
+
+    // Autres
+    custom: { name: "Autre (Configuration manuelle)", host: "", port: 587, category: "custom" }
+}
+
+type ProviderCategory = "public" | "pro" | "relay" | "custom"
+
 export function SmtpSettings() {
     const [configs, setConfigs] = useState<SmtpConfig[]>([])
     const [loading, setLoading] = useState(true)
@@ -35,7 +62,7 @@ export function SmtpSettings() {
         provider: "gmail",
         smtp_host: "smtp.gmail.com",
         smtp_port: 465,
-        email: "", // Merged User & From Email
+        email: "",
         password: "",
         from_name: ""
     })
@@ -60,20 +87,15 @@ export function SmtpSettings() {
     }
 
     const handleProviderChange = (value: string) => {
-        let updates: any = { provider: value }
-
-        // Auto-fill common providers
-        if (value === 'gmail') {
-            updates = { ...updates, smtp_host: 'smtp.gmail.com', smtp_port: 465 }
-        } else if (value === 'outlook') {
-            updates = { ...updates, smtp_host: 'smtp.office365.com', smtp_port: 587 }
-        } else if (value === 'ionos') {
-            updates = { ...updates, smtp_host: 'smtp.ionos.com', smtp_port: 465 }
-        } else {
-            updates = { ...updates, smtp_host: '', smtp_port: 587 }
+        const preset = SMTP_PRESETS[value as keyof typeof SMTP_PRESETS]
+        if (preset) {
+            setFormData(prev => ({
+                ...prev,
+                provider: value,
+                smtp_host: preset.host,
+                smtp_port: preset.port
+            }))
         }
-
-        setFormData(prev => ({ ...prev, ...updates }))
     }
 
     const handleTestConnection = async () => {
@@ -83,10 +105,6 @@ export function SmtpSettings() {
         }
 
         setTestingConnection(true)
-        console.log("Testing connection with:", {
-            host: formData.smtp_host,
-            user: formData.email
-        })
 
         try {
             const res = await fetch("/api/settings/smtp/test", {
@@ -107,7 +125,7 @@ export function SmtpSettings() {
 
             if (res.ok && data.success) {
                 toast.success("✅ Connexion réussie !", {
-                    description: "Vos identifiants sont valides."
+                    description: data.message || "Vos identifiants sont valides."
                 })
             } else {
                 toast.error("❌ Echec connexion", {
@@ -191,6 +209,8 @@ export function SmtpSettings() {
         }
     }
 
+    const currentPreset = SMTP_PRESETS[formData.provider as keyof typeof SMTP_PRESETS]
+
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center bg-white p-4 rounded-lg border shadow-sm">
@@ -207,210 +227,156 @@ export function SmtpSettings() {
                             <Plus className="w-4 h-4 mr-2" /> Connecter un Email
                         </Button>
                     </DialogTrigger>
-                    {/* KEY FIX: sm:max-w-7xl overrides the default sm:max-w-lg */}
-                    <DialogContent className="sm:max-w-7xl w-[95vw] md:w-[90vw] lg:w-[85vw] max-h-[90vh] p-0 overflow-hidden gap-0 border-none shadow-2xl flex flex-col">
-                        <div className="flex-1 grid lg:grid-cols-12 overflow-hidden bg-white">
+                    <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
+                        <DialogHeader className="mb-4">
+                            <DialogTitle className="text-2xl">Configurer un compte d'envoi</DialogTitle>
+                            <DialogDescription className="text-base">
+                                Connectez votre email professionnel pour envoyer vos campagnes (SMTP).
+                            </DialogDescription>
+                        </DialogHeader>
 
-                            {/* LEFT COLUMN: Form (7 columns) */}
-                            <div className="lg:col-span-7 p-6 lg:p-8 overflow-y-auto custom-scrollbar">
-                                <DialogHeader className="mb-6">
-                                    <DialogTitle className="text-2xl font-bold text-gray-900">Configurer un compte d'envoi</DialogTitle>
-                                    <DialogDescription className="text-base">
-                                        Connectez votre email pour envoyer vos campagnes (SMTP).
-                                    </DialogDescription>
-                                </DialogHeader>
+                        <div className="space-y-6">
+                            {/* Provider Selection */}
+                            <div className="space-y-3">
+                                <Label className="text-base font-semibold">1. Type de compte email</Label>
+                                <Select value={formData.provider} onValueChange={handleProviderChange}>
+                                    <SelectTrigger className="w-full">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Grand Public</div>
+                                        {Object.entries(SMTP_PRESETS).filter(([_, p]) => p.category === "public").map(([key, preset]) => (
+                                            <SelectItem key={key} value={key}>{preset.name}</SelectItem>
+                                        ))}
 
-                                <div className="space-y-8">
-                                    {/* 1. Provider Selection */}
-                                    <div className="space-y-3">
-                                        <Label className="text-base font-semibold text-gray-800">1. Fournisseur</Label>
-                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                            {[
-                                                { id: 'gmail', name: 'Gmail', icon: 'G', color: 'text-red-600 bg-red-50 border-red-100' },
-                                                { id: 'outlook', name: 'Outlook', icon: 'O', color: 'text-blue-600 bg-blue-50 border-blue-100' },
-                                                { id: 'ionos', name: 'Ionos', icon: 'I', color: 'text-yellow-700 bg-yellow-50 border-yellow-100' },
-                                                { id: 'custom', name: 'Autre', icon: '?', color: 'text-gray-600 bg-gray-50 border-gray-100' }
-                                            ].map(p => (
-                                                <div
-                                                    key={p.id}
-                                                    onClick={() => handleProviderChange(p.id)}
-                                                    className={cn(
-                                                        "cursor-pointer border-2 rounded-xl p-3 text-center transition-all duration-200 hover:scale-[1.02]",
-                                                        formData.provider === p.id
-                                                            ? `border-indigo-600 ring-1 ring-indigo-600 bg-indigo-50/50`
-                                                            : "border-transparent bg-gray-50 hover:bg-white hover:border-gray-200 shadow-sm"
-                                                    )}
-                                                >
-                                                    <div className={cn("text-xl font-black mb-1 w-8 h-8 mx-auto rounded-full flex items-center justify-center", p.color)}>
-                                                        {p.icon}
-                                                    </div>
-                                                    <div className="text-xs font-bold">{p.name}</div>
-                                                </div>
-                                            ))}
+                                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground mt-2">Hébergeurs Professionnels</div>
+                                        {Object.entries(SMTP_PRESETS).filter(([_, p]) => p.category === "pro").map(([key, preset]) => (
+                                            <SelectItem key={key} value={key}>{preset.name}</SelectItem>
+                                        ))}
+
+                                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground mt-2">Services SMTP Pro</div>
+                                        {Object.entries(SMTP_PRESETS).filter(([_, p]) => p.category === "relay").map(([key, preset]) => (
+                                            <SelectItem key={key} value={key}>{preset.name}</SelectItem>
+                                        ))}
+
+                                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground mt-2">Autre</div>
+                                        <SelectItem value="custom">Configuration manuelle</SelectItem>
+                                    </SelectContent>
+                                </Select>
+
+                                {currentPreset?.note && (
+                                    <div className="flex gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                        <Info className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                                        <p className="text-xs text-blue-900">{currentPreset.note}</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Credentials */}
+                            <div className="space-y-4">
+                                <Label className="text-base font-semibold">2. Identifiants</Label>
+                                <div className="grid md:grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label className="text-xs font-medium text-gray-600 uppercase">Email d'envoi</Label>
+                                        <div className="relative">
+                                            <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                                            <Input
+                                                className="pl-9 bg-gray-50/50 border-gray-200"
+                                                placeholder="vous@entreprise.com"
+                                                value={formData.email}
+                                                onChange={e => setFormData({ ...formData, email: e.target.value })}
+                                            />
                                         </div>
                                     </div>
-
-                                    {/* 2. Basic Info */}
-                                    <div className="space-y-4">
-                                        <Label className="text-base font-semibold text-gray-800">2. Identifiants</Label>
-
-                                        <div className="space-y-4">
-                                            <div className="grid md:grid-cols-2 gap-4">
-                                                <div className="space-y-2">
-                                                    <Label className="text-xs font-medium text-gray-600 uppercase">Email d'envoi</Label>
-                                                    <div className="relative">
-                                                        <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                                                        <Input
-                                                            className="pl-9 bg-gray-50/50 border-gray-200"
-                                                            placeholder="vous@entreprise.com"
-                                                            value={formData.email}
-                                                            onChange={e => setFormData({ ...formData, email: e.target.value })}
-                                                        />
-                                                    </div>
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <Label className="text-xs font-medium text-gray-600 uppercase">
-                                                        Mot de passe
-                                                    </Label>
-                                                    <div className="relative">
-                                                        <Shield className="absolute left-3 top-3 h-4 w-4 text-emerald-600" />
-                                                        <Input
-                                                            className="pl-9 bg-emerald-50/30 border-emerald-100 focus-visible:ring-emerald-500"
-                                                            type="password"
-                                                            placeholder="Mot de passe d'application"
-                                                            value={formData.password}
-                                                            onChange={e => setFormData({ ...formData, password: e.target.value })}
-                                                        />
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <div className="grid md:grid-cols-2 gap-4">
-                                                <div className="space-y-2">
-                                                    <Label className="text-xs font-medium text-gray-600 uppercase">Nom de la config</Label>
-                                                    <Input
-                                                        className="bg-gray-50/50 border-gray-200"
-                                                        placeholder="ex: Mon Gmail Pro"
-                                                        value={formData.name}
-                                                        onChange={e => setFormData({ ...formData, name: e.target.value })}
-                                                    />
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <Label className="text-xs font-medium text-gray-600 uppercase">Expéditeur (Optionnel)</Label>
-                                                    <Input
-                                                        className="bg-gray-50/50 border-gray-200"
-                                                        placeholder="ex: Jean Dupont"
-                                                        value={formData.from_name}
-                                                        onChange={e => setFormData({ ...formData, from_name: e.target.value })}
-                                                    />
-                                                </div>
-                                            </div>
+                                    <div className="space-y-2">
+                                        <Label className="text-xs font-medium text-gray-600 uppercase">
+                                            Mot de passe
+                                        </Label>
+                                        <div className="relative">
+                                            <Shield className="absolute left-3 top-3 h-4 w-4 text-emerald-600" />
+                                            <Input
+                                                className="pl-9 bg-emerald-50/30 border-emerald-100 focus-visible:ring-emerald-500"
+                                                type="password"
+                                                placeholder="Mot de passe d'application"
+                                                value={formData.password}
+                                                onChange={e => setFormData({ ...formData, password: e.target.value })}
+                                            />
                                         </div>
                                     </div>
+                                </div>
 
-                                    {/* 3. Advanced (Custom) */}
-                                    {formData.provider === 'custom' && (
-                                        <div className="space-y-3 pt-2 border-t border-dashed">
-                                            <div className="p-4 bg-slate-50 border rounded-xl grid grid-cols-12 gap-3">
-                                                <div className="col-span-8 space-y-1">
-                                                    <Label className="text-xs font-semibold text-muted-foreground">Serveur SMTP</Label>
-                                                    <Input
-                                                        className="h-9 text-sm bg-white"
-                                                        placeholder="smtp.example.com"
-                                                        value={formData.smtp_host}
-                                                        onChange={e => setFormData({ ...formData, smtp_host: e.target.value })}
-                                                    />
-                                                </div>
-                                                <div className="col-span-4 space-y-1">
-                                                    <Label className="text-xs font-semibold text-muted-foreground">Port</Label>
-                                                    <Input
-                                                        type="number"
-                                                        className="h-9 text-sm bg-white"
-                                                        placeholder="587"
-                                                        value={formData.smtp_port}
-                                                        onChange={e => setFormData({ ...formData, smtp_port: parseInt(e.target.value) })}
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
+                                <div className="grid md:grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label className="text-xs font-medium text-gray-600 uppercase">Nom de la config</Label>
+                                        <Input
+                                            className="bg-gray-50/50 border-gray-200"
+                                            placeholder="ex: Mon Email Pro"
+                                            value={formData.name}
+                                            onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label className="text-xs font-medium text-gray-600 uppercase">Expéditeur (Optionnel)</Label>
+                                        <Input
+                                            className="bg-gray-50/50 border-gray-200"
+                                            placeholder="ex: Jean Dupont"
+                                            value={formData.from_name}
+                                            onChange={e => setFormData({ ...formData, from_name: e.target.value })}
+                                        />
+                                    </div>
                                 </div>
                             </div>
 
-                            {/* RIGHT COLUMN: Guide (5 columns) */}
-                            <div className="hidden lg:block lg:col-span-5 bg-gradient-to-br from-indigo-50 to-white border-l border-indigo-100 p-8 overflow-y-auto">
-                                <div className="sticky top-0 space-y-6">
-                                    <div className="flex items-center gap-3 text-indigo-900 mb-6">
-                                        <div className="p-2 bg-indigo-100 rounded-lg">
-                                            <BookOpen className="w-5 h-5" />
-                                        </div>
-                                        <h4 className="font-bold">Guide de connexion</h4>
+                            {/* Advanced Settings */}
+                            <div className="space-y-3 pt-2 border-t border-dashed">
+                                <Label className="text-base font-semibold">3. Configuration serveur</Label>
+                                <div className="p-4 bg-slate-50 border rounded-xl grid grid-cols-12 gap-3">
+                                    <div className="col-span-8 space-y-1">
+                                        <Label className="text-xs font-semibold text-muted-foreground">Serveur SMTP</Label>
+                                        <Input
+                                            className="h-9 text-sm bg-white"
+                                            placeholder="smtp.example.com"
+                                            value={formData.smtp_host}
+                                            onChange={e => setFormData({ ...formData, smtp_host: e.target.value })}
+                                        />
                                     </div>
-
-                                    <div className="bg-white p-4 rounded-xl border border-indigo-100 shadow-sm space-y-2">
-                                        <h5 className="font-bold text-sm text-gray-900">1. Mot de passe d'application</h5>
-                                        <p className="text-xs text-gray-600 leading-relaxed">
-                                            Pour Gmail/Outlook avec 2FA, votre mot de passe habituel ne fonctionne pas. Vous devez en générer un spécifique.
-                                        </p>
+                                    <div className="col-span-4 space-y-1">
+                                        <Label className="text-xs font-semibold text-muted-foreground">Port</Label>
+                                        <Input
+                                            type="number"
+                                            className="h-9 text-sm bg-white"
+                                            placeholder="587"
+                                            value={formData.smtp_port}
+                                            onChange={e => setFormData({ ...formData, smtp_port: parseInt(e.target.value) || 587 })}
+                                        />
                                     </div>
-
-                                    <div className="space-y-3">
-                                        <h5 className="text-xs font-bold text-muted-foreground uppercase tracking-wide">Comment faire ?</h5>
-
-                                        <div className="bg-white p-3 rounded-lg border hover:border-red-200 transition-colors group">
-                                            <div className="flex items-center gap-2 text-sm font-bold text-gray-800 mb-2">
-                                                <span className="w-5 h-5 bg-red-100 text-red-600 rounded flex items-center justify-center text-xs">G</span>
-                                                Google / Gmail
-                                            </div>
-                                            <ul className="text-[11px] space-y-1.5 text-gray-500 list-disc list-inside">
-                                                <li>Gestion compte {'>'} Sécurité</li>
-                                                <li>Validation en 2 étapes {'>'} Mots de passe d'app</li>
-                                                <li>Créer "Messagerie" + "Windows"</li>
-                                            </ul>
-                                            <a href="https://myaccount.google.com/apppasswords" target="_blank" className="mt-2 block text-center text-[10px] text-blue-600 bg-blue-50 py-1.5 rounded hover:bg-blue-100 transition-colors">
-                                                Ouvrir Google Security <ExternalLink className="inline w-2 h-2 ml-1" />
-                                            </a>
-                                        </div>
-
-                                        <div className="bg-white p-3 rounded-lg border hover:border-blue-200 transition-colors">
-                                            <div className="flex items-center gap-2 text-sm font-bold text-gray-800 mb-2">
-                                                <span className="w-5 h-5 bg-blue-100 text-blue-600 rounded flex items-center justify-center text-xs">O</span>
-                                                Outlook
-                                            </div>
-                                            <p className="text-[11px] text-gray-500">
-                                                Activez "SMTP Authenticated" dans l'admin 365. Si 2FA activé, créez un mot de passe d'application Microsoft.
-                                            </p>
-                                        </div>
-                                    </div>
+                                </div>
+                                <div className="flex gap-2 p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-900">
+                                    <Info className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                                    <span><strong>Port 465</strong> = SSL/TLS direct • <strong>Port 587</strong> = STARTTLS</span>
                                 </div>
                             </div>
                         </div>
 
-                        {/* FOOTER */}
-                        <div className="p-4 bg-gray-50 border-t flex justify-between items-center">
+                        <DialogFooter className="mt-6 flex justify-between items-center">
                             <Button
                                 variant="ghost"
                                 onClick={handleTestConnection}
                                 disabled={testingConnection}
-                                className="text-xs text-muted-foreground hover:text-gray-900"
+                                className="text-xs"
                             >
                                 {testingConnection ? <Loader2 className="w-3 h-3 animate-spin mr-2" /> : <RefreshCw className="w-3 h-3 mr-2" />}
                                 Tester la connexion
                             </Button>
-                            <div className="flex items-center gap-3">
-                                <span className="text-[10px] text-muted-foreground hidden sm:inline-block">
-                                    En enregistrant, vous acceptez d'utiliser ce compte.
-                                </span>
-                                <Button
-                                    onClick={handleSave}
-                                    disabled={saving}
-                                    className="bg-indigo-600 hover:bg-indigo-700 min-w-[140px]"
-                                >
-                                    {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
-                                    Enregistrer
-                                </Button>
-                            </div>
-                        </div>
+                            <Button
+                                onClick={handleSave}
+                                disabled={saving}
+                                className="bg-indigo-600 hover:bg-indigo-700 min-w-[140px]"
+                            >
+                                {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
+                                Enregistrer
+                            </Button>
+                        </DialogFooter>
                     </DialogContent>
                 </Dialog>
             </div>
@@ -421,10 +387,9 @@ export function SmtpSettings() {
                         <CardHeader className="pb-3">
                             <div className="flex justify-between items-start">
                                 <CardTitle className="text-base font-bold flex items-center gap-3">
-                                    {config.provider === 'gmail' && <div className="w-8 h-8 rounded-lg bg-red-50 text-red-600 border border-red-100 flex items-center justify-center text-sm font-black">G</div>}
-                                    {config.provider === 'outlook' && <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center text-sm font-black">O</div>}
-                                    {config.provider === 'ionos' && <div className="w-8 h-8 rounded-lg bg-yellow-50 text-yellow-700 border border-yellow-100 flex items-center justify-center text-sm font-black">I</div>}
-                                    {config.provider === 'custom' && <div className="w-8 h-8 rounded-lg bg-gray-50 text-gray-600 border border-gray-100 flex items-center justify-center text-sm font-black">?</div>}
+                                    <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-100 flex items-center justify-center text-sm font-black">
+                                        {SMTP_PRESETS[config.provider as keyof typeof SMTP_PRESETS]?.name.charAt(0) || "?"}
+                                    </div>
                                     <span className="truncate">{config.name}</span>
                                 </CardTitle>
                                 <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50" onClick={() => handleDelete(config.id)}>
