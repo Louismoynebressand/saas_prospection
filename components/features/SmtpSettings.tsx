@@ -23,8 +23,16 @@ interface SmtpConfig {
     is_active: boolean
 }
 
+interface SmtpPreset {
+    name: string
+    host: string
+    port: number
+    category: "public" | "pro" | "relay" | "custom"
+    note?: string
+}
+
 // Comprehensive SMTP Provider Presets
-const SMTP_PRESETS = {
+const SMTP_PRESETS: Record<string, SmtpPreset> = {
     // Grand Public
     gmail: { name: "Gmail / Google Workspace", host: "smtp.gmail.com", port: 465, category: "public", note: "Nécessite un mot de passe d'application si 2FA activé" },
     outlook: { name: "Microsoft 365 / Outlook", host: "smtp.office365.com", port: 587, category: "public", note: "Utilisez votre compte professionnel ou personnel" },
