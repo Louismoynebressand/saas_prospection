@@ -240,7 +240,7 @@ export function PlanningTab({ schedule, queueStats, onUpdate, onAddProspects }: 
             {/* LOW STOCK ALERT */}
             {(isCriticalStock || isWarningStock) && remainingEmails > 0 && (
                 <div className={cn(
-                    "border-l-4 p-4 rounded-md flex items-start gap-3",
+                    "border-l-4 p-4 rounded-md flex items-start gap-3 shadow-sm",
                     isCriticalStock ? "bg-red-50 border-red-500" : "bg-amber-50 border-amber-500"
                 )}>
                     {isCriticalStock ? (
@@ -271,127 +271,137 @@ export function PlanningTab({ schedule, queueStats, onUpdate, onAddProspects }: 
                 </div>
             )}
 
-            {/* Status Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Card className="bg-indigo-50 border-indigo-100">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-indigo-600 uppercase">File d'attente</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-3xl font-bold text-indigo-900">{queueStats.pending}</div>
-                        <p className="text-xs text-indigo-600 mt-1">Emails prêts à partir</p>
-                    </CardContent>
-                </Card>
-                <Card className="bg-emerald-50 border-emerald-100">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-emerald-600 uppercase">Envoyés (Total)</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-3xl font-bold text-emerald-900">{queueStats.sent}</div>
-                        <p className="text-xs text-emerald-600 mt-1">Depuis le début</p>
-                    </CardContent>
-                </Card>
+            <div className="flex flex-col lg:flex-row gap-4">
+                {/* COMPACT STATS COLUMN */}
+                <div className="flex flex-row lg:flex-col gap-4 lg:w-48 shrink-0">
+                    <Card className="flex-1 bg-white border-slate-200 shadow-sm">
+                        <CardHeader className="p-4 pb-2">
+                            <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-wider">File d'attente</CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-4 pt-0">
+                            <div className="text-2xl font-bold text-slate-900">{queueStats.pending}</div>
+                            <p className="text-[10px] text-slate-400 mt-0.5">En attente</p>
+                        </CardContent>
+                    </Card>
+                    <Card className="flex-1 bg-white border-slate-200 shadow-sm">
+                        <CardHeader className="p-4 pb-2">
+                            <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-wider">Envoyés</CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-4 pt-0">
+                            <div className="text-2xl font-bold text-emerald-600">{queueStats.sent}</div>
+                            <p className="text-[10px] text-slate-400 mt-0.5">Total</p>
+                        </CardContent>
+                    </Card>
+                </div>
 
-                {/* CONFIGURATION CARD */}
-                <Card className="bg-white border-slate-200 col-span-1 md:col-span-1">
-                    <CardHeader className="pb-2 flex flex-row items-center justify-between">
-                        <CardTitle className="text-sm font-medium text-slate-600 uppercase">Configuration</CardTitle>
+                {/* WIDER CONFIGURATION CARD */}
+                <Card className="flex-1 bg-white border-slate-200 shadow-sm">
+                    <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between">
+                        <CardTitle className="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-indigo-500" />
+                            Configuration Actuelle
+                        </CardTitle>
+                        {/* BIGGER EDIT BUTTON MOVED HERE FOR COMPACTNESS */}
+                        <Dialog open={editOpen} onOpenChange={setEditOpen}>
+                            <DialogTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-8 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50">
+                                    <Edit className="w-4 h-4 mr-1.5" />
+                                    Modifier
+                                </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                                <DialogHeader>
+                                    <DialogTitle>Modifier la planification</DialogTitle>
+                                    <DialogDescription>Ajustez les paramètres en cours de route.</DialogDescription>
+                                </DialogHeader>
+                                <div className="space-y-4 py-4">
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between items-center">
+                                            <Label>Vitesse d'envoi</Label>
+                                            <span className="text-sm font-bold">{editDailyLimit[0]} mails/jour</span>
+                                        </div>
+                                        <Slider value={editDailyLimit} onValueChange={setEditDailyLimit} max={100} min={1} step={1} />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label>Compte d'envoi</Label>
+                                        <Select value={editSmtpId} onValueChange={setEditSmtpId}>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Choisir un compte" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {smtpConfigs.map(c => (
+                                                    <SelectItem key={c.id} value={c.id}>{c.from_email} ({c.provider})</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label>Début</Label>
+                                            <Input type="time" value={editTimeWindow.start} onChange={e => setEditTimeWindow({ ...editTimeWindow, start: e.target.value })} />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>Fin</Label>
+                                            <Input type="time" value={editTimeWindow.end} onChange={e => setEditTimeWindow({ ...editTimeWindow, end: e.target.value })} />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label>Jours actifs</Label>
+                                        <div className="flex justify-between gap-1">
+                                            {weekDays.map((d) => (
+                                                <button
+                                                    key={d.val}
+                                                    onClick={() => toggleEditDay(d.val)}
+                                                    className={cn(
+                                                        "w-8 h-8 rounded-full text-xs font-bold transition-all",
+                                                        editDays.includes(d.val)
+                                                            ? "bg-indigo-600 text-white shadow-sm"
+                                                            : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                                                    )}
+                                                >
+                                                    {d.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                                <DialogFooter>
+                                    <Button variant="outline" onClick={() => setEditOpen(false)}>Annuler</Button>
+                                    <Button onClick={handleUpdate} disabled={editing} className="gap-2 bg-indigo-600 hover:bg-indigo-700">
+                                        {editing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                        Enregistrer
+                                    </Button>
+                                </DialogFooter>
+                            </DialogContent>
+                        </Dialog>
                     </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="space-y-2">
-                            <div className="flex items-center gap-2">
-                                <span className="font-bold text-slate-900 text-lg">{schedule.daily_limit} / jour</span>
+                    <CardContent className="space-y-4 p-4 pt-0">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div className="space-y-1">
+                                <div className="text-xs text-slate-400 uppercase font-semibold">Vitesse</div>
+                                <div className="text-xl font-bold text-slate-900">{schedule.daily_limit} <span className="text-xs font-normal text-slate-500">mails/jour</span></div>
                             </div>
-                            <div className="text-xs text-slate-500 flex items-center gap-2">
-                                <Clock className="w-3 h-3" /> {schedule.time_window_start?.slice(0, 5)} - {schedule.time_window_end?.slice(0, 5)}
+                            <div className="space-y-1">
+                                <div className="text-xs text-slate-400 uppercase font-semibold">Fenêtre</div>
+                                <div className="text-xl font-bold text-slate-900 flex items-center gap-1.5">
+                                    {schedule.time_window_start?.slice(0, 5)} - {schedule.time_window_end?.slice(0, 5)}
+                                </div>
                             </div>
-                            <div className="text-xs text-slate-500 flex items-center gap-2" title={smtpName}>
-                                <Mail className="w-3 h-3" /> <span className="truncate max-w-[150px]">{smtpName}</span>
+                            <div className="space-y-1 overflow-hidden">
+                                <div className="text-xs text-slate-400 uppercase font-semibold">Compte actif</div>
+                                <div className="text-sm font-semibold text-slate-700 truncate" title={smtpName}>
+                                    {smtpName}
+                                </div>
                             </div>
                         </div>
 
-                        <div className="flex flex-col gap-2 pt-2">
-                            {/* BIGGER EDIT BUTTON */}
-                            <Dialog open={editOpen} onOpenChange={setEditOpen}>
-                                <DialogTrigger asChild>
-                                    <Button variant="outline" className="w-full justify-start border-slate-300 font-medium">
-                                        <Edit className="w-4 h-4 mr-2" />
-                                        Modifier la planification
-                                    </Button>
-                                </DialogTrigger>
-                                <DialogContent>
-                                    <DialogHeader>
-                                        <DialogTitle>Modifier la planification</DialogTitle>
-                                        <DialogDescription>Ajustez les paramètres en cours de route.</DialogDescription>
-                                    </DialogHeader>
-                                    <div className="space-y-4 py-4">
-                                        <div className="space-y-2">
-                                            <div className="flex justify-between items-center">
-                                                <Label>Vitesse d'envoi</Label>
-                                                <span className="text-sm font-bold">{editDailyLimit[0]} mails/jour</span>
-                                            </div>
-                                            <Slider value={editDailyLimit} onValueChange={setEditDailyLimit} max={100} min={1} step={1} />
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label>Compte d'envoi</Label>
-                                            <Select value={editSmtpId} onValueChange={setEditSmtpId}>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Choisir un compte" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {smtpConfigs.map(c => (
-                                                        <SelectItem key={c.id} value={c.id}>{c.from_email} ({c.provider})</SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="space-y-2">
-                                                <Label>Début</Label>
-                                                <Input type="time" value={editTimeWindow.start} onChange={e => setEditTimeWindow({ ...editTimeWindow, start: e.target.value })} />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label>Fin</Label>
-                                                <Input type="time" value={editTimeWindow.end} onChange={e => setEditTimeWindow({ ...editTimeWindow, end: e.target.value })} />
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label>Jours actifs</Label>
-                                            <div className="flex justify-between gap-1">
-                                                {weekDays.map((d) => (
-                                                    <button
-                                                        key={d.val}
-                                                        onClick={() => toggleEditDay(d.val)}
-                                                        className={cn(
-                                                            "w-8 h-8 rounded-full text-xs font-bold transition-all",
-                                                            editDays.includes(d.val)
-                                                                ? "bg-indigo-600 text-white shadow-sm"
-                                                                : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-                                                        )}
-                                                    >
-                                                        {d.label}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <DialogFooter>
-                                        <Button variant="outline" onClick={() => setEditOpen(false)}>Annuler</Button>
-                                        <Button onClick={handleUpdate} disabled={editing} className="gap-2 bg-indigo-600 hover:bg-indigo-700">
-                                            {editing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                                            Enregistrer
-                                        </Button>
-                                    </DialogFooter>
-                                </DialogContent>
-                            </Dialog>
-
-                            {/* ADD PROSPECTS BUTTON */}
+                        <div className="pt-2 border-t border-slate-100 mt-2">
                             {onAddProspects && (
-                                <Button onClick={onAddProspects} className="w-full justify-start bg-indigo-600 hover:bg-indigo-700 font-medium">
-                                    <Send className="w-4 h-4 mr-2" />
+                                <Button onClick={onAddProspects} variant="outline" size="sm" className="w-full justify-center bg-slate-50 border-slate-200 text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 transition-colors">
+                                    <Plus className="w-4 h-4 mr-2" />
                                     Ajouter des prospects
                                 </Button>
                             )}
@@ -400,13 +410,13 @@ export function PlanningTab({ schedule, queueStats, onUpdate, onAddProspects }: 
                 </Card>
             </div>
 
-            {/* Timeline / Forecast */}
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
+            {/* Timeline / Forecast - INFINITE SCROLL */}
+            <Card className="border-slate-200 shadow-sm overflow-hidden">
+                <CardHeader className="flex flex-row items-center justify-between bg-slate-50/50 border-b border-slate-100 px-6 py-4">
                     <div>
-                        <CardTitle className="flex items-center gap-2">
-                            <CalendarIcon className="w-5 h-5 text-indigo-600" />
-                            Prévisions d'envoi
+                        <CardTitle className="flex items-center gap-2 text-base">
+                            <CalendarIcon className="w-5 h-5 text-indigo-500" />
+                            Prévisions d'envoi & Historique
                         </CardTitle>
                         <CardDescription>
                             Fin estimée le <span className="font-bold text-gray-900">{format(endDate, "d MMMM yyyy", { locale: fr })}</span>
@@ -415,9 +425,9 @@ export function PlanningTab({ schedule, queueStats, onUpdate, onAddProspects }: 
 
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
-                            <Button variant="destructive" size="sm" disabled={canceling} className="opacity-90 hover:opacity-100">
+                            <Button variant="ghost" size="sm" disabled={canceling} className="text-red-600 hover:text-red-700 hover:bg-red-50">
                                 {canceling ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <XCircle className="w-4 h-4 mr-2" />}
-                                Arrêter
+                                Arrêter la campagne
                             </Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent>
@@ -438,53 +448,64 @@ export function PlanningTab({ schedule, queueStats, onUpdate, onAddProspects }: 
                     </AlertDialog>
 
                 </CardHeader>
-                <CardContent>
-                    <div className="grid grid-cols-5 sm:grid-cols-7 md:grid-cols-10 gap-2 mb-6">
-                        {timelineData.map((day, i) => {
-                            let statusText = ""
-                            let statusClass = ""
+                <CardContent className="p-0">
+                    {/* SCROLLABLE CONTAINER */}
+                    <div className="overflow-x-auto custom-scrollbar">
+                        <div className="flex gap-1.5 p-6 min-w-max">
+                            {timelineData.map((day, i) => {
+                                let statusText = ""
+                                let statusClass = ""
 
-                            if (day.isBeforeStart) {
-                                statusText = "Attente"
-                                statusClass = "bg-gray-50 border-gray-100 text-gray-400"
-                            } else if (day.isOffDay) {
-                                statusText = "Pause"
-                                statusClass = "bg-slate-50 border-slate-100 text-gray-400 opacity-60"
-                            } else {
-                                statusClass = "bg-white border-slate-200"
-                            }
+                                if (day.isBeforeStart) {
+                                    statusText = "Attente"
+                                    statusClass = "bg-slate-50 border-slate-100 text-slate-300"
+                                } else if (day.isOffDay) {
+                                    statusText = "Pause"
+                                    statusClass = "bg-slate-50 border-slate-100 text-slate-300 opacity-50"
+                                } else {
+                                    statusClass = "bg-white border-slate-200"
+                                }
 
-                            if (day.isToday) {
-                                statusClass += " border-indigo-500 bg-indigo-50 ring-1 ring-indigo-500"
-                            }
+                                if (day.isToday) {
+                                    statusClass += " border-indigo-500 bg-indigo-50/30 ring-1 ring-indigo-500 shadow-sm z-10 scale-105 origin-bottom"
+                                }
 
-                            return (
-                                <div
-                                    key={i}
-                                    className={cn(
-                                        "flex flex-col items-center justify-center p-2 rounded border text-xs h-16 transition-colors",
-                                        statusClass
-                                    )}
-                                >
-                                    <span className={cn("font-semibold mb-1", day.isToday ? "text-indigo-700" : "text-gray-500")}>
-                                        {format(day.date, "d MMM", { locale: fr })}
-                                    </span>
-                                    {day.isActive ? (
-                                        <Badge variant="secondary" className="px-1.5 h-5 text-[10px] bg-emerald-100 text-emerald-800">
-                                            {day.sent}
-                                        </Badge>
-                                    ) : (
-                                        <span className="text-[10px] uppercase font-medium">
-                                            {statusText}
+                                return (
+                                    <div
+                                        key={i}
+                                        className={cn(
+                                            "flex flex-col items-center justify-center p-2 rounded-lg border text-xs h-20 w-16 shrink-0 transition-all",
+                                            statusClass
+                                        )}
+                                    >
+                                        <span className={cn("text-[10px] font-bold uppercase mb-1", day.isToday ? "text-indigo-600" : "text-slate-400")}>
+                                            {format(day.date, "EEE", { locale: fr })}
                                         </span>
-                                    )}
-                                </div>
-                            )
-                        })}
+                                        <span className={cn("text-lg font-bold mb-1", day.isToday ? "text-indigo-900" : "text-slate-700")}>
+                                            {format(day.date, "dd")}
+                                        </span>
+
+                                        {day.isActive ? (
+                                            <Badge variant="secondary" className="px-1.5 h-4 text-[9px] bg-emerald-100 text-emerald-800 border-none">
+                                                {day.sent}
+                                            </Badge>
+                                        ) : (
+                                            <span className="text-[9px] uppercase font-bold text-slate-300">
+                                                -
+                                            </span>
+                                        )}
+                                    </div>
+                                )
+                            })}
+                            {/* Spacer for end of scroll */}
+                            <div className="w-10 shrink-0" />
+                        </div>
                     </div>
 
-                    <p className="text-xs text-center text-muted-foreground">
-                        Affichage des 30 prochains jours.
+                    <p className="text-[10px] text-center text-muted-foreground pb-2 flex items-center justify-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-emerald-100 block"></span> Envoi
+                        <span className="w-2 h-2 rounded-full bg-slate-100 block ml-2"></span> Pause
+                        <span className="ml-2">Faites défiler pour voir la suite →</span>
                     </p>
 
                 </CardContent>
