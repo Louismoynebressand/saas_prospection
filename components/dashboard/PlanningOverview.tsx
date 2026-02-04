@@ -56,7 +56,7 @@ export function PlanningOverview() {
                 const campaignIds = schedulesData.map((s: any) => s.campaign_id)
                 const { data: campaignsData, error: campaignsError } = await supabase
                     .from('cold_email_campaigns')
-                    .select('id, name')
+                    .select('id, nom_campagne')
                     .in('id', campaignIds)
 
                 if (campaignsError) throw campaignsError
@@ -64,7 +64,9 @@ export function PlanningOverview() {
                 // 3. Merge Data
                 const mergedSchedules = schedulesData.map((schedule: any) => ({
                     ...schedule,
-                    cold_email_campaigns: campaignsData?.find((c: any) => c.id === schedule.campaign_id) || { name: 'Campagne inconnue' }
+                    cold_email_campaigns: campaignsData?.find((c: any) => c.id === schedule.campaign_id)
+                        ? { name: campaignsData.find((c: any) => c.id === schedule.campaign_id)!.nom_campagne }
+                        : { name: 'Campagne inconnue' }
                 }))
 
                 setSchedules(mergedSchedules)
