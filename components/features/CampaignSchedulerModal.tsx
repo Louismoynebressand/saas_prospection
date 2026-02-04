@@ -21,9 +21,10 @@ import Link from "next/link"
 interface CampaignSchedulerModalProps {
     campaignId: string
     onScheduled?: () => void
+    hasSchedule?: boolean
 }
 
-export function CampaignSchedulerModal({ campaignId, onScheduled }: CampaignSchedulerModalProps) {
+export function CampaignSchedulerModal({ campaignId, onScheduled, hasSchedule = false }: CampaignSchedulerModalProps) {
     const [open, setOpen] = useState(false)
     const [loading, setLoading] = useState(false)
     const supabase = createClient()
@@ -144,8 +145,26 @@ export function CampaignSchedulerModal({ campaignId, onScheduled }: CampaignSche
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button className="bg-emerald-600 hover:bg-emerald-700 shadow-sm gap-2">
-                    <Play className="w-4 h-4" /> Lancer / Planifier
+                <Button
+                    className={cn(
+                        "transition-all duration-300 shadow-sm gap-2 text-white font-medium border-0",
+                        hasSchedule
+                            ? "bg-slate-100 text-slate-400 cursor-not-allowed hover:bg-slate-100 shadow-none"
+                            : "bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 shadow-[0_0_15px_rgba(99,102,241,0.4)] hover:shadow-[0_0_20px_rgba(99,102,241,0.6)]"
+                    )}
+                    disabled={hasSchedule}
+                >
+                    {hasSchedule ? (
+                        <>
+                            <CheckCircle2 className="w-4 h-4" />
+                            Planifié
+                        </>
+                    ) : (
+                        <>
+                            <Sparkles className="w-4 h-4 animate-pulse" />
+                            Planifier l'envoi des mails
+                        </>
+                    )}
                 </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-lg">
