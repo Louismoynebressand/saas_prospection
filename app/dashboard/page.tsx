@@ -86,13 +86,13 @@ export default function DashboardPage() {
                 // Emails generated (from campaign_prospects status)
                 supabase
                     .from('campaign_prospects')
-                    .select('*, campaigns!inner(user_id)', { count: 'exact', head: true })
-                    .eq('campaigns.user_id', user.id)
+                    .select('*, cold_email_campaigns!inner(user_id)', { count: 'exact', head: true })
+                    .eq('cold_email_campaigns.user_id', user.id)
                     .eq('email_status', 'generated'),
 
                 // Active Campaigns (Check multiple status variations)
                 supabase
-                    .from('campaigns')
+                    .from('cold_email_campaigns')
                     .select('*', { count: 'exact', head: true })
                     .eq('user_id', user.id)
                     .or('status.eq.ACTIVE,status.eq.active,status.eq.Running,is_active.eq.true'),
@@ -100,14 +100,15 @@ export default function DashboardPage() {
                 // Emails Sent (via campaign_prospects)
                 supabase
                     .from('campaign_prospects')
-                    .select('*, campaigns!inner(user_id)', { count: 'exact', head: true })
-                    .eq('campaigns.user_id', user.id)
+                    .select('*, cold_email_campaigns!inner(user_id)', { count: 'exact', head: true })
+                    .eq('cold_email_campaigns.user_id', user.id)
                     .in('email_status', ['sent', 'opened', 'clicked', 'replied']),
 
-                // Scheduled Emails
+                // Scheduled Emails (Filtered by user via campaign)
                 supabase
                     .from('email_queue')
-                    .select('*', { count: 'exact', head: true })
+                    .select('*, cold_email_campaigns!inner(user_id)', { count: 'exact', head: true })
+                    .eq('cold_email_campaigns.user_id', user.id)
                     .eq('status', 'pending')
             ])
 

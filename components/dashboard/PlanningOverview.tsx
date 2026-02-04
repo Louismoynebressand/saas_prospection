@@ -20,7 +20,7 @@ interface Schedule {
     days_of_week: number[]
     status: string
     start_date: string
-    campaigns: {
+    cold_email_campaigns: {
         name: string
     }
 }
@@ -40,12 +40,12 @@ export function PlanningOverview() {
             const { data: { user } } = await supabase.auth.getUser()
             if (!user) return
 
-            // Join schedules with campaigns to get name
+            // Join schedules with cold_email_campaigns to get name
             const { data, error } = await supabase
                 .from('campaign_schedules')
                 .select(`
                     *,
-                    campaigns (name)
+                    cold_email_campaigns (name)
                 `)
                 .eq('status', 'active')
 
@@ -127,7 +127,7 @@ export function PlanningOverview() {
                         </Badge>
                     </CardTitle>
                     <CardDescription className="flex items-center gap-2 mt-1">
-                        Campagne : <span className="font-semibold text-gray-900">{currentSchedule.campaigns?.name}</span>
+                        Campagne : <span className="font-semibold text-gray-900">{currentSchedule.cold_email_campaigns?.name}</span>
                     </CardDescription>
                 </div>
 
