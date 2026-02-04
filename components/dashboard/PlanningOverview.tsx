@@ -29,6 +29,7 @@ export function PlanningOverview() {
     const supabase = createClient()
     const [schedules, setSchedules] = useState<Schedule[]>([])
     const [loading, setLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
     const [currentIndex, setCurrentIndex] = useState(0)
 
     useEffect(() => {
@@ -37,25 +38,42 @@ export function PlanningOverview() {
 
     const fetchSchedules = async () => {
         try {
+            setError(null)
             const { data: { user } } = await supabase.auth.getUser()
             if (!user) return
 
-            // Join schedules with cold_email_campaigns to get name
-            const { data, error } = await supabase
+            // 1. Fetch Schedules
+            const { data: schedulesData, error: schedulesError } = await supabase
                 .from('campaign_schedules')
-                .select(`
-                    *,
-                    cold_email_campaigns (name)
-                `)
+                .select('*')
                 .eq('status', 'active')
+                .order('created_at', { ascending: false })
 
-            if (data) {
-                // Filter manually for user ownership via campaigns if RLS doesn't handle deep join perfectly on this query
-                // Or assume campaigns RLS handles it.
-                setSchedules(data as any[])
+            if (schedulesError) throw schedulesError
+
+            if (schedulesData && schedulesData.length > 0) {
+                // 2. Fetch Campaign Names
+                const campaignIds = schedulesData.map(s => s.campaign_id)
+                const { data: campaignsData, error: campaignsError } = await supabase
+                    .from('cold_email_campaigns')
+                    .select('id, name')
+                    .in('id', campaignIds)
+
+                if (campaignsError) throw campaignsError
+
+                // 3. Merge Data
+                const mergedSchedules = schedulesData.map(schedule => ({
+                    ...schedule,
+                    cold_email_campaigns: campaignsData?.find(c => c.id === schedule.campaign_id) || { name: 'Campagne inconnue' }
+                }))
+
+                setSchedules(mergedSchedules)
+            } else {
+                setSchedules([])
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error fetching schedules:", error)
+            setError(error.message || "Impossible de charger le planning")
         } finally {
             setLoading(false)
         }
@@ -69,6 +87,24 @@ export function PlanningOverview() {
                 </CardHeader>
                 <CardContent className="h-40 flex items-center justify-center">
                     <Loader2 className="w-6 h-6 animate-spin text-slate-300" />
+                </CardContent>
+            </Card>
+        )
+    }
+
+    if (error) {
+        return (
+            <Card className="border-red-200 shadow-sm bg-red-50">
+                <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2 text-red-700">
+                        <Loader2 className="w-5 h-5" /> Erreur de chargement
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <p className="text-sm text-red-600">{error}</p>
+                    <Button variant="outline" size="sm" onClick={fetchSchedules} className="mt-4 border-red-200 hover:bg-red-100 text-red-700">
+                        Réessayer
+                    </Button>
                 </CardContent>
             </Card>
         )
