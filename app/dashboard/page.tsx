@@ -21,7 +21,6 @@ interface DashboardStats {
     emailsSent: number
     emailsScheduled: number
 }
-}
 
 export default function DashboardPage() {
     const [stats, setStats] = useState<DashboardStats>({
@@ -110,16 +109,7 @@ export default function DashboardPage() {
                     .eq('status', 'pending')
             ])
 
-            setStats({
-                totalProspects: prospectsResult.count || 0,
-                totalSearches: searchesResult.count || 0,
-                activeSearches: activeSearchesResult.count || 0,
-                emailsScanned: emailsScannedResult.count || 0,
-                emailsGenerated: emailsGeneratedResult.count || 0,
-                activeCampaigns: activeCampaignsResult.count || 0,
-                emailsSent: emailsSentResult.count || 0,
-                emailsScheduled: 0 // Will replace with result below if valid
-            })
+
 
             // Correction with explicit assignments
             const newStats = {
@@ -389,6 +379,11 @@ export default function DashboardPage() {
                 <div>
                     <LastJobWidget />
                 </div>
+            </div>
+
+            {/* Planning Overview Section */}
+            <div className="w-full">
+                <PlanningOverview />
             </div>
 
             {/* Empty State CTA */}
