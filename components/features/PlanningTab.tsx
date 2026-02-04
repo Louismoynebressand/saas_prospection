@@ -59,9 +59,7 @@ export function PlanningTab({ schedule, queueStats, onUpdate, onAddProspects }: 
     const [editTimeWindow, setEditTimeWindow] = useState({ start: "08:00", end: "18:00" })
     const [editDays, setEditDays] = useState<number[]>([])
     const [editSmtpId, setEditSmtpId] = useState<string>("")
-    const [editTimeWindow, setEditTimeWindow] = useState({ start: "08:00", end: "18:00" })
-    const [editDays, setEditDays] = useState<number[]>([])
-    const [editSmtpId, setEditSmtpId] = useState<string>("")
+
     const [smtpConfigs, setSmtpConfigs] = useState<any[]>([])
 
     // Timeline State
