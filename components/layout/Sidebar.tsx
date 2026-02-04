@@ -203,12 +203,18 @@ export function Sidebar() {
                                 key={item.name}
                                 href={item.href}
                                 className={cn(
-                                    "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-200",
+                                    "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-200 relative overflow-hidden group",
                                     isActive
-                                        ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
-                                        : "text-muted-foreground hover:bg-muted hover:text-foreground hover:pl-4"
+                                        ? "bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-indigo-700 shadow-sm border-l-4 border-indigo-500 pl-2"
+                                        : "text-muted-foreground hover:bg-slate-50 hover:text-foreground hover:pl-4"
                                 )}
                             >
+                                {isActive && (
+                                    <div className="absolute inset-0 bg-gradient-to-r from-violet-500/5 to-transparent opacity-100 pointer-events-none" />
+                                )}
+                                {isActive && (
+                                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
+                                )}
                                 <Icon className="h-4 w-4" />
                                 {item.name}
                             </Link>

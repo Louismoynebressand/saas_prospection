@@ -7,6 +7,7 @@ import { KPIWidget } from "@/components/dashboard/KPIWidget"
 import { QuickActions } from "@/components/dashboard/QuickActions"
 import { ActivityFeed } from "@/components/dashboard/ActivityFeed"
 import { LastJobWidget } from "@/components/dashboard/LastJobWidget"
+import { PlanningOverview } from "@/components/dashboard/PlanningOverview"
 import { Users, Search, Mail, ShieldCheck, Sparkles, Rocket, Send } from "lucide-react"
 import { motion } from "framer-motion"
 
@@ -18,6 +19,8 @@ interface DashboardStats {
     emailsGenerated: number
     activeCampaigns: number
     emailsSent: number
+    emailsScheduled: number
+}
 }
 
 export default function DashboardPage() {
@@ -28,7 +31,8 @@ export default function DashboardPage() {
         emailsScanned: 0,
         emailsGenerated: 0,
         activeCampaigns: 0,
-        emailsSent: 0
+        emailsSent: 0,
+        emailsScheduled: 0
     })
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
@@ -52,7 +56,8 @@ export default function DashboardPage() {
                 emailsScannedResult,
                 emailsGeneratedResult,
                 activeCampaignsResult,
-                emailsSentResult
+                emailsSentResult,
+                emailsScheduledResult
             ] = await Promise.all([
                 // Total prospects scraped
                 supabase
@@ -90,13 +95,19 @@ export default function DashboardPage() {
                     .from('campaigns')
                     .select('*', { count: 'exact', head: true })
                     .eq('user_id', user.id)
-                    .eq('is_active', true),
+                    .eq('status', 'ACTIVE'),
 
                 // Emails Sent (via campaign links)
                 supabase
                     .from('campaign_prospect_links')
                     .select('*', { count: 'exact', head: true })
-                    .in('email_status', ['sent', 'opened', 'clicked', 'replied']) // Count any interaction as sent initially
+                    .in('email_status', ['sent', 'opened', 'clicked', 'replied']), // Count any interaction as sent initially
+
+                // Scheduled Emails
+                supabase
+                    .from('email_queue')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('status', 'pending')
             ])
 
             setStats({
@@ -106,8 +117,34 @@ export default function DashboardPage() {
                 emailsScanned: emailsScannedResult.count || 0,
                 emailsGenerated: emailsGeneratedResult.count || 0,
                 activeCampaigns: activeCampaignsResult.count || 0,
-                emailsSent: emailsSentResult.count || 0
+                emailsSent: emailsSentResult.count || 0,
+                emailsScheduled: 0 // Will replace with result below if valid
             })
+
+            // Correction with explicit assignments
+            const newStats = {
+                totalProspects: prospectsResult.count || 0,
+                totalSearches: searchesResult.count || 0,
+                activeSearches: activeSearchesResult.count || 0,
+                emailsScanned: emailsScannedResult.count || 0,
+                // Fix: Count prospects with generated status
+                emailsGenerated: 0,
+                // Fix: Count active campaigns by status
+                activeCampaigns: activeCampaignsResult.count || 0,
+                emailsSent: emailsSentResult.count || 0,
+                emailsScheduled: emailsScheduledResult.count || 0
+            }
+
+            // 2. Generated: check scrape_prospects with email_status='generated'
+            const { count: generatedCount } = await supabase
+                .from('scrape_prospect')
+                .select('*', { count: 'exact', head: true })
+                .eq('id_user', user.id)
+                .eq('email_status', 'generated')
+
+            if (generatedCount !== null) newStats.emailsGenerated = generatedCount
+
+            setStats(newStats)
             setLoading(false)
         } catch (err: any) {
             console.error('Error fetching dashboard stats:', err)
@@ -138,11 +175,16 @@ export default function DashboardPage() {
             .on('postgres_changes', { event: '*', schema: 'public', table: 'campaigns' }, fetchDashboardStats)
             .subscribe()
 
+        const queueChannel = supabase.channel('dashboard_queue')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'email_queue' }, fetchDashboardStats)
+            .subscribe()
+
         return () => {
             supabase.removeChannel(prospectsChannel)
             supabase.removeChannel(jobsChannel)
             supabase.removeChannel(emailsChannel)
             supabase.removeChannel(campaignsChannel)
+            supabase.removeChannel(queueChannel)
         }
     }, [])
 
@@ -171,7 +213,7 @@ export default function DashboardPage() {
             </div>
 
             {/* KPI Grid */}
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -309,6 +351,30 @@ export default function DashboardPage() {
                         className="border-emerald-200/50"
                         emptyAction={{
                             label: "Voir les campagnes",
+                            href: "/campaigns"
+                        }}
+                    />
+                </motion.div>
+
+                {/* New: Emails Scheduled */}
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4, delay: 0.7 }}
+                >
+                    <KPIWidget
+                        title="Planification"
+                        icon={Rocket}
+                        value={stats.emailsScheduled}
+                        subtitle="Emails en attente d'envoi"
+                        loading={loading}
+                        error={error || undefined}
+                        onRetry={fetchDashboardStats}
+                        isEmpty={!loading && stats.emailsScheduled === 0}
+                        emptyMessage="Aucune planification"
+                        className="border-amber-200/50"
+                        emptyAction={{
+                            label: "Planifier",
                             href: "/campaigns"
                         }}
                     />
