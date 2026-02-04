@@ -17,13 +17,15 @@ import type { CampaignProspectLink, EmailStatus, Campaign } from "@/types"
 interface CampaignProspectsListProps {
     campaignId: string
     campaign?: Campaign
+    onAddProspects?: () => void
+    refreshTrigger?: number
 }
 
-export function CampaignProspectsList({ campaignId, campaign }: CampaignProspectsListProps) {
+export function CampaignProspectsList({ campaignId, campaign, onAddProspects, refreshTrigger = 0 }: CampaignProspectsListProps) {
     const [prospects, setProspects] = useState<CampaignProspectLink[]>([])
     const [loading, setLoading] = useState(true)
     const [selectedProspects, setSelectedProspects] = useState<Set<string>>(new Set())
-    const [showAddModal, setShowAddModal] = useState(false)
+    // const [showAddModal, setShowAddModal] = useState(false) // Moved to parent
     const [viewingProspect, setViewingProspect] = useState<any>(null)
     const [viewingEmail, setViewingEmail] = useState<{ subject: string | null, content: string | null } | null>(null)
     const [detailProspect, setDetailProspect] = useState<any>(null)
@@ -45,7 +47,7 @@ export function CampaignProspectsList({ campaignId, campaign }: CampaignProspect
 
     useEffect(() => {
         loadProspects()
-    }, [campaignId])
+    }, [campaignId, refreshTrigger])
 
     const loadProspects = async (showLoading = true) => {
         try {
@@ -193,10 +195,12 @@ export function CampaignProspectsList({ campaignId, campaign }: CampaignProspect
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-2xl font-bold">Prospects de la campagne</CardTitle>
-                    <Button onClick={() => setShowAddModal(true)}>
-                        <UserPlus className="w-4 h-4 mr-2" />
-                        Ajouter des prospects
-                    </Button>
+                    {onAddProspects && (
+                        <Button onClick={onAddProspects}>
+                            <UserPlus className="w-4 h-4 mr-2" />
+                            Ajouter des prospects
+                        </Button>
+                    )}
                 </CardHeader>
                 <CardContent>
                     <div className="flex gap-6 text-sm">
@@ -420,13 +424,6 @@ export function CampaignProspectsList({ campaignId, campaign }: CampaignProspect
             </Card>
 
             {/* Modals */}
-            <AddProspectsToCampaignModal
-                open={showAddModal}
-                onOpenChange={setShowAddModal}
-                campaignId={campaignId}
-                onSuccess={() => loadProspects()}
-            />
-
             <EmailViewerModal
                 open={!!viewingEmail}
                 onOpenChange={(open) => !open && setViewingEmail(null)}
