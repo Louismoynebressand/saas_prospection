@@ -62,9 +62,9 @@ export function PlanningOverview() {
                 if (campaignsError) throw campaignsError
 
                 // 3. Merge Data
-                const mergedSchedules = schedulesData.map(schedule => ({
+                const mergedSchedules = schedulesData.map((schedule: any) => ({
                     ...schedule,
-                    cold_email_campaigns: campaignsData?.find(c => c.id === schedule.campaign_id) || { name: 'Campagne inconnue' }
+                    cold_email_campaigns: campaignsData?.find((c: any) => c.id === schedule.campaign_id) || { name: 'Campagne inconnue' }
                 }))
 
                 setSchedules(mergedSchedules)
