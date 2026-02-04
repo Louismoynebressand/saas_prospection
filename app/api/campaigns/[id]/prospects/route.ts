@@ -139,6 +139,83 @@ export async function POST(
             return NextResponse.json({ error: insertError.message }, { status: 500 })
         }
 
+        // =================================================================================
+        // SMART AUTOMATION: If Campaign has ACTIVE SCHEDULE -> Auto-Queue & Trigger Generation
+        // =================================================================================
+        if (created && created.length > 0) {
+            // 1. Check for Active Schedule
+            const { data: schedule } = await supabase
+                .from('campaign_schedules')
+                .select('id')
+                .eq('campaign_id', campaignId)
+                .eq('status', 'active')
+                .maybeSingle() // Use maybeSingle to avoid error if none found
+
+            if (schedule) {
+                console.log(`[Smart Auto] Active schedule found (${schedule.id}) for campaign ${campaignId}. Queueing ${created.length} new prospects.`)
+
+                // 2. Add to Email Queue
+                const queueItems = created.map(p => ({
+                    campaign_id: campaignId,
+                    prospect_id: p.prospect_id,
+                    schedule_id: schedule.id,
+                    status: 'pending',
+                    priority: 0
+                }))
+
+                const { error: queueError } = await supabase
+                    .from('email_queue')
+                    .upsert(queueItems, { onConflict: 'campaign_id, prospect_id', ignoreDuplicates: true })
+
+                if (queueError) {
+                    console.error('[Smart Auto] Failed to queue prospects:', queueError)
+                } else {
+                    // 3. Trigger Generation for "not_generated"
+                    const ungeneratedProspects = created
+                        .filter(p => p.email_status === 'not_generated')
+                        .map(p => p.prospect_id)
+
+                    if (ungeneratedProspects.length > 0) {
+                        // Create Job
+                        const { data: job, error: jobError } = await supabase
+                            .from('cold_email_jobs')
+                            .insert({
+                                user_id: user.id,
+                                campaign_id: campaignId,
+                                prospect_ids: ungeneratedProspects,
+                                status: 'pending',
+                                started_at: new Date().toISOString()
+                            })
+                            .select()
+                            .single()
+
+                        if (!jobError && job) {
+                            // Trigger N8N Webhook
+                            const HARDCODED_URL = "https://n8n.srv903375.hstgr.cloud/webhook/neuraflow_scrappeur_generateur_cold_mail"
+                            const webhookUrl = process.env.N8N_WEBHOOK_COLD_EMAIL || process.env.NEXT_PUBLIC_N8N_WEBHOOK_COLD_EMAIL_URL || HARDCODED_URL
+
+                            if (webhookUrl) {
+                                const webhookPayload = {
+                                    user_id: user.id,
+                                    job_id: job.id,
+                                    campaign_id: campaignId,
+                                    prospect_ids: ungeneratedProspects
+                                }
+
+                                fetch(webhookUrl, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(webhookPayload)
+                                }).catch(err => console.error("[Smart Auto] Generation Webhook Failed:", err))
+
+                                console.log(`[Smart Auto] Triggered generation for ${ungeneratedProspects.length} prospects.`)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         return NextResponse.json({
             success: true,
             added: created?.length || 0,

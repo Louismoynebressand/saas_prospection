@@ -173,10 +173,48 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
         if (deleteError) throw deleteError
 
-        return NextResponse.json({ success: true, message: "Planning annulé et file d'attente nettoyée" })
+        // PUT /api/campaigns/[id]/schedule
+        // Update an existing active schedule
+        export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+            const { id: campaignId } = await params
+            const supabase = await createClient()
 
-    } catch (error: any) {
-        console.error("Schedule Cancellation Error:", error)
-        return NextResponse.json({ success: false, error: error.message }, { status: 500 })
-    }
-}
+            try {
+                const body = await req.json()
+                const { daily_limit, time_window_start, time_window_end, days_of_week, smtp_configuration_id } = body
+
+                // 1. Get Active Schedule
+                const { data: schedule, error: schedError } = await supabase
+                    .from('campaign_schedules')
+                    .select('id')
+                    .eq('campaign_id', campaignId)
+                    .eq('status', 'active')
+                    .single()
+
+                if (schedError || !schedule) {
+                    return NextResponse.json({ success: false, error: "No active schedule found to update" }, { status: 404 })
+                }
+
+                // 2. Update Schedule
+                const updates: any = {}
+                if (daily_limit) updates.daily_limit = daily_limit
+                if (time_window_start) updates.time_window_start = time_window_start
+                if (time_window_end) updates.time_window_end = time_window_end
+                if (days_of_week) updates.days_of_week = days_of_week
+                if (smtp_configuration_id) updates.smtp_configuration_id = smtp_configuration_id
+                updates.updated_at = new Date().toISOString()
+
+                const { error: updateError } = await supabase
+                    .from('campaign_schedules')
+                    .update(updates)
+                    .eq('id', schedule.id)
+
+                if (updateError) throw updateError
+
+                return NextResponse.json({ success: true, message: "Planning mis à jour" })
+
+            } catch (error: any) {
+                console.error("Schedule Update Error:", error)
+                return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+            }
+        }
