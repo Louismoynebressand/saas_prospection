@@ -17,7 +17,7 @@ export interface VerificationResult {
 }
 
 // Placeholder URL - To be replaced by environment variable or user input
-const PLACEHOLDER_WEBHOOK_URL = "https://n8n.srv903375.hstgr.cloud/webhook/test-smtp-config-placeholder"
+const PLACEHOLDER_WEBHOOK_URL = "https://n8n.srv903375.hstgr.cloud/webhook/neuraflow_scrappeur_test_configuration_smtp"
 
 export async function verifySmtpWithWebhook(config: SmtpConfigForVerification): Promise<VerificationResult> {
     const webhookUrl = process.env.N8N_WEBHOOK_SMTP_TEST || PLACEHOLDER_WEBHOOK_URL
