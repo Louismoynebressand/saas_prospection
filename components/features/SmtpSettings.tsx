@@ -44,7 +44,7 @@ const SMTP_PRESETS: Record<string, SmtpPreset> = {
     ovh_pro: { name: "Email Pro", host: "pro1.mail.ovh.net", port: 587, category: "pro", icon: "EP", note: "Le chiffre peut varier (pro1, pro2...)" },
     ovh_exchange: { name: "Exchange", host: "ex3.mail.ovh.net", port: 587, category: "pro", icon: "EX", note: "Le chiffre peut varier (ex1, ex2, ex3...)" },
     ionos: { name: "IONOS", host: "smtp.ionos.com", port: 587, category: "pro", icon: "IO" },
-    o2switch: { name: "o2switch", host: "mail.votre-domaine.o2switch.net", port: 465, category: "pro", icon: "O2", note: "Remplacez 'votre-domaine' par votre identifiant (ex: mail.niaouli.o2switch.net)" },
+    o2switch: { name: "o2switch", host: "", port: 465, category: "pro", icon: "O2", note: "Utilisez le serveur du provider : mail.VOTRE-COMPTE.o2switch.net (trouvez VOTRE-COMPTE dans l'email de bienvenue o2switch). N'utilisez PAS votre nom de domaine." },
 
     // Services SMTP Pro
     brevo: { name: "Brevo", host: "smtp-relay.brevo.com", port: 587, category: "relay", icon: "BR", note: "Utilisez vos identifiants SMTP Brevo (pas votre mot de passe compte)" },
