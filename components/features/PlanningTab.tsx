@@ -70,7 +70,7 @@ export function PlanningTab({ schedule, queueStats, onUpdate }: PlanningTabProps
 
                 if (data) {
                     setSmtpConfigs(data)
-                    const found = data.find(c => c.id === schedule.smtp_configuration_id)
+                    const found = data.find((c: any) => c.id === schedule.smtp_configuration_id)
                     if (found) {
                         setSmtpName(`${found.from_email} (${found.provider})`)
                     } else {
