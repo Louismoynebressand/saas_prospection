@@ -96,7 +96,10 @@ export function SmtpSettings() {
                     host: formData.smtp_host,
                     port: formData.smtp_port,
                     user: formData.email,
-                    pass: formData.password
+                    pass: formData.password,
+                    from_email: formData.email,
+                    from_name: formData.from_name || "",
+                    provider: formData.provider
                 })
             })
 
