@@ -53,7 +53,7 @@ export function PlanningOverview() {
 
             if (schedulesData && schedulesData.length > 0) {
                 // 2. Fetch Campaign Names
-                const campaignIds = schedulesData.map(s => s.campaign_id)
+                const campaignIds = schedulesData.map((s: any) => s.campaign_id)
                 const { data: campaignsData, error: campaignsError } = await supabase
                     .from('cold_email_campaigns')
                     .select('id, name')
