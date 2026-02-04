@@ -5,10 +5,10 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { toast } from "sonner"
-import { Loader2, Plus, Trash2, CheckCircle2, AlertCircle, Server, Mail, Shield, BookOpen, ExternalLink, RefreshCw, Info } from "lucide-react"
+import { Loader2, Plus, Trash2, CheckCircle2, Server, Mail, Shield, RefreshCw, Info, Building2, Globe, Zap } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface SmtpConfig {
@@ -29,33 +29,32 @@ interface SmtpPreset {
     port: number
     category: "public" | "pro" | "relay" | "custom"
     note?: string
+    icon?: string
 }
 
 // Comprehensive SMTP Provider Presets
 const SMTP_PRESETS: Record<string, SmtpPreset> = {
     // Grand Public
-    gmail: { name: "Gmail / Google Workspace", host: "smtp.gmail.com", port: 465, category: "public", note: "Nécessite un mot de passe d'application si 2FA activé" },
-    outlook: { name: "Microsoft 365 / Outlook", host: "smtp.office365.com", port: 587, category: "public", note: "Utilisez votre compte professionnel ou personnel" },
+    gmail: { name: "Gmail", host: "smtp.gmail.com", port: 465, category: "public", icon: "G", note: "Nécessite un mot de passe d'application si 2FA activé" },
+    outlook: { name: "Microsoft 365", host: "smtp.office365.com", port: 587, category: "public", icon: "O", note: "Utilisez votre compte professionnel ou personnel" },
+    zoho: { name: "Zoho Mail", host: "smtp.zoho.com", port: 465, category: "public", icon: "Z" },
 
     // Hébergeurs Français Pro
-    ovh_mx: { name: "OVH - MX Plan", host: "ssl0.ovh.net", port: 587, category: "pro", note: "Serveur : ssl0.ovh.net ou smtp.mail.ovh.net" },
-    ovh_pro: { name: "OVH - Email Pro", host: "pro1.mail.ovh.net", port: 587, category: "pro", note: "Le chiffre peut varier (pro1, pro2...)" },
-    ovh_exchange: { name: "OVH - Exchange", host: "ex3.mail.ovh.net", port: 587, category: "pro", note: "Le chiffre peut varier (ex1, ex2, ex3...)" },
-    ionos: { name: "IONOS (1&1)", host: "smtp.ionos.com", port: 587, category: "pro" },
-    o2switch: { name: "o2switch", host: "mail.votre-domaine.o2switch.net", port: 465, category: "pro", note: "Remplacez 'votre-domaine' par votre identifiant o2switch (ex: mail.niaouli.o2switch.net)" },
+    ovh_mx: { name: "MX Plan", host: "ssl0.ovh.net", port: 587, category: "pro", icon: "MX", note: "Serveur : ssl0.ovh.net ou smtp.mail.ovh.net" },
+    ovh_pro: { name: "Email Pro", host: "pro1.mail.ovh.net", port: 587, category: "pro", icon: "EP", note: "Le chiffre peut varier (pro1, pro2...)" },
+    ovh_exchange: { name: "Exchange", host: "ex3.mail.ovh.net", port: 587, category: "pro", icon: "EX", note: "Le chiffre peut varier (ex1, ex2, ex3...)" },
+    ionos: { name: "IONOS", host: "smtp.ionos.com", port: 587, category: "pro", icon: "IO" },
+    o2switch: { name: "o2switch", host: "mail.votre-domaine.o2switch.net", port: 465, category: "pro", icon: "O2", note: "Remplacez 'votre-domaine' par votre identifiant (ex: mail.niaouli.o2switch.net)" },
 
     // Services SMTP Pro
-    brevo: { name: "Brevo (ex-Sendinblue)", host: "smtp-relay.brevo.com", port: 587, category: "relay", note: "Utilisez vos identifiants SMTP Brevo (pas votre mot de passe compte)" },
-    sendgrid: { name: "SendGrid", host: "smtp.sendgrid.net", port: 587, category: "relay", note: "User: 'apikey', Password: votre clé API" },
-    mailgun_us: { name: "Mailgun (US)", host: "smtp.mailgun.org", port: 587, category: "relay" },
-    mailgun_eu: { name: "Mailgun (EU)", host: "smtp.eu.mailgun.org", port: 587, category: "relay" },
-    zoho: { name: "Zoho Mail", host: "smtp.zoho.com", port: 465, category: "public" },
+    brevo: { name: "Brevo", host: "smtp-relay.brevo.com", port: 587, category: "relay", icon: "BR", note: "Utilisez vos identifiants SMTP Brevo (pas votre mot de passe compte)" },
+    sendgrid: { name: "SendGrid", host: "smtp.sendgrid.net", port: 587, category: "relay", icon: "SG", note: "User: 'apikey', Password: votre clé API" },
+    mailgun_us: { name: "Mailgun US", host: "smtp.mailgun.org", port: 587, category: "relay", icon: "MG" },
+    mailgun_eu: { name: "Mailgun EU", host: "smtp.eu.mailgun.org", port: 587, category: "relay", icon: "MG" },
 
     // Autres
-    custom: { name: "Autre (Configuration manuelle)", host: "", port: 587, category: "custom" }
+    custom: { name: "Autre", host: "", port: 587, category: "custom", icon: "?" }
 }
-
-type ProviderCategory = "public" | "pro" | "relay" | "custom"
 
 export function SmtpSettings() {
     const [configs, setConfigs] = useState<SmtpConfig[]>([])
@@ -63,6 +62,7 @@ export function SmtpSettings() {
     const [isDialogOpen, setIsDialogOpen] = useState(false)
     const [testingConnection, setTestingConnection] = useState(false)
     const [saving, setSaving] = useState(false)
+    const [selectedCategory, setSelectedCategory] = useState<"public" | "pro" | "relay" | "custom">("public")
 
     // Form State
     const [formData, setFormData] = useState({
@@ -95,7 +95,7 @@ export function SmtpSettings() {
     }
 
     const handleProviderChange = (value: string) => {
-        const preset = SMTP_PRESETS[value as keyof typeof SMTP_PRESETS]
+        const preset = SMTP_PRESETS[value]
         if (preset) {
             setFormData(prev => ({
                 ...prev,
@@ -137,7 +137,8 @@ export function SmtpSettings() {
                 })
             } else {
                 toast.error("❌ Echec connexion", {
-                    description: data.error || "Vérifiez vos identifiants."
+                    description: data.error || "Vérifiez vos identifiants.",
+                    duration: 6000
                 })
             }
         } catch (error) {
@@ -181,7 +182,6 @@ export function SmtpSettings() {
                 toast.success("Configuration enregistrée !")
                 setIsDialogOpen(false)
                 fetchConfigs()
-                // Reset form
                 setFormData({
                     name: "",
                     provider: "gmail",
@@ -193,7 +193,8 @@ export function SmtpSettings() {
                 })
             } else {
                 toast.error("Erreur sauvegarde", {
-                    description: data.error || "Impossible d'enregistrer."
+                    description: data.error || "Impossible d'enregistrer.",
+                    duration: 6000
                 })
             }
         } catch (error) {
@@ -217,7 +218,10 @@ export function SmtpSettings() {
         }
     }
 
-    const currentPreset = SMTP_PRESETS[formData.provider as keyof typeof SMTP_PRESETS]
+    const currentPreset = SMTP_PRESETS[formData.provider]
+    const publicProviders = Object.entries(SMTP_PRESETS).filter(([_, p]) => p.category === "public")
+    const proProviders = Object.entries(SMTP_PRESETS).filter(([_, p]) => p.category === "pro")
+    const relayProviders = Object.entries(SMTP_PRESETS).filter(([_, p]) => p.category === "relay")
 
     return (
         <div className="space-y-6">
@@ -239,38 +243,121 @@ export function SmtpSettings() {
                         <DialogHeader className="mb-4">
                             <DialogTitle className="text-2xl">Configurer un compte d'envoi</DialogTitle>
                             <DialogDescription className="text-base">
-                                Connectez votre email professionnel pour envoyer vos campagnes (SMTP).
+                                Sélectionnez votre fournisseur email et connectez votre compte SMTP.
                             </DialogDescription>
                         </DialogHeader>
 
                         <div className="space-y-6">
-                            {/* Provider Selection */}
+                            {/* Provider Selection with Tabs */}
                             <div className="space-y-3">
-                                <Label className="text-base font-semibold">1. Type de compte email</Label>
-                                <Select value={formData.provider} onValueChange={handleProviderChange}>
-                                    <SelectTrigger className="w-full">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Grand Public</div>
-                                        {Object.entries(SMTP_PRESETS).filter(([_, p]) => p.category === "public").map(([key, preset]) => (
-                                            <SelectItem key={key} value={key}>{preset.name}</SelectItem>
-                                        ))}
+                                <Label className="text-base font-semibold">1. Quel est votre fournisseur email ?</Label>
 
-                                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground mt-2">Hébergeurs Professionnels</div>
-                                        {Object.entries(SMTP_PRESETS).filter(([_, p]) => p.category === "pro").map(([key, preset]) => (
-                                            <SelectItem key={key} value={key}>{preset.name}</SelectItem>
-                                        ))}
+                                <Tabs value={selectedCategory} onValueChange={(v) => setSelectedCategory(v as any)} className="w-full">
+                                    <TabsList className="grid w-full grid-cols-4">
+                                        <TabsTrigger value="public" className="flex items-center gap-1.5">
+                                            <Globe className="w-3.5 h-3.5" />
+                                            <span className="hidden sm:inline">Grand Public</span>
+                                            <span className="sm:hidden">Public</span>
+                                        </TabsTrigger>
+                                        <TabsTrigger value="pro" className="flex items-center gap-1.5">
+                                            <Building2 className="w-3.5 h-3.5" />
+                                            <span className="hidden sm:inline">Hébergeurs Pro</span>
+                                            <span className="sm:hidden">Pro</span>
+                                        </TabsTrigger>
+                                        <TabsTrigger value="relay" className="flex items-center gap-1.5">
+                                            <Zap className="w-3.5 h-3.5" />
+                                            <span className="hidden sm:inline">Services SMTP</span>
+                                            <span className="sm:hidden">SMTP</span>
+                                        </TabsTrigger>
+                                        <TabsTrigger value="custom" className="flex items-center gap-1.5">
+                                            <Server className="w-3.5 h-3.5" />
+                                            Autre
+                                        </TabsTrigger>
+                                    </TabsList>
 
-                                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground mt-2">Services SMTP Pro</div>
-                                        {Object.entries(SMTP_PRESETS).filter(([_, p]) => p.category === "relay").map(([key, preset]) => (
-                                            <SelectItem key={key} value={key}>{preset.name}</SelectItem>
-                                        ))}
+                                    <TabsContent value="public" className="mt-4">
+                                        <div className="grid grid-cols-3 gap-3">
+                                            {publicProviders.map(([key, preset]) => (
+                                                <button
+                                                    key={key}
+                                                    onClick={() => handleProviderChange(key)}
+                                                    className={cn(
+                                                        "flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all hover:scale-[1.02]",
+                                                        formData.provider === key
+                                                            ? "border-indigo-600 bg-indigo-50 shadow-md"
+                                                            : "border-gray-200 bg-white hover:border-indigo-300"
+                                                    )}
+                                                >
+                                                    <div className={cn(
+                                                        "w-10 h-10 rounded-lg flex items-center justify-center text-sm font-black",
+                                                        formData.provider === key ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-600"
+                                                    )}>
+                                                        {preset.icon}
+                                                    </div>
+                                                    <span className="text-xs font-semibold text-center">{preset.name}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </TabsContent>
 
-                                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground mt-2">Autre</div>
-                                        <SelectItem value="custom">Configuration manuelle</SelectItem>
-                                    </SelectContent>
-                                </Select>
+                                    <TabsContent value="pro" className="mt-4">
+                                        <div className="grid grid-cols-3 gap-3">
+                                            {proProviders.map(([key, preset]) => (
+                                                <button
+                                                    key={key}
+                                                    onClick={() => handleProviderChange(key)}
+                                                    className={cn(
+                                                        "flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all hover:scale-[1.02]",
+                                                        formData.provider === key
+                                                            ? "border-indigo-600 bg-indigo-50 shadow-md"
+                                                            : "border-gray-200 bg-white hover:border-indigo-300"
+                                                    )}
+                                                >
+                                                    <div className={cn(
+                                                        "w-10 h-10 rounded-lg flex items-center justify-center text-[10px] font-black",
+                                                        formData.provider === key ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-600"
+                                                    )}>
+                                                        {preset.icon}
+                                                    </div>
+                                                    <span className="text-xs font-semibold text-center">{preset.name}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </TabsContent>
+
+                                    <TabsContent value="relay" className="mt-4">
+                                        <div className="grid grid-cols-3 gap-3">
+                                            {relayProviders.map(([key, preset]) => (
+                                                <button
+                                                    key={key}
+                                                    onClick={() => handleProviderChange(key)}
+                                                    className={cn(
+                                                        "flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all hover:scale-[1.02]",
+                                                        formData.provider === key
+                                                            ? "border-indigo-600 bg-indigo-50 shadow-md"
+                                                            : "border-gray-200 bg-white hover:border-indigo-300"
+                                                    )}
+                                                >
+                                                    <div className={cn(
+                                                        "w-10 h-10 rounded-lg flex items-center justify-center text-[10px] font-black",
+                                                        formData.provider === key ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-600"
+                                                    )}>
+                                                        {preset.icon}
+                                                    </div>
+                                                    <span className="text-xs font-semibold text-center">{preset.name}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </TabsContent>
+
+                                    <TabsContent value="custom" className="mt-4">
+                                        <div className="p-6 bg-slate-50 rounded-xl border-2 border-dashed text-center">
+                                            <Server className="w-8 h-8 mx-auto mb-2 text-slate-400" />
+                                            <p className="text-sm text-slate-600">Configuration manuelle sélectionnée</p>
+                                            <p className="text-xs text-slate-500 mt-1">Remplissez les champs serveur SMTP ci-dessous</p>
+                                        </div>
+                                    </TabsContent>
+                                </Tabs>
 
                                 {currentPreset?.note && (
                                     <div className="flex gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
@@ -282,7 +369,7 @@ export function SmtpSettings() {
 
                             {/* Credentials */}
                             <div className="space-y-4">
-                                <Label className="text-base font-semibold">2. Identifiants</Label>
+                                <Label className="text-base font-semibold">2. Identifiants de connexion</Label>
                                 <div className="grid md:grid-cols-2 gap-4">
                                     <div className="space-y-2">
                                         <Label className="text-xs font-medium text-gray-600 uppercase">Email d'envoi</Label>
@@ -297,13 +384,11 @@ export function SmtpSettings() {
                                         </div>
                                     </div>
                                     <div className="space-y-2">
-                                        <Label className="text-xs font-medium text-gray-600 uppercase">
-                                            Mot de passe
-                                        </Label>
+                                        <Label className="text-xs font-medium text-gray-600 uppercase">Mot de passe</Label>
                                         <div className="relative">
                                             <Shield className="absolute left-3 top-3 h-4 w-4 text-emerald-600" />
                                             <Input
-                                                className="pl-9 bg-emerald-50/30 border-emerald-100 focus-visible:ring-emerald-500"
+                                                className="pl-9 bg-emerald-50/30 border-emerald-100"
                                                 type="password"
                                                 placeholder="Mot de passe d'application"
                                                 value={formData.password}
@@ -361,7 +446,7 @@ export function SmtpSettings() {
                                 </div>
                                 <div className="flex gap-2 p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-900">
                                     <Info className="w-3 h-3 mt-0.5 flex-shrink-0" />
-                                    <span><strong>Port 465</strong> = SSL/TLS direct • <strong>Port 587</strong> = STARTTLS</span>
+                                    <span><strong>Port 465</strong> = SSL/TLS • <strong>Port 587</strong> = STARTTLS</span>
                                 </div>
                             </div>
                         </div>
@@ -391,12 +476,12 @@ export function SmtpSettings() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {configs.map(config => (
-                    <Card key={config.id} className="group hover:border-indigo-300 transition-all hover:shadow-md cursor-default">
+                    <Card key={config.id} className="group hover:border-indigo-300 transition-all hover:shadow-md">
                         <CardHeader className="pb-3">
                             <div className="flex justify-between items-start">
                                 <CardTitle className="text-base font-bold flex items-center gap-3">
                                     <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-100 flex items-center justify-center text-sm font-black">
-                                        {SMTP_PRESETS[config.provider as keyof typeof SMTP_PRESETS]?.name.charAt(0) || "?"}
+                                        {SMTP_PRESETS[config.provider]?.icon || "?"}
                                     </div>
                                     <span className="truncate">{config.name}</span>
                                 </CardTitle>

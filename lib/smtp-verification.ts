@@ -64,18 +64,31 @@ export async function verifySmtpWithWebhook(config: SmtpConfigForVerification): 
             }
         }
 
-        // Parse response
+        // Parse response - N8N returns an array with one object
         const data = await webhookResponse.json()
         console.log(`✅ [SMTP Test] Webhook response data:`, data)
 
-        // N8N should return { success: true/false, message: "..." }
-        // Handle different response formats
-        const isSuccess = data.success === true || data.ok === true || data.result === true
+        // Handle array response from n8n
+        const result = Array.isArray(data) ? data[0] : data
 
-        return {
-            success: isSuccess,
-            message: data.message || data.error || (isSuccess ? "Configuration validée" : "Échec de connexion"),
-            details: data
+        // Check if validation is successful
+        // Expected format: { "statut": "finish", "validation SMTP": "Valide" | "Refuse", "raison_refus": "..." }
+        const isValid = result?.["validation SMTP"] === "Valide" || result?.validation_smtp === "Valide"
+
+        if (isValid) {
+            return {
+                success: true,
+                message: "✅ Configuration SMTP validée avec succès !",
+                details: result
+            }
+        } else {
+            // If refused, extract the reason
+            const refusalReason = result?.raison_refus || result?.error || "Échec de connexion SMTP"
+            return {
+                success: false,
+                message: refusalReason,
+                details: result
+            }
         }
 
     } catch (error: any) {
