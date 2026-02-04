@@ -1,15 +1,23 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Clock, Calendar as CalendarIcon, Send, CheckCircle2, AlertTriangle, MoreHorizontal, Mail, XCircle, Loader2, Edit, Save } from "lucide-react"
-import { format, addDays, startOfDay, isBefore, isSameDay } from "date-fns"
-import { fr } from "date-fns/locale"
+import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { toast } from "sonner"
+import { Badge } from "@/components/ui/badge"
+import { CalendarIcon, Clock, Mail, AlertTriangle, XCircle, Loader2, Save, Edit, Send, Plus } from "lucide-react"
+import { format, addDays, isSameDay, startOfDay, isBefore } from "date-fns"
+import { fr } from "date-fns/locale"
+import { cn } from "@/lib/utils"
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+    DialogFooter,
+} from "@/components/ui/dialog"
 import {
     AlertDialog,
     AlertDialogAction,
@@ -21,12 +29,11 @@ import {
     AlertDialogTitle,
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { cn } from "@/lib/utils"
+import { toast } from "sonner"
 
 interface PlanningTabProps {
     schedule: any
@@ -37,9 +44,10 @@ interface PlanningTabProps {
         total: number
     }
     onUpdate?: () => void
+    onAddProspects?: () => void
 }
 
-export function PlanningTab({ schedule, queueStats, onUpdate }: PlanningTabProps) {
+export function PlanningTab({ schedule, queueStats, onUpdate, onAddProspects }: PlanningTabProps) {
     const supabase = createClient()
     const [smtpName, setSmtpName] = useState<string>("Chargement...")
     const [canceling, setCanceling] = useState(false)
@@ -166,28 +174,26 @@ export function PlanningTab({ schedule, queueStats, onUpdate }: PlanningTabProps
     const dailyLimit = schedule.daily_limit || 1
     const activeDays = schedule.days_of_week || [1, 2, 3, 4, 5]
 
+    // Low Stock Logic
+    const daysStock = remainingEmails / (dailyLimit || 1)
+    const isCriticalStock = daysStock < 5
+    const isWarningStock = daysStock >= 5 && daysStock < 10
+
     // Logic: Start Timeline from TODAY to see context.
-    // If schedule.start_date is future, campaign is "Pending Start".
     const scheduleStart = startOfDay(new Date(schedule.start_date))
     const today = startOfDay(new Date())
 
-    // Simulation starts today
     let simulationDate = today
     let simulatedRemaining = remainingEmails
 
     const timelineData = []
     let daysToFinish = 0
 
-    // Simulate 365 days max
     for (let i = 0; i < 365; i++) {
         // Stop if done (and we have shown at least 15 days for visual context)
         if (simulatedRemaining <= 0 && i > 15) break
 
         const dayOfWeek = simulationDate.getDay() || 7 // 1-7
-
-        // Active Conditions:
-        // 1. Must be >= Schedule Start Date
-        // 2. Must be an Active Day of Week
         const isBeforeStart = isBefore(simulationDate, scheduleStart)
         const isOffDay = !activeDays.includes(dayOfWeek)
         const isActive = !isBeforeStart && !isOffDay
@@ -198,7 +204,7 @@ export function PlanningTab({ schedule, queueStats, onUpdate }: PlanningTabProps
             simulatedRemaining -= sentCount
         }
 
-        if (i < 30) { // Store first 30 days for grid
+        if (i < 30) {
             timelineData.push({
                 date: new Date(simulationDate),
                 sent: sentCount,
@@ -210,14 +216,12 @@ export function PlanningTab({ schedule, queueStats, onUpdate }: PlanningTabProps
         }
 
         if (sentCount > 0 || simulatedRemaining > 0) {
-            // Only count "Finishing Time" for days where work is still needed or done
             if (simulatedRemaining > 0) daysToFinish = i
         }
 
         simulationDate = addDays(simulationDate, 1)
     }
 
-    // Calculate approximate End Date
     const endDate = addDays(today, daysToFinish + 1)
 
     const weekDays = [
@@ -232,6 +236,41 @@ export function PlanningTab({ schedule, queueStats, onUpdate }: PlanningTabProps
 
     return (
         <div className="space-y-6">
+
+            {/* LOW STOCK ALERT */}
+            {(isCriticalStock || isWarningStock) && remainingEmails > 0 && (
+                <div className={cn(
+                    "border-l-4 p-4 rounded-md flex items-start gap-3",
+                    isCriticalStock ? "bg-red-50 border-red-500" : "bg-amber-50 border-amber-500"
+                )}>
+                    {isCriticalStock ? (
+                        <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5" />
+                    ) : (
+                        <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5" />
+                    )}
+                    <div>
+                        <h4 className={cn("font-semibold text-sm", isCriticalStock ? "text-red-900" : "text-amber-900")}>
+                            {isCriticalStock ? "Stock Critique : Interruption Imminente" : "Attention : Stock Faible"}
+                        </h4>
+                        <p className={cn("text-sm mt-1", isCriticalStock ? "text-red-700" : "text-amber-700")}>
+                            Il ne vous reste que <strong>{Math.floor(daysStock)} jours d'avance</strong> ({remainingEmails} emails) au rythme actuel.
+                            Ajoutez des prospects rapidement pour maintenir votre campagne.
+                        </p>
+                        {onAddProspects && (
+                            <Button
+                                variant={isCriticalStock ? "destructive" : "outline"}
+                                size="sm"
+                                onClick={onAddProspects}
+                                className="mt-3 bg-white hover:bg-slate-100 text-slate-800 border-slate-300 shadow-sm"
+                            >
+                                <Plus className="w-4 h-4 mr-2" />
+                                Ajouter des prospects maintenant
+                            </Button>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {/* Status Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Card className="bg-indigo-50 border-indigo-100">
@@ -252,96 +291,110 @@ export function PlanningTab({ schedule, queueStats, onUpdate }: PlanningTabProps
                         <p className="text-xs text-emerald-600 mt-1">Depuis le début</p>
                     </CardContent>
                 </Card>
-                <Card className="bg-white border-slate-200">
+
+                {/* CONFIGURATION CARD */}
+                <Card className="bg-white border-slate-200 col-span-1 md:col-span-1">
                     <CardHeader className="pb-2 flex flex-row items-center justify-between">
                         <CardTitle className="text-sm font-medium text-slate-600 uppercase">Configuration</CardTitle>
-
-                        {/* EDIT DIALOG */}
-                        <Dialog open={editOpen} onOpenChange={setEditOpen}>
-                            <DialogTrigger asChild>
-                                <Button variant="ghost" size="sm" className="h-6 w-6 p-0 hover:bg-slate-100">
-                                    <Edit className="w-3 h-3 text-slate-500" />
-                                </Button>
-                            </DialogTrigger>
-                            <DialogContent>
-                                <DialogHeader>
-                                    <DialogTitle>Modifier la planification</DialogTitle>
-                                    <DialogDescription>Ajustez les paramètres en cours de route.</DialogDescription>
-                                </DialogHeader>
-                                <div className="space-y-4 py-4">
-                                    <div className="space-y-2">
-                                        <div className="flex justify-between items-center">
-                                            <Label>Vitesse d'envoi</Label>
-                                            <span className="text-sm font-bold">{editDailyLimit[0]} mails/jour</span>
-                                        </div>
-                                        <Slider value={editDailyLimit} onValueChange={setEditDailyLimit} max={100} min={1} step={1} />
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <Label>Compte d'envoi</Label>
-                                        <Select value={editSmtpId} onValueChange={setEditSmtpId}>
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Choisir un compte" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {smtpConfigs.map(c => (
-                                                    <SelectItem key={c.id} value={c.id}>{c.from_email} ({c.provider})</SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <Label>Début</Label>
-                                            <Input type="time" value={editTimeWindow.start} onChange={e => setEditTimeWindow({ ...editTimeWindow, start: e.target.value })} />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label>Fin</Label>
-                                            <Input type="time" value={editTimeWindow.end} onChange={e => setEditTimeWindow({ ...editTimeWindow, end: e.target.value })} />
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <Label>Jours actifs</Label>
-                                        <div className="flex justify-between gap-1">
-                                            {weekDays.map((d) => (
-                                                <button
-                                                    key={d.val}
-                                                    onClick={() => toggleEditDay(d.val)}
-                                                    className={cn(
-                                                        "w-8 h-8 rounded-full text-xs font-bold transition-all",
-                                                        editDays.includes(d.val)
-                                                            ? "bg-indigo-600 text-white shadow-sm"
-                                                            : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-                                                    )}
-                                                >
-                                                    {d.label}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-                                <DialogFooter>
-                                    <Button variant="outline" onClick={() => setEditOpen(false)}>Annuler</Button>
-                                    <Button onClick={handleUpdate} disabled={editing} className="gap-2 bg-indigo-600 hover:bg-indigo-700">
-                                        {editing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                                        Enregistrer
-                                    </Button>
-                                </DialogFooter>
-                            </DialogContent>
-                        </Dialog>
-
                     </CardHeader>
-                    <CardContent className="space-y-2">
-                        <div className="flex items-center gap-2">
-                            <span className="font-bold text-slate-900 text-lg">{schedule.daily_limit} / jour</span>
+                    <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                                <span className="font-bold text-slate-900 text-lg">{schedule.daily_limit} / jour</span>
+                            </div>
+                            <div className="text-xs text-slate-500 flex items-center gap-2">
+                                <Clock className="w-3 h-3" /> {schedule.time_window_start?.slice(0, 5)} - {schedule.time_window_end?.slice(0, 5)}
+                            </div>
+                            <div className="text-xs text-slate-500 flex items-center gap-2" title={smtpName}>
+                                <Mail className="w-3 h-3" /> <span className="truncate max-w-[150px]">{smtpName}</span>
+                            </div>
                         </div>
-                        <div className="text-xs text-slate-500 flex items-center gap-2">
-                            <Clock className="w-3 h-3" /> {schedule.time_window_start?.slice(0, 5)} - {schedule.time_window_end?.slice(0, 5)}
-                        </div>
-                        <div className="text-xs text-slate-500 flex items-center gap-2" title={smtpName}>
-                            <Mail className="w-3 h-3" /> <span className="truncate max-w-[150px]">{smtpName}</span>
+
+                        <div className="flex flex-col gap-2 pt-2">
+                            {/* BIGGER EDIT BUTTON */}
+                            <Dialog open={editOpen} onOpenChange={setEditOpen}>
+                                <DialogTrigger asChild>
+                                    <Button variant="outline" className="w-full justify-start border-slate-300 font-medium">
+                                        <Edit className="w-4 h-4 mr-2" />
+                                        Modifier la planification
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent>
+                                    <DialogHeader>
+                                        <DialogTitle>Modifier la planification</DialogTitle>
+                                        <DialogDescription>Ajustez les paramètres en cours de route.</DialogDescription>
+                                    </DialogHeader>
+                                    <div className="space-y-4 py-4">
+                                        <div className="space-y-2">
+                                            <div className="flex justify-between items-center">
+                                                <Label>Vitesse d'envoi</Label>
+                                                <span className="text-sm font-bold">{editDailyLimit[0]} mails/jour</span>
+                                            </div>
+                                            <Slider value={editDailyLimit} onValueChange={setEditDailyLimit} max={100} min={1} step={1} />
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label>Compte d'envoi</Label>
+                                            <Select value={editSmtpId} onValueChange={setEditSmtpId}>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Choisir un compte" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {smtpConfigs.map(c => (
+                                                        <SelectItem key={c.id} value={c.id}>{c.from_email} ({c.provider})</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-2">
+                                                <Label>Début</Label>
+                                                <Input type="time" value={editTimeWindow.start} onChange={e => setEditTimeWindow({ ...editTimeWindow, start: e.target.value })} />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label>Fin</Label>
+                                                <Input type="time" value={editTimeWindow.end} onChange={e => setEditTimeWindow({ ...editTimeWindow, end: e.target.value })} />
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label>Jours actifs</Label>
+                                            <div className="flex justify-between gap-1">
+                                                {weekDays.map((d) => (
+                                                    <button
+                                                        key={d.val}
+                                                        onClick={() => toggleEditDay(d.val)}
+                                                        className={cn(
+                                                            "w-8 h-8 rounded-full text-xs font-bold transition-all",
+                                                            editDays.includes(d.val)
+                                                                ? "bg-indigo-600 text-white shadow-sm"
+                                                                : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                                                        )}
+                                                    >
+                                                        {d.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <DialogFooter>
+                                        <Button variant="outline" onClick={() => setEditOpen(false)}>Annuler</Button>
+                                        <Button onClick={handleUpdate} disabled={editing} className="gap-2 bg-indigo-600 hover:bg-indigo-700">
+                                            {editing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                            Enregistrer
+                                        </Button>
+                                    </DialogFooter>
+                                </DialogContent>
+                            </Dialog>
+
+                            {/* ADD PROSPECTS BUTTON */}
+                            {onAddProspects && (
+                                <Button onClick={onAddProspects} className="w-full justify-start bg-indigo-600 hover:bg-indigo-700 font-medium">
+                                    <Send className="w-4 h-4 mr-2" />
+                                    Ajouter des prospects
+                                </Button>
+                            )}
                         </div>
                     </CardContent>
                 </Card>
@@ -362,7 +415,7 @@ export function PlanningTab({ schedule, queueStats, onUpdate }: PlanningTabProps
 
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
-                            <Button variant="destructive" size="sm" disabled={canceling}>
+                            <Button variant="destructive" size="sm" disabled={canceling} className="opacity-90 hover:opacity-100">
                                 {canceling ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <XCircle className="w-4 h-4 mr-2" />}
                                 Arrêter
                             </Button>
