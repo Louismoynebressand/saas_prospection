@@ -4,8 +4,8 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Clock, Calendar as CalendarIcon, Send, CheckCircle2, AlertTriangle, MoreHorizontal, Mail, XCircle, Loader2 } from "lucide-react"
-import { format } from "date-fns"
+import { Clock, Calendar as CalendarIcon, Send, CheckCircle2, AlertTriangle, MoreHorizontal, Mail, XCircle, Loader2, Edit, Save } from "lucide-react"
+import { format, addDays, startOfDay, isBefore, isSameDay } from "date-fns"
 import { fr } from "date-fns/locale"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
@@ -21,6 +21,12 @@ import {
     AlertDialogTitle,
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
+import { Slider } from "@/components/ui/slider"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { cn } from "@/lib/utils"
 
 interface PlanningTabProps {
     schedule: any
@@ -30,7 +36,7 @@ interface PlanningTabProps {
         failed: number
         total: number
     }
-    onUpdate?: () => void // Callback to refresh parent
+    onUpdate?: () => void
 }
 
 export function PlanningTab({ schedule, queueStats, onUpdate }: PlanningTabProps) {
@@ -38,23 +44,48 @@ export function PlanningTab({ schedule, queueStats, onUpdate }: PlanningTabProps
     const [smtpName, setSmtpName] = useState<string>("Chargement...")
     const [canceling, setCanceling] = useState(false)
 
+    // Edit State
+    const [editOpen, setEditOpen] = useState(false)
+    const [editing, setEditing] = useState(false)
+    const [editDailyLimit, setEditDailyLimit] = useState([20])
+    const [editTimeWindow, setEditTimeWindow] = useState({ start: "08:00", end: "18:00" })
+    const [editDays, setEditDays] = useState<number[]>([])
+    const [editSmtpId, setEditSmtpId] = useState<string>("")
+    const [smtpConfigs, setSmtpConfigs] = useState<any[]>([])
+
     useEffect(() => {
+        if (schedule) {
+            setEditDailyLimit([schedule.daily_limit])
+            setEditTimeWindow({ start: schedule.time_window_start, end: schedule.time_window_end })
+            setEditDays(schedule.days_of_week || [])
+            setEditSmtpId(schedule.smtp_configuration_id || "")
+        }
+
         if (schedule?.smtp_configuration_id) {
             const fetchSmtp = async () => {
                 const { data } = await supabase
                     .from('smtp_configurations')
-                    .select('from_email, provider')
-                    .eq('id', schedule.smtp_configuration_id)
-                    .single()
+                    .select('id, from_email, provider, is_active')
+                    .eq('is_active', true)
+
                 if (data) {
-                    setSmtpName(`${data.from_email} (${data.provider})`)
-                } else {
-                    setSmtpName("Inconnu")
+                    setSmtpConfigs(data)
+                    const found = data.find(c => c.id === schedule.smtp_configuration_id)
+                    if (found) {
+                        setSmtpName(`${found.from_email} (${found.provider})`)
+                    } else {
+                        setSmtpName("Inconnu / Inactif")
+                    }
                 }
             }
             fetchSmtp()
         } else if (schedule) {
             setSmtpName("Par défaut (1er disponible)")
+            const fetchAll = async () => {
+                const { data } = await supabase.from('smtp_configurations').select('*').eq('is_active', true)
+                if (data) setSmtpConfigs(data)
+            }
+            fetchAll()
         }
     }, [schedule, supabase])
 
@@ -79,6 +110,43 @@ export function PlanningTab({ schedule, queueStats, onUpdate }: PlanningTabProps
         }
     }
 
+    const handleUpdate = async () => {
+        setEditing(true)
+        try {
+            const res = await fetch(`/api/campaigns/${schedule.campaign_id}/schedule`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    daily_limit: editDailyLimit[0],
+                    time_window_start: editTimeWindow.start,
+                    time_window_end: editTimeWindow.end,
+                    days_of_week: editDays,
+                    smtp_configuration_id: editSmtpId
+                })
+            })
+            const data = await res.json()
+            if (res.ok) {
+                toast.success("Planification mise à jour")
+                setEditOpen(false)
+                if (onUpdate) onUpdate()
+            } else {
+                throw new Error(data.error || "Erreur lors de la mise à jour")
+            }
+        } catch (error: any) {
+            toast.error("Erreur", { description: error.message })
+        } finally {
+            setEditing(false)
+        }
+    }
+
+    const toggleEditDay = (day: number) => {
+        setEditDays(prev =>
+            prev.includes(day)
+                ? prev.filter(d => d !== day)
+                : [...prev, day].sort()
+        )
+    }
+
     if (!schedule) {
         return (
             <div className="flex flex-col items-center justify-center p-12 text-center border-2 border-dashed rounded-xl bg-slate-50">
@@ -93,9 +161,74 @@ export function PlanningTab({ schedule, queueStats, onUpdate }: PlanningTabProps
         )
     }
 
-    const estimatedDays = schedule.daily_limit > 0 ? Math.ceil(queueStats.pending / schedule.daily_limit) : 0
-    const endDate = new Date()
-    endDate.setDate(endDate.getDate() + estimatedDays) // Rough estimation
+    // FORECAST CALCULATION
+    const remainingEmails = queueStats.pending
+    const dailyLimit = schedule.daily_limit || 1
+    const activeDays = schedule.days_of_week || [1, 2, 3, 4, 5]
+
+    // Logic: Start Timeline from TODAY to see context.
+    // If schedule.start_date is future, campaign is "Pending Start".
+    const scheduleStart = startOfDay(new Date(schedule.start_date))
+    const today = startOfDay(new Date())
+
+    // Simulation starts today
+    let simulationDate = today
+    let simulatedRemaining = remainingEmails
+
+    const timelineData = []
+    let daysToFinish = 0
+
+    // Simulate 365 days max
+    for (let i = 0; i < 365; i++) {
+        // Stop if done (and we have shown at least 15 days for visual context)
+        if (simulatedRemaining <= 0 && i > 15) break
+
+        const dayOfWeek = simulationDate.getDay() || 7 // 1-7
+
+        // Active Conditions:
+        // 1. Must be >= Schedule Start Date
+        // 2. Must be an Active Day of Week
+        const isBeforeStart = isBefore(simulationDate, scheduleStart)
+        const isOffDay = !activeDays.includes(dayOfWeek)
+        const isActive = !isBeforeStart && !isOffDay
+
+        let sentCount = 0
+        if (isActive && simulatedRemaining > 0) {
+            sentCount = Math.min(simulatedRemaining, dailyLimit)
+            simulatedRemaining -= sentCount
+        }
+
+        if (i < 30) { // Store first 30 days for grid
+            timelineData.push({
+                date: new Date(simulationDate),
+                sent: sentCount,
+                isActive,
+                isBeforeStart,
+                isOffDay,
+                isToday: isSameDay(simulationDate, today),
+            })
+        }
+
+        if (sentCount > 0 || simulatedRemaining > 0) {
+            // Only count "Finishing Time" for days where work is still needed or done
+            if (simulatedRemaining > 0) daysToFinish = i
+        }
+
+        simulationDate = addDays(simulationDate, 1)
+    }
+
+    // Calculate approximate End Date
+    const endDate = addDays(today, daysToFinish + 1)
+
+    const weekDays = [
+        { val: 1, label: 'L' },
+        { val: 2, label: 'M' },
+        { val: 3, label: 'M' },
+        { val: 4, label: 'J' },
+        { val: 5, label: 'V' },
+        { val: 6, label: 'S' },
+        { val: 7, label: 'D' },
+    ]
 
     return (
         <div className="space-y-6">
@@ -120,8 +253,85 @@ export function PlanningTab({ schedule, queueStats, onUpdate }: PlanningTabProps
                     </CardContent>
                 </Card>
                 <Card className="bg-white border-slate-200">
-                    <CardHeader className="pb-2">
+                    <CardHeader className="pb-2 flex flex-row items-center justify-between">
                         <CardTitle className="text-sm font-medium text-slate-600 uppercase">Configuration</CardTitle>
+
+                        {/* EDIT DIALOG */}
+                        <Dialog open={editOpen} onOpenChange={setEditOpen}>
+                            <DialogTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-6 w-6 p-0 hover:bg-slate-100">
+                                    <Edit className="w-3 h-3 text-slate-500" />
+                                </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                                <DialogHeader>
+                                    <DialogTitle>Modifier la planification</DialogTitle>
+                                    <DialogDescription>Ajustez les paramètres en cours de route.</DialogDescription>
+                                </DialogHeader>
+                                <div className="space-y-4 py-4">
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between items-center">
+                                            <Label>Vitesse d'envoi</Label>
+                                            <span className="text-sm font-bold">{editDailyLimit[0]} mails/jour</span>
+                                        </div>
+                                        <Slider value={editDailyLimit} onValueChange={setEditDailyLimit} max={100} min={1} step={1} />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label>Compte d'envoi</Label>
+                                        <Select value={editSmtpId} onValueChange={setEditSmtpId}>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Choisir un compte" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {smtpConfigs.map(c => (
+                                                    <SelectItem key={c.id} value={c.id}>{c.from_email} ({c.provider})</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label>Début</Label>
+                                            <Input type="time" value={editTimeWindow.start} onChange={e => setEditTimeWindow({ ...editTimeWindow, start: e.target.value })} />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>Fin</Label>
+                                            <Input type="time" value={editTimeWindow.end} onChange={e => setEditTimeWindow({ ...editTimeWindow, end: e.target.value })} />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label>Jours actifs</Label>
+                                        <div className="flex justify-between gap-1">
+                                            {weekDays.map((d) => (
+                                                <button
+                                                    key={d.val}
+                                                    onClick={() => toggleEditDay(d.val)}
+                                                    className={cn(
+                                                        "w-8 h-8 rounded-full text-xs font-bold transition-all",
+                                                        editDays.includes(d.val)
+                                                            ? "bg-indigo-600 text-white shadow-sm"
+                                                            : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                                                    )}
+                                                >
+                                                    {d.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                                <DialogFooter>
+                                    <Button variant="outline" onClick={() => setEditOpen(false)}>Annuler</Button>
+                                    <Button onClick={handleUpdate} disabled={editing} className="gap-2 bg-indigo-600 hover:bg-indigo-700">
+                                        {editing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                        Enregistrer
+                                    </Button>
+                                </DialogFooter>
+                            </DialogContent>
+                        </Dialog>
+
                     </CardHeader>
                     <CardContent className="space-y-2">
                         <div className="flex items-center gap-2">
@@ -146,7 +356,7 @@ export function PlanningTab({ schedule, queueStats, onUpdate }: PlanningTabProps
                             Prévisions d'envoi
                         </CardTitle>
                         <CardDescription>
-                            Basé sur votre limite de {schedule.daily_limit} mails/jour.
+                            Fin estimée le <span className="font-bold text-gray-900">{format(endDate, "d MMMM yyyy", { locale: fr })}</span>
                         </CardDescription>
                     </div>
 
@@ -154,7 +364,7 @@ export function PlanningTab({ schedule, queueStats, onUpdate }: PlanningTabProps
                         <AlertDialogTrigger asChild>
                             <Button variant="destructive" size="sm" disabled={canceling}>
                                 {canceling ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <XCircle className="w-4 h-4 mr-2" />}
-                                Arrêter la campagne
+                                Arrêter
                             </Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent>
@@ -176,38 +386,54 @@ export function PlanningTab({ schedule, queueStats, onUpdate }: PlanningTabProps
 
                 </CardHeader>
                 <CardContent>
-                    <div className="space-y-6">
-                        <div className="flex items-center gap-4 p-4 border rounded-lg bg-slate-50">
-                            <div className="p-3 bg-white border rounded-full shadow-sm">
-                                <Send className="w-5 h-5 text-indigo-600" />
-                            </div>
-                            <div className="flex-1">
-                                <h4 className="font-semibold text-gray-900">En cours d'exécution</h4>
-                                <p className="text-sm text-muted-foreground">
-                                    Prochain envoi lors du créneau {schedule.time_window_start?.slice(0, 5)} - {schedule.time_window_end?.slice(0, 5)}.
-                                </p>
-                            </div>
-                            <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
-                                Actif
-                            </Badge>
-                        </div>
+                    <div className="grid grid-cols-5 sm:grid-cols-7 md:grid-cols-10 gap-2 mb-6">
+                        {timelineData.map((day, i) => {
+                            let statusText = ""
+                            let statusClass = ""
 
-                        <div className="relative pl-8 border-l-2 border-indigo-100 space-y-8 ml-4">
-                            {/* Today Point */}
-                            <div className="relative">
-                                <div className="absolute -left-[39px] top-1 w-5 h-5 rounded-full bg-indigo-600 border-4 border-white shadow-sm" />
-                                <h5 className="font-bold text-gray-900">Aujourd'hui</h5>
-                                <p className="text-sm text-muted-foreground">Traitement de la file d'attente...</p>
-                            </div>
+                            if (day.isBeforeStart) {
+                                statusText = "Attente"
+                                statusClass = "bg-gray-50 border-gray-100 text-gray-400"
+                            } else if (day.isOffDay) {
+                                statusText = "Pause"
+                                statusClass = "bg-slate-50 border-slate-100 text-gray-400 opacity-60"
+                            } else {
+                                statusClass = "bg-white border-slate-200"
+                            }
 
-                            {/* End Point */}
-                            <div className="relative">
-                                <div className="absolute -left-[39px] top-1 w-5 h-5 rounded-full bg-slate-300 border-4 border-white" />
-                                <h5 className="font-bold text-gray-900">Fin estimée : {format(endDate, "d MMMM yyyy", { locale: fr })}</h5>
-                                <p className="text-sm text-muted-foreground">Si aucun prospect n'est ajouté.</p>
-                            </div>
-                        </div>
+                            if (day.isToday) {
+                                statusClass += " border-indigo-500 bg-indigo-50 ring-1 ring-indigo-500"
+                            }
+
+                            return (
+                                <div
+                                    key={i}
+                                    className={cn(
+                                        "flex flex-col items-center justify-center p-2 rounded border text-xs h-16 transition-colors",
+                                        statusClass
+                                    )}
+                                >
+                                    <span className={cn("font-semibold mb-1", day.isToday ? "text-indigo-700" : "text-gray-500")}>
+                                        {format(day.date, "d MMM", { locale: fr })}
+                                    </span>
+                                    {day.isActive ? (
+                                        <Badge variant="secondary" className="px-1.5 h-5 text-[10px] bg-emerald-100 text-emerald-800">
+                                            {day.sent}
+                                        </Badge>
+                                    ) : (
+                                        <span className="text-[10px] uppercase font-medium">
+                                            {statusText}
+                                        </span>
+                                    )}
+                                </div>
+                            )
+                        })}
                     </div>
+
+                    <p className="text-xs text-center text-muted-foreground">
+                        Affichage des 30 prochains jours.
+                    </p>
+
                 </CardContent>
             </Card>
         </div>
