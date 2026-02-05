@@ -52,11 +52,11 @@ function Calendar({
                 ),
                 day_range_end: "day-range-end",
                 day_selected:
-                    "!bg-purple-700 !text-white hover:!bg-purple-700 hover:!text-white focus:!bg-purple-700 focus:!text-white !font-bold",
-                day_today: "bg-accent text-accent-foreground",
+                    "!bg-pink-500 !text-white hover:!bg-pink-600 hover:!text-white focus:!bg-pink-600 focus:!text-white !font-bold rounded-md",
+                day_today: "bg-accent text-accent-foreground font-bold",
                 day_outside:
-                    "day-outside text-muted-foreground opacity-50 aria-selected:bg-accent/50 aria-selected:text-muted-foreground aria-selected:opacity-30",
-                day_disabled: "text-muted-foreground opacity-50",
+                    "day-outside text-muted-foreground opacity-30 aria-selected:bg-accent/50 aria-selected:text-muted-foreground aria-selected:opacity-30",
+                day_disabled: "text-muted-foreground opacity-30 cursor-not-allowed bg-slate-50/50",
                 day_range_middle:
                     "aria-selected:bg-purple-100 aria-selected:text-purple-900",
                 day_hidden: "invisible",

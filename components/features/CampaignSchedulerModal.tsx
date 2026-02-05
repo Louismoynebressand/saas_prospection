@@ -508,8 +508,9 @@ export function CampaignSchedulerModal({ campaignId, onScheduled, hasSchedule = 
                                                 />
                                             </PopoverContent>
                                         </Popover>
-                                        <Button size="sm" onClick={addCustomDate} disabled={!customBlockDate} variant="secondary">
+                                        <Button size="sm" onClick={addCustomDate} disabled={!customBlockDate} variant="secondary" className="gap-2">
                                             <Plus className="w-4 h-4" />
+                                            Ajouter
                                         </Button>
                                     </div>
                                 </div>
