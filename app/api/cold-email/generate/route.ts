@@ -6,7 +6,8 @@ import { logInfo, logError } from '@/lib/logger'
 // Schema pour valider le payload
 const generateEmailSchema = z.object({
     campaignId: z.string().uuid(),
-    prospectIds: z.array(z.union([z.string(), z.number()])).min(1)
+    prospectIds: z.array(z.union([z.string(), z.number()])).min(1),
+    agent_instructions: z.string().optional() // OVERRIDE for Playground
 })
 
 /**
@@ -40,10 +41,25 @@ export async function POST(request: NextRequest) {
 
         userId = user.id
 
+        // FETCH INSTRUCTIONS if not overridden
+        let finalInstructions = validated.agent_instructions
+        if (!finalInstructions) {
+            const { data: campaign } = await supabase
+                .from('cold_email_campaigns')
+                .select('agent_instructions')
+                .eq('id', validated.campaignId)
+                .single()
+
+            if (campaign?.agent_instructions) {
+                finalInstructions = campaign.agent_instructions
+            }
+        }
+
         logInfo('Cold Email generation requested', {
             userId,
             campaignId: validated.campaignId,
-            prospectCount: validated.prospectIds.length
+            prospectCount: validated.prospectIds.length,
+            hasInstructions: !!finalInstructions
         })
 
         // Webhook URL (Environment or Hardcoded Fallback)
@@ -127,7 +143,8 @@ export async function POST(request: NextRequest) {
             user_id: user.id,
             job_id: job.id,
             campaign_id: validated.campaignId,
-            prospect_ids: validated.prospectIds
+            prospect_ids: validated.prospectIds,
+            agent_instructions: finalInstructions // Add this field
         }
 
         // 6. Appel Webhook (avec Timeout)

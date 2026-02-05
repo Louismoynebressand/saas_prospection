@@ -535,13 +535,38 @@ export function SmtpSettings() {
     const handleProviderChange = (value: string) => {
         const preset = SMTP_PRESETS[value]
         if (preset) {
+            let host = preset.host
+            // Auto-suggest mail.domain for custom/pro providers if email is already present
+            if (host === "" && formData.email && formData.email.includes('@')) {
+                const domain = formData.email.split('@')[1]
+                if (domain) {
+                    host = `mail.${domain}`
+                }
+            }
+
             setFormData(prev => ({
                 ...prev,
                 provider: value,
-                smtp_host: preset.host,
+                smtp_host: host,
                 smtp_port: preset.port
             }))
         }
+    }
+
+    const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const email = e.target.value
+        let newHost = formData.smtp_host
+
+        // Auto-suggest mail.domain when typing email for providers without fixed host
+        const preset = SMTP_PRESETS[formData.provider]
+        if (preset && preset.host === "" && email.includes('@')) {
+            const domain = email.split('@')[1]
+            if (domain) {
+                newHost = `mail.${domain}`
+            }
+        }
+
+        setFormData(prev => ({ ...prev, email: email, smtp_host: newHost }))
     }
 
     const performVerification = async (): Promise<boolean> => {
@@ -612,10 +637,7 @@ export function SmtpSettings() {
             return
         }
 
-        if (!isVerified) {
-            const success = await performVerification()
-            if (!success) return
-        }
+
 
         setSaving(true)
         try {
@@ -846,7 +868,7 @@ export function SmtpSettings() {
                                                     className="pl-10 bg-gray-50/50 border-gray-200 h-10"
                                                     placeholder="vous@entreprise.com"
                                                     value={formData.email}
-                                                    onChange={e => setFormData({ ...formData, email: e.target.value })}
+                                                    onChange={handleEmailChange}
                                                 />
                                             </div>
                                         </div>

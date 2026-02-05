@@ -66,7 +66,7 @@ interface CreateCampaignWizardProps {
     onSuccess?: (campaignId: string) => void
 }
 
-type WizardStep = 'identity' | 'positioning' | 'targeting' | 'signature'
+type WizardStep = 'identity' | 'positioning' | 'targeting' | 'signature' | 'personalization'
 
 // --- HELPERS ---
 const mapTone = (aiValue: string): string => {
@@ -129,6 +129,7 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
         formal: true,
         email_length: "STANDARD" as "CONCISE" | "STANDARD" | "DETAILED",
         language: "fr" as "fr" | "en",
+        agent_instructions: "",
     })
 
     // FIX: Use callback to update form data properly
@@ -299,12 +300,12 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) throw new Error("Non connecté")
 
-        // pain_points is already an array, no need to split
         const painPointsArray = formData.pain_points
 
         const campaignData = {
             user_id: user.id,
             campaign_name: formData.campaign_name,
+            agent_instructions: formData.agent_instructions,
             my_company_name: formData.my_company_name,
             my_website: formData.my_website,
             pitch: formData.pitch,
@@ -381,6 +382,10 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
                 await saveCampaign()
                 setStep('signature')
             }
+            else if (step === 'signature') {
+                await saveCampaign()
+                setStep('personalization')
+            }
         } catch (error: any) {
             console.error(error)
             toast.error("Erreur: " + error.message)
@@ -454,6 +459,7 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
                 formal: true,
                 email_length: "STANDARD",
                 language: "fr",
+                agent_instructions: "",
             })
 
         } catch (error: any) {
@@ -711,12 +717,42 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
         </div>
     )
 
+    const renderPersonalizationStep = () => (
+        <div className="space-y-5 py-6">
+            <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 mb-6">
+                <div className="flex gap-3">
+                    <Sparkles className="w-5 h-5 text-blue-600 mt-0.5" />
+                    <div>
+                        <h4 className="font-semibold text-blue-900 text-sm">Instructions personnalisées pour l'IA</h4>
+                        <p className="text-sm text-blue-700 mt-1">
+                            Donnez des directives spécifiques à l'IA pour la rédaction des emails. Vous pouvez définir le ton, une méthodologie de vente particulière (AIDA, PAS...), ou des règles à respecter.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <FieldWithTooltip
+                label="Instructions & Contexte (Optionnel)"
+                tooltip="Ex: 'Adopte un ton direct mais empathique', 'Utilise la méthodologie AIDA', 'Ne jamais utiliser de jargon technique'..."
+            >
+                <Textarea
+                    placeholder="Ex: Utilise un ton très direct. La structure du mail doit être : Problème -> Solution -> Preuve sociale. Ne dépasse jamais 150 mots. Utilise le vouvoiement."
+                    value={formData.agent_instructions || ""}
+                    onChange={(e) => updateFormData('agent_instructions', e.target.value)}
+                    rows={8}
+                    className="border-2 focus:border-primary transition-all resize-none font-mono text-sm leading-relaxed"
+                />
+            </FieldWithTooltip>
+        </div>
+    )
+
 
     const stepConfig = {
         identity: { title: "1. Identité", icon: Building2 },
         positioning: { title: "2. Positionnement", icon: Target },
         targeting: { title: "3. Ciblage", icon: Award },
         signature: { title: "4. Signature", icon: Pen },
+        personalization: { title: "5. Instructions", icon: Sparkles },
     }
 
     return (
@@ -751,13 +787,14 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
                 {step === 'positioning' && renderPositioningStep()}
                 {step === 'targeting' && renderTargetingStep()}
                 {step === 'signature' && renderSignatureStep()}
+                {step === 'personalization' && renderPersonalizationStep()}
 
                 <DialogFooter className="flex justify-between items-center gap-2 pt-4 border-t">
                     {step !== 'identity' && (
                         <Button
                             variant="outline"
                             onClick={() => {
-                                const steps: WizardStep[] = ['identity', 'positioning', 'targeting', 'signature']
+                                const steps: WizardStep[] = ['identity', 'positioning', 'targeting', 'signature', 'personalization']
                                 const currentIndex = steps.indexOf(step)
                                 if (currentIndex > 0) setStep(steps[currentIndex - 1])
                             }}
@@ -784,7 +821,7 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
                         </>
                     )}
 
-                    {step !== 'signature' ? (
+                    {step !== 'personalization' ? (
                         <Button
                             onClick={handleNext}
                             disabled={loading || aiLoading}

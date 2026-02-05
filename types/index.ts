@@ -172,6 +172,7 @@ export interface Campaign {
     email_length?: 'CONCISE' | 'STANDARD' | 'DETAILED';
     personalization_level?: 'LOW' | 'MEDIUM' | 'HIGH';
     language?: 'fr' | 'en';
+    agent_instructions?: string;
 
     // Legacy/Optional fields
     allowed_pain_themes?: any; // jsonb

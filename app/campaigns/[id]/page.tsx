@@ -15,6 +15,7 @@ import { CampaignConfigEditor } from "@/components/features/CampaignConfigEditor
 import { CampaignSchedulerModal } from "@/components/features/CampaignSchedulerModal"
 import { PlanningTab } from "@/components/features/PlanningTab"
 import { AddProspectsToCampaignModal } from "@/components/features/AddProspectsToCampaignModal"
+import { PersonalizationTab } from "@/components/features/PersonalizationTab"
 import { AIBadge } from "@/components/ui/ai-badge"
 import Link from "next/link"
 
@@ -160,18 +161,22 @@ export default function CampaignDetailPage() {
                 transition={{ duration: 0.4, delay: 0.1 }}
             >
                 <Tabs defaultValue={defaultTab} className="w-full">
-                    <TabsList className="grid w-full max-w-lg grid-cols-3 mb-6">
+                    <TabsList className="grid w-full max-w-2xl grid-cols-4 mb-6">
                         <TabsTrigger value="prospects" className="gap-2">
                             <Mail className="w-4 h-4" />
-                            Prospects
+                            <span className="hidden sm:inline">Prospects</span>
+                        </TabsTrigger>
+                        <TabsTrigger value="personalization" className="gap-2">
+                            <Sparkles className="w-4 h-4" />
+                            <span className="hidden sm:inline">Personnalisation</span>
                         </TabsTrigger>
                         <TabsTrigger value="planning" className="gap-2">
                             <Clock className="w-4 h-4" />
-                            Planning
+                            <span className="hidden sm:inline">Planning</span>
                         </TabsTrigger>
                         <TabsTrigger value="configuration" className="gap-2">
                             <Settings className="w-4 h-4" />
-                            Configuration
+                            <span className="hidden sm:inline">Config</span>
                         </TabsTrigger>
                     </TabsList>
 
@@ -181,6 +186,13 @@ export default function CampaignDetailPage() {
                             campaign={campaign}
                             onAddProspects={() => setShowAddProspectModal(true)}
                             refreshTrigger={prospectsRefreshTrigger}
+                        />
+                    </TabsContent>
+
+                    <TabsContent value="personalization" className="space-y-4">
+                        <PersonalizationTab
+                            campaign={campaign}
+                            onUpdate={(updated) => setCampaign(updated)}
                         />
                     </TabsContent>
 
