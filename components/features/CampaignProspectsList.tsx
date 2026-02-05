@@ -12,6 +12,11 @@ import { AddProspectsToCampaignModal } from "./AddProspectsToCampaignModal"
 import { ProspectViewModal } from "./ProspectViewModal"
 import { ProspectDetailModal } from "./ProspectDetailModal"
 import { EmailViewerModal } from "./EmailViewerModal"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { AlertCircle } from "lucide-react"
+import Link from "next/link"
+import { createClient } from "@/lib/supabase/client"
 import type { CampaignProspectLink, EmailStatus, Campaign } from "@/types"
 
 interface CampaignProspectsListProps {
@@ -30,6 +35,13 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
     const [detailProspect, setDetailProspect] = useState<any>(null)
     const [batchActionLoading, setBatchActionLoading] = useState(false)
 
+    // SMTP Selection State
+    const [smtpConfigs, setSmtpConfigs] = useState<any[]>([])
+    const [showSendDialog, setShowSendDialog] = useState(false)
+    const [selectedSmtpId, setSelectedSmtpId] = useState<string>("")
+    const [pendingSendIds, setPendingSendIds] = useState<string[]>([])
+    const [loadingSmtp, setLoadingSmtp] = useState(false)
+
     // Polling only when not doing actions
     useEffect(() => {
         let intervalId: NodeJS.Timeout
@@ -47,6 +59,34 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
     useEffect(() => {
         loadProspects()
     }, [campaignId, refreshTrigger])
+
+    const loadSmtpConfigs = async () => {
+        setLoadingSmtp(true)
+        try {
+            const supabase = createClient()
+            const { data, error } = await supabase
+                .from('smtp_configurations')
+                .select('*')
+                .eq('is_active', true)
+                .order('created_at', { ascending: false })
+
+            if (!error && data) {
+                setSmtpConfigs(data)
+                if (data.length > 0) {
+                    setSelectedSmtpId(data[0].id)
+                }
+            }
+        } catch (error) {
+            console.error('Error loading SMTP configs:', error)
+        } finally {
+            setLoadingSmtp(false)
+        }
+    }
+
+    // Load SMTPs on mount
+    useEffect(() => {
+        loadSmtpConfigs()
+    }, [])
 
     const loadProspects = async (showLoading = true) => {
         try {
@@ -88,15 +128,31 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
         }
     }
 
-    const handleSendEmail = async (prospectIds: string | string[]) => {
+    const handleSendEmail = (prospectIds: string | string[]) => {
+        const ids = Array.isArray(prospectIds) ? prospectIds : [prospectIds]
+        setPendingSendIds(ids)
+        setShowSendDialog(true)
+        // Ensure fetching if empty (though should be fetched on mount)
+        if (smtpConfigs.length === 0) loadSmtpConfigs()
+    }
+
+    const confirmSendEmail = async () => {
+        if (!selectedSmtpId) {
+            toast.error("Veuillez sélectionner un compte d'envoi")
+            return
+        }
+
         try {
             setBatchActionLoading(true)
-            const ids = Array.isArray(prospectIds) ? prospectIds : [prospectIds]
+            const ids = pendingSendIds
 
             const response = await fetch(`/api/campaigns/${campaignId}/send-email`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prospectIds: ids })
+                body: JSON.stringify({
+                    prospectIds: ids,
+                    smtpConfigurationId: selectedSmtpId
+                })
             })
 
             if (!response.ok) throw new Error('Erreur envoi')
@@ -105,6 +161,8 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
             toast.success(`${result.sent} email(s) envoyé(s)`)
             loadProspects()
             setSelectedProspects(new Set())
+            setShowSendDialog(false)
+            setPendingSendIds([])
         } catch (error: any) {
             toast.error(error.message)
         } finally {
@@ -488,6 +546,76 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
                     }
                 }}
             />
+
+            {/* Send Confirmation Dialog */}
+            <Dialog open={showSendDialog} onOpenChange={setShowSendDialog}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Confirmer l'envoi</DialogTitle>
+                        <DialogDescription>
+                            Vous allez envoyer cet email à {pendingSendIds.length} destinataire(s).
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {loadingSmtp ? (
+                        <div className="flex justify-center py-4">
+                            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                        </div>
+                    ) : smtpConfigs.length === 0 ? (
+                        <div className="flex flex-col items-center gap-4 py-4 text-center">
+                            <div className="p-3 bg-amber-100 rounded-full">
+                                <AlertCircle className="w-6 h-6 text-amber-600" />
+                            </div>
+                            <div className="space-y-1">
+                                <p className="font-semibold text-amber-900">Aucun compte SMTP configuré</p>
+                                <p className="text-sm text-amber-700">Vous devez connecter une adresse email pour envoyer des campagnes.</p>
+                            </div>
+                            <Button asChild variant="outline" className="mt-2">
+                                <Link href="/emails">Configurer un email</Link>
+                            </Button>
+                        </div>
+                    ) : (
+                        <div className="space-y-4 py-4">
+                            <div className="space-y-2">
+                                <Label>Compte d'envoi</Label>
+                                <Select value={selectedSmtpId} onValueChange={setSelectedSmtpId}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Sélectionner un email..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {smtpConfigs.map(config => (
+                                            <SelectItem key={config.id} value={config.id}>
+                                                {config.from_email}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                {smtpConfigs.length > 0 && selectedSmtpId && (
+                                    <p className="text-xs text-muted-foreground">
+                                        L'email sera envoyé via <strong>{smtpConfigs.find(c => c.id === selectedSmtpId)?.from_email}</strong>.
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowSendDialog(false)}>Annuler</Button>
+                        <Button
+                            onClick={confirmSendEmail}
+                            disabled={batchActionLoading || smtpConfigs.length === 0 || !selectedSmtpId}
+                            className="bg-gradient-to-r from-violet-600 to-indigo-600 text-white"
+                        >
+                            {batchActionLoading ? (
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            ) : (
+                                <Send className="w-4 h-4 mr-2" />
+                            )}
+                            Envoyer maintenant
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

@@ -17,7 +17,7 @@ export async function POST(
     try {
         const supabase = await createClient()
         const body = await request.json()
-        const { prospectId, prospectIds } = body
+        const { prospectId, prospectIds, smtpConfigurationId } = body
         const { id: campaignId } = await params
 
         // Normalize to array
@@ -75,6 +75,8 @@ export async function POST(
                     body: JSON.stringify({
                         prospect_id: cp.prospect_id,
                         campaign_id: campaignId,
+                        user_id: user.id,
+                        smtp_configuration_id: smtpConfigurationId, // Passed from frontend or undefined (handled by n8n if optional, but we should probably require it if the user wants strict control)
                         email_order: 1 // Default to 1st email for manual trigger
                     })
                 })
