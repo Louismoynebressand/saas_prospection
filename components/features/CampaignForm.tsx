@@ -27,7 +27,7 @@ import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 
 const campaignSchema = z.object({
-    nom_campagne: z.string().min(2, "Le nom est trop court"),
+    campaign_name: z.string().min(2, "Le nom est trop court"),
     nom_entreprise_client: z.string(),
     site_web_client: z.string(),
     phrase_positionnement_client: z.string(),
@@ -60,7 +60,7 @@ export function CampaignForm({ open, onOpenChange, campaignId, onSuccess }: Camp
     const form = useForm<CampaignFormValues>({
         resolver: zodResolver(campaignSchema),
         defaultValues: {
-            nom_campagne: "",
+            campaign_name: "",
             nom_entreprise_client: "",
             site_web_client: "",
             phrase_positionnement_client: "",
@@ -90,7 +90,7 @@ export function CampaignForm({ open, onOpenChange, campaignId, onSuccess }: Camp
 
                 if (data) {
                     form.reset({
-                        nom_campagne: data.nom_campagne,
+                        campaign_name: data.campaign_name,
                         nom_entreprise_client: data.nom_entreprise_client || "",
                         site_web_client: data.site_web_client || "",
                         phrase_positionnement_client: data.phrase_positionnement_client || "",
@@ -111,7 +111,7 @@ export function CampaignForm({ open, onOpenChange, campaignId, onSuccess }: Camp
             loadCampaign()
         } else if (open) {
             form.reset({
-                nom_campagne: "",
+                campaign_name: "",
                 vouvoiement: true
             })
         }
@@ -128,7 +128,7 @@ export function CampaignForm({ open, onOpenChange, campaignId, onSuccess }: Camp
 
             const payload = {
                 user_id: user.id,
-                nom_campagne: values.nom_campagne,
+                campaign_name: values.campaign_name,
                 nom_entreprise_client: values.nom_entreprise_client,
                 site_web_client: values.site_web_client,
                 phrase_positionnement_client: values.phrase_positionnement_client,
@@ -197,8 +197,8 @@ export function CampaignForm({ open, onOpenChange, campaignId, onSuccess }: Camp
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="space-y-2">
                                         <Label>Nom de la campagne *</Label>
-                                        <Input {...form.register("nom_campagne")} placeholder="ex: Campagne Agents Immo Janvier" />
-                                        {form.formState.errors.nom_campagne && <span className="text-red-500 text-xs">{form.formState.errors.nom_campagne.message}</span>}
+                                        <Input {...form.register("campaign_name")} placeholder="ex: Campagne Agents Immo Janvier" />
+                                        {form.formState.errors.campaign_name && <span className="text-red-500 text-xs">{form.formState.errors.campaign_name.message}</span>}
                                     </div>
                                     <div className="space-y-2">
                                         <Label>Nom de votre entreprise</Label>
