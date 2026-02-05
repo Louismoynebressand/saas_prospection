@@ -230,7 +230,13 @@ export function CampaignConfigEditor({ campaign, onUpdate }: CampaignConfigEdito
                                     const updated = {
                                         ...formData,
                                         ...config,
-                                        signature_html: html
+                                        signature_html: html,
+                                        signature_website_text: config.signature_website_text,
+                                        signature_custom_link_text: config.signature_custom_link_text,
+                                        signature_custom_link_url: config.signature_custom_link_url,
+                                        signature_show_phone: config.signature_show_phone,
+                                        signature_show_email: config.signature_show_email,
+                                        signature_show_website: config.signature_show_website
                                     }
                                     setFormData(updated)
 
