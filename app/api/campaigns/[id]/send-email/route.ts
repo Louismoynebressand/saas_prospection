@@ -67,30 +67,49 @@ export async function POST(
                 continue
             }
 
-            // TODO: Actual email sending logic
-            // Example: await sendEmailViaService(cp.generated_email_content, prospectEmail)
-
-            // For now, simulate sending
-            const { error: updateError } = await supabase
-                .from('campaign_prospects')
-                .update({
-                    email_status: 'sent',
-                    email_sent_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString()
+            try {
+                // Call n8n webhook to trigger real sending
+                const webhookRes = await fetch('https://n8n.srv903375.hstgr.cloud/webhook/neuraflow_scrappeur_envoi_mail_smtp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        prospect_id: cp.prospect_id,
+                        campaign_id: campaignId,
+                        email_order: 1 // Default to 1st email for manual trigger
+                    })
                 })
-                .eq('id', cp.id)
 
-            if (updateError) {
-                results.push({
-                    prospect_id: cp.prospect_id,
-                    success: false,
-                    error: updateError.message
-                })
-            } else {
+                if (!webhookRes.ok) {
+                    const errorText = await webhookRes.text()
+                    throw new Error(`Webhook failed: ${webhookRes.status} ${errorText}`)
+                }
+
+                // Update status in database upon success
+                const { error: updateError } = await supabase
+                    .from('campaign_prospects')
+                    .update({
+                        email_status: 'sent',
+                        email_sent_at: new Date().toISOString(),
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', cp.id)
+
+                if (updateError) {
+                    throw updateError
+                }
+
                 results.push({
                     prospect_id: cp.prospect_id,
                     success: true,
                     sent_at: new Date().toISOString()
+                })
+
+            } catch (err: any) {
+                console.error(`Failed to send email for prospect ${cp.prospect_id}:`, err)
+                results.push({
+                    prospect_id: cp.prospect_id,
+                    success: false,
+                    error: err.message || 'Unknown error'
                 })
             }
         }
