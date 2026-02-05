@@ -42,9 +42,9 @@ function Calendar({
                 nav_button_previous: "absolute left-1",
                 nav_button_next: "absolute right-1",
                 table: "w-full border-collapse space-y-1",
-                head_row: "flex",
+                head_row: "flex justify-between",
                 head_cell:
-                    "text-muted-foreground rounded-md w-12 font-normal text-[0.8rem]",
+                    "text-muted-foreground rounded-md w-12 flex-1 font-normal text-[0.8rem] text-center",
                 row: "flex w-full mt-2",
                 cell: "h-12 w-12 text-center text-sm p-0 relative [&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-outside)]:bg-accent/50 [&:has([aria-selected])]:bg-purple-100/50 first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
                 day: cn(
