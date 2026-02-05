@@ -42,6 +42,12 @@ export function CampaignSchedulerModal({ campaignId, onScheduled, hasSchedule = 
     const [blockedDates, setBlockedDates] = useState<string[]>([])
     const [customBlockDate, setCustomBlockDate] = useState<Date | undefined>(undefined)
 
+    // Warm-up State
+    const [enableWarmup, setEnableWarmup] = useState(false)
+    const [warmupStartLimit, setWarmupStartLimit] = useState([2])
+    const [warmupIncrement, setWarmupIncrement] = useState(1)
+    const [warmupDaysPerStep, setWarmupDaysPerStep] = useState(2)
+
     // SMTP Check State
     const [checkingSmtp, setCheckingSmtp] = useState(true)
     const [smtpConfigs, setSmtpConfigs] = useState<any[]>([])
@@ -118,7 +124,12 @@ export function CampaignSchedulerModal({ campaignId, onScheduled, hasSchedule = 
                     days_of_week: days,
                     smtp_configuration_id: selectedSmtpId,
                     exclude_holidays: excludeHolidays,
-                    blocked_dates: blockedDates
+                    blocked_dates: blockedDates,
+                    enable_warmup: enableWarmup,
+                    warmup_start_limit: warmupStartLimit[0],
+                    warmup_increment: warmupIncrement,
+                    warmup_days_per_step: warmupDaysPerStep,
+                    warmup_target_limit: dailyLimit[0]
                 })
             })
 
@@ -278,25 +289,122 @@ export function CampaignSchedulerModal({ campaignId, onScheduled, hasSchedule = 
                             </Popover>
                         </div>
 
-                        {/* 2. Daily Limit */}
+                        {/* 2. Daily Limit with Warnings & Warm-up */}
                         <div className="space-y-4">
                             <div className="flex justify-between items-center">
                                 <Label className="font-semibold text-gray-700">Vitesse d'envoi</Label>
-                                <span className="text-sm font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded">
+                                <span className={cn(
+                                    "text-sm font-bold px-2 py-1 rounded",
+                                    dailyLimit[0] >= 20 ? "text-red-600 bg-red-50" :
+                                        dailyLimit[0] >= 10 ? "text-amber-600 bg-amber-50" :
+                                            "text-emerald-600 bg-emerald-50"
+                                )}>
                                     {dailyLimit[0]} mails / jour
                                 </span>
                             </div>
                             <Slider
                                 value={dailyLimit}
                                 onValueChange={setDailyLimit}
-                                max={100}
+                                max={50}
                                 min={1}
                                 step={1}
                                 className="py-1"
                             />
+                            {/* Volume Warnings */}
+                            {dailyLimit[0] >= 20 && (
+                                <div className="flex items-start gap-2 p-3 rounded-md bg-red-50 border border-red-200 animate-in fade-in slide-in-from-top-2">
+                                    <AlertCircle className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
+                                    <p className="text-xs text-red-700">
+                                        <strong>Volume élevé :</strong> Pour les domaines peu utilisés, un volume trop important risque de placer vos mails en spam. Commencez progressivement ou activez le warm-up.
+                                    </p>
+                                </div>
+                            )}
+                            {dailyLimit[0] >= 10 && dailyLimit[0] < 20 && (
+                                <div className="flex items-start gap-2 p-3 rounded-md bg-amber-50 border border-amber-200 animate-in fade-in slide-in-from-top-2">
+                                    <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                                    <p className="text-xs text-amber-700">
+                                        <strong>Attention :</strong> Assurez-vous que votre domaine a déjà envoyé des emails régulièrement.
+                                    </p>
+                                </div>
+                            )}
                             <p className="text-xs text-muted-foreground">
                                 Estimation : Pour 100 prospects, cela prendra environ <span className="font-bold text-gray-900">{Math.ceil(100 / dailyLimit[0])} jours</span>.
                             </p>
+                        </div>
+
+                        {/* 2b. Warm-up Section */}
+                        <div className="space-y-4 pt-2 border-t">
+                            <div className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                                <div className="space-y-0.5">
+                                    <Label className="text-base font-semibold flex items-center gap-2">
+                                        🔥 Warm-up progressif
+                                    </Label>
+                                    <p className="text-xs text-muted-foreground">
+                                        Recommandé pour les nouveaux domaines. Augmente graduellement le volume d'envoi pour éviter le spam.
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={enableWarmup}
+                                    onCheckedChange={setEnableWarmup}
+                                />
+                            </div>
+
+                            {enableWarmup && (
+                                <div className="space-y-4 animate-in fade-in slide-in-from-top-2 p-4 bg-blue-50/50 rounded-lg border border-blue-100">
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between items-center">
+                                            <Label className="text-sm">Limite de départ</Label>
+                                            <span className="text-sm font-bold text-blue-600">{warmupStartLimit[0]} mails/jour</span>
+                                        </div>
+                                        <Slider
+                                            value={warmupStartLimit}
+                                            onValueChange={setWarmupStartLimit}
+                                            max={10}
+                                            min={2}
+                                            step={1}
+                                        />
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="space-y-2">
+                                            <Label className="text-sm">Augmentation par palier</Label>
+                                            <Select value={String(warmupIncrement)} onValueChange={(v) => setWarmupIncrement(Number(v))}>
+                                                <SelectTrigger className="bg-white">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="1">+1 mail</SelectItem>
+                                                    <SelectItem value="2">+2 mails</SelectItem>
+                                                    <SelectItem value="3">+3 mails</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-sm">Jours par palier</Label>
+                                            <Select value={String(warmupDaysPerStep)} onValueChange={(v) => setWarmupDaysPerStep(Number(v))}>
+                                                <SelectTrigger className="bg-white">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="2">2 jours</SelectItem>
+                                                    <SelectItem value="3">3 jours</SelectItem>
+                                                    <SelectItem value="4">4 jours</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+
+                                    <div className="p-3 bg-white rounded-md border border-blue-200">
+                                        <p className="text-xs text-blue-700 font-medium mb-2">📈 Progression prévue :</p>
+                                        <p className="text-xs text-blue-600">
+                                            {warmupStartLimit[0]} → {warmupStartLimit[0] + warmupIncrement} → {warmupStartLimit[0] + warmupIncrement * 2} → ... → {dailyLimit[0]} mails/jour
+                                        </p>
+                                        <p className="text-[10px] text-blue-500 mt-1">
+                                            Augmentation tous les {warmupDaysPerStep} jours jusqu'à atteindre {dailyLimit[0]} mails/jour
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* 3. Time Window & Days */}

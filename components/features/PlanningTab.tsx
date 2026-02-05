@@ -67,6 +67,12 @@ export function PlanningTab({ schedule, queueStats, onUpdate, onAddProspects }: 
     const [editBlockedDates, setEditBlockedDates] = useState<string[]>([])
     const [customBlockDate, setCustomBlockDate] = useState<Date | undefined>(undefined)
 
+    // Warm-up Edit State
+    const [editEnableWarmup, setEditEnableWarmup] = useState(false)
+    const [editWarmupStartLimit, setEditWarmupStartLimit] = useState([2])
+    const [editWarmupIncrement, setEditWarmupIncrement] = useState(1)
+    const [editWarmupDaysPerStep, setEditWarmupDaysPerStep] = useState(2)
+
     const [smtpConfigs, setSmtpConfigs] = useState<any[]>([])
 
     // Timeline State
@@ -80,6 +86,10 @@ export function PlanningTab({ schedule, queueStats, onUpdate, onAddProspects }: 
             setEditSmtpId(schedule.smtp_configuration_id || "")
             setEditExcludeHolidays(schedule.exclude_holidays || false)
             setEditBlockedDates(schedule.blocked_dates || [])
+            setEditEnableWarmup(schedule.enable_warmup || false)
+            setEditWarmupStartLimit([schedule.warmup_start_limit || 2])
+            setEditWarmupIncrement(schedule.warmup_increment || 1)
+            setEditWarmupDaysPerStep(schedule.warmup_days_per_step || 2)
         }
 
         if (schedule?.smtp_configuration_id) {
@@ -155,7 +165,12 @@ export function PlanningTab({ schedule, queueStats, onUpdate, onAddProspects }: 
                     days_of_week: editDays,
                     smtp_configuration_id: editSmtpId,
                     exclude_holidays: editExcludeHolidays,
-                    blocked_dates: editBlockedDates
+                    blocked_dates: editBlockedDates,
+                    enable_warmup: editEnableWarmup,
+                    warmup_start_limit: editWarmupStartLimit[0],
+                    warmup_increment: editWarmupIncrement,
+                    warmup_days_per_step: editWarmupDaysPerStep,
+                    warmup_target_limit: editDailyLimit[0]
                 })
             })
             const data = await res.json()
@@ -360,12 +375,106 @@ export function PlanningTab({ schedule, queueStats, onUpdate, onAddProspects }: 
                                     <DialogDescription>Ajustez les paramètres en cours de route.</DialogDescription>
                                 </DialogHeader>
                                 <div className="space-y-4 py-4">
-                                    <div className="space-y-2">
+                                    <div className="space-y-4">
                                         <div className="flex justify-between items-center">
                                             <Label>Vitesse d'envoi</Label>
-                                            <span className="text-sm font-bold">{editDailyLimit[0]} mails/jour</span>
+                                            <span className={cn(
+                                                "text-sm font-bold px-2 py-1 rounded",
+                                                editDailyLimit[0] >= 20 ? "text-red-600 bg-red-50" :
+                                                    editDailyLimit[0] >= 10 ? "text-amber-600 bg-amber-50" :
+                                                        "text-emerald-600 bg-emerald-50"
+                                            )}>
+                                                {editDailyLimit[0]} mails/jour
+                                            </span>
                                         </div>
-                                        <Slider value={editDailyLimit} onValueChange={setEditDailyLimit} max={100} min={1} step={1} />
+                                        <Slider value={editDailyLimit} onValueChange={setEditDailyLimit} max={50} min={1} step={1} />
+                                        {/* Volume Warnings */}
+                                        {editDailyLimit[0] >= 20 && (
+                                            <div className="flex items-start gap-2 p-3 rounded-md bg-red-50 border border-red-200 animate-in fade-in slide-in-from-top-2">
+                                                <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
+                                                <p className="text-xs text-red-700">
+                                                    <strong>Volume élevé :</strong> Pour les domaines peu utilisés, un volume trop important risque de placer vos mails en spam.
+                                                </p>
+                                            </div>
+                                        )}
+                                        {editDailyLimit[0] >= 10 && editDailyLimit[0] < 20 && (
+                                            <div className="flex items-start gap-2 p-3 rounded-md bg-amber-50 border border-amber-200">
+                                                <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                                                <p className="text-xs text-amber-700">
+                                                    <strong>Attention :</strong> Assurez-vous que votre domaine a déjà envoyé des emails régulièrement.
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Warm-up Section */}
+                                    <div className="space-y-4 pt-2 border-t">
+                                        <div className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                                            <div className="space-y-0.5">
+                                                <Label className="text-base font-semibold">🔥 Warm-up progressif</Label>
+                                                <p className="text-xs text-muted-foreground">
+                                                    Recommandé pour les nouveaux domaines.
+                                                </p>
+                                            </div>
+                                            <Switch
+                                                checked={editEnableWarmup}
+                                                onCheckedChange={setEditEnableWarmup}
+                                            />
+                                        </div>
+
+                                        {editEnableWarmup && (
+                                            <div className="space-y-4 animate-in fade-in slide-in-from-top-2 p-4 bg-blue-50/50 rounded-lg border border-blue-100">
+                                                <div className="space-y-2">
+                                                    <div className="flex justify-between items-center">
+                                                        <Label className="text-sm">Limite de départ</Label>
+                                                        <span className="text-sm font-bold text-blue-600">{editWarmupStartLimit[0]} mails/jour</span>
+                                                    </div>
+                                                    <Slider
+                                                        value={editWarmupStartLimit}
+                                                        onValueChange={setEditWarmupStartLimit}
+                                                        max={10}
+                                                        min={2}
+                                                        step={1}
+                                                    />
+                                                </div>
+
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <div className="space-y-2">
+                                                        <Label className="text-sm">Augmentation</Label>
+                                                        <Select value={String(editWarmupIncrement)} onValueChange={(v) => setEditWarmupIncrement(Number(v))}>
+                                                            <SelectTrigger className="bg-white">
+                                                                <SelectValue />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="1">+1 mail</SelectItem>
+                                                                <SelectItem value="2">+2 mails</SelectItem>
+                                                                <SelectItem value="3">+3 mails</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label className="text-sm">Jours/palier</Label>
+                                                        <Select value={String(editWarmupDaysPerStep)} onValueChange={(v) => setEditWarmupDaysPerStep(Number(v))}>
+                                                            <SelectTrigger className="bg-white">
+                                                                <SelectValue />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="2">2 jours</SelectItem>
+                                                                <SelectItem value="3">3 jours</SelectItem>
+                                                                <SelectItem value="4">4 jours</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </div>
+                                                </div>
+
+                                                <div className="p-3 bg-white rounded-md border border-blue-200">
+                                                    <p className="text-xs text-blue-700 font-medium mb-1">📈 Progression :</p>
+                                                    <p className="text-xs text-blue-600">
+                                                        {editWarmupStartLimit[0]} → ... → {editDailyLimit[0]} mails/jour
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
 
                                     <div className="space-y-2">

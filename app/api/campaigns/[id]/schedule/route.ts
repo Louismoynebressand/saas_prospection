@@ -8,26 +8,54 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     try {
         const body = await req.json()
-        const { start_date, daily_limit, time_window_start, time_window_end, days_of_week, smtp_configuration_id, exclude_holidays, blocked_dates } = body
+        const {
+            start_date,
+            daily_limit,
+            time_window_start,
+            time_window_end,
+            days_of_week,
+            smtp_configuration_id,
+            exclude_holidays,
+            blocked_dates,
+            enable_warmup,
+            warmup_start_limit,
+            warmup_increment,
+            warmup_days_per_step,
+            warmup_target_limit
+        } = body
+
+        // Validation: max daily limit is 50
+        if (daily_limit > 50) {
+            return NextResponse.json({ success: false, error: "La limite quotidienne ne peut pas dépasser 50 emails" }, { status: 400 })
+        }
 
         if (!smtp_configuration_id) {
             return NextResponse.json({ success: false, error: "SMTP Configuration ID is required" }, { status: 400 })
         }
 
         // 1. Create Schedule
+        // If warm-up is enabled, use warmup_start_limit as initial daily_limit
+        const effectiveDailyLimit = enable_warmup ? warmup_start_limit : daily_limit
+
         const { data: schedule, error: schedError } = await supabase
             .from('campaign_schedules')
             .insert({
                 campaign_id: campaignId,
                 start_date,
-                daily_limit,
+                daily_limit: effectiveDailyLimit,
                 time_window_start,
                 time_window_end,
                 days_of_week,
                 status: 'active',
                 smtp_configuration_id,
                 exclude_holidays: exclude_holidays || false,
-                blocked_dates: blocked_dates || []
+                blocked_dates: blocked_dates || [],
+                enable_warmup: enable_warmup || false,
+                warmup_start_limit: warmup_start_limit || 2,
+                warmup_increment: warmup_increment || 1,
+                warmup_days_per_step: warmup_days_per_step || 2,
+                warmup_target_limit: warmup_target_limit || daily_limit,
+                warmup_current_day: enable_warmup ? 0 : null
             })
             .select()
             .single()
@@ -191,12 +219,30 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     try {
         const body = await req.json()
-        const { daily_limit, time_window_start, time_window_end, days_of_week, smtp_configuration_id, exclude_holidays, blocked_dates } = body
+        const {
+            daily_limit,
+            time_window_start,
+            time_window_end,
+            days_of_week,
+            smtp_configuration_id,
+            exclude_holidays,
+            blocked_dates,
+            enable_warmup,
+            warmup_start_limit,
+            warmup_increment,
+            warmup_days_per_step,
+            warmup_target_limit
+        } = body
 
-        // 1. Get Active Schedule
+        // Validation: max daily limit is 50
+        if (daily_limit > 50) {
+            return NextResponse.json({ success: false, error: "La limite quotidienne ne peut pas dépasser 50 emails" }, { status: 400 })
+        }
+
+        // 1. Get Active Schedule with full details
         const { data: schedule, error: schedError } = await supabase
             .from('campaign_schedules')
-            .select('id')
+            .select('*')
             .eq('campaign_id', campaignId)
             .eq('status', 'active')
             .single()
@@ -207,13 +253,38 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
         // 2. Update Schedule
         const updates: any = {}
-        if (daily_limit) updates.daily_limit = daily_limit
+
+        // Handle warm-up state transitions
+        if (enable_warmup && !schedule.enable_warmup) {
+            // Enabling warm-up for the first time
+            updates.daily_limit = warmup_start_limit
+            updates.warmup_current_day = 0
+        } else if (enable_warmup && schedule.enable_warmup) {
+            // Warm-up already enabled, keep current progress unless manually changed
+            if (daily_limit) updates.daily_limit = schedule.daily_limit // Keep current limit
+        } else if (!enable_warmup && schedule.enable_warmup) {
+            // Disabling warm-up
+            if (daily_limit) updates.daily_limit = daily_limit
+            updates.warmup_current_day = null
+        } else {
+            // Warm-up not enabled, normal update
+            if (daily_limit) updates.daily_limit = daily_limit
+        }
+
         if (time_window_start) updates.time_window_start = time_window_start
         if (time_window_end) updates.time_window_end = time_window_end
         if (days_of_week) updates.days_of_week = days_of_week
         if (smtp_configuration_id) updates.smtp_configuration_id = smtp_configuration_id
         if (exclude_holidays !== undefined) updates.exclude_holidays = exclude_holidays
         if (blocked_dates) updates.blocked_dates = blocked_dates
+
+        // Warm-up parameters
+        if (enable_warmup !== undefined) updates.enable_warmup = enable_warmup
+        if (warmup_start_limit) updates.warmup_start_limit = warmup_start_limit
+        if (warmup_increment) updates.warmup_increment = warmup_increment
+        if (warmup_days_per_step) updates.warmup_days_per_step = warmup_days_per_step
+        if (warmup_target_limit) updates.warmup_target_limit = warmup_target_limit
+
         updates.updated_at = new Date().toISOString()
 
         const { error: updateError } = await supabase
