@@ -47,7 +47,10 @@ export async function POST(req: Request) {
         }
 
         const body = await req.json()
-        const validation = smtpSchema.safeParse(body)
+
+        // Remove id for validation if present, but keep it for logic
+        const { id, ...configData } = body
+        const validation = smtpSchema.safeParse(configData)
 
         if (!validation.success) {
             return NextResponse.json({ error: "Validation failed", details: validation.error.format() }, { status: 400 })
@@ -77,20 +80,38 @@ export async function POST(req: Request) {
         }
         // ------------------------------
 
-        const { data, error } = await supabase
-            .from("smtp_configurations")
-            .insert({
-                user_id: user.id,
-                ...validation.data
-            })
-            .select()
-            .single()
+        let query = supabase.from("smtp_configurations")
 
-        if (error) throw error
+        if (id) {
+            // Update existing
+            const { data, error } = await query
+                .update({
+                    ...validation.data,
+                    updated_at: new Date().toISOString()
+                })
+                .eq("id", id)
+                .eq("user_id", user.id) // Security check
+                .select()
+                .single()
 
-        return NextResponse.json({ config: data })
+            if (error) throw error
+            return NextResponse.json({ config: data })
+        } else {
+            // Insert new
+            const { data, error } = await query
+                .insert({
+                    user_id: user.id,
+                    ...validation.data
+                })
+                .select()
+                .single()
+
+            if (error) throw error
+            return NextResponse.json({ config: data })
+        }
+
     } catch (error: any) {
-        console.error("Error creating SMTP config:", error)
+        console.error("Error creating/updating SMTP config:", error)
         return NextResponse.json({ error: error.message }, { status: 500 })
     }
 }
@@ -98,6 +119,12 @@ export async function POST(req: Request) {
 export async function DELETE(req: Request) {
     try {
         const supabase = await createClient()
+        const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+        if (authError || !user) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+        }
+
         const { searchParams } = new URL(req.url)
         const id = searchParams.get("id")
 
@@ -107,6 +134,7 @@ export async function DELETE(req: Request) {
             .from("smtp_configurations")
             .delete()
             .eq("id", id)
+            .eq("user_id", user.id) // Enforce ownership
 
         if (error) throw error
 
