@@ -378,15 +378,14 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
                                                                 size="sm"
                                                                 variant="outline"
                                                                 onClick={() => handleGenerateEmail(cp.prospect_id)}
-                                                                title="Générer l'email"
+                                                                className="hover:border-violet-300 hover:bg-violet-50 text-violet-700 bg-white shadow-sm transition-all"
                                                             >
-                                                                <Mail className="w-4 h-4" />
+                                                                <Mail className="w-4 h-4 mr-2" />
+                                                                Générer le mail
                                                             </Button>
                                                         ) : (
                                                             <Button
                                                                 size="sm"
-                                                                variant="ghost"
-                                                                className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                                                                 onClick={(e) => {
                                                                     e.stopPropagation()
                                                                     setViewingEmail({
@@ -396,9 +395,10 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
                                                                         prospectId: cp.prospect_id
                                                                     })
                                                                 }}
-                                                                title="Voir l'email généré"
+                                                                className="bg-white/60 hover:bg-white border border-violet-100 text-violet-700 shadow-[0_2px_10px_rgba(139,92,246,0.1)] hover:shadow-[0_2px_15px_rgba(139,92,246,0.2)] backdrop-blur-sm transition-all duration-300"
                                                             >
-                                                                <Mail className="w-4 h-4 fill-blue-100" />
+                                                                <Eye className="w-4 h-4 mr-2" />
+                                                                Voir le mail
                                                             </Button>
                                                         )}
 
@@ -406,20 +406,20 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
                                                             <Button
                                                                 size="sm"
                                                                 onClick={() => handleSendEmail(cp.prospect_id)}
-                                                                className="bg-green-600 hover:bg-green-700 text-white"
-                                                                title="Envoyer l'email"
+                                                                className="bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white border-0 shadow-[0_2px_10px_rgba(168,85,247,0.3)] hover:shadow-[0_4px_15px_rgba(168,85,247,0.4)] transition-all duration-300"
                                                             >
-                                                                <Send className="w-4 h-4" />
+                                                                <Send className="w-4 h-4 mr-2" />
+                                                                Envoyer
                                                             </Button>
                                                         )}
 
                                                         <Button
                                                             size="sm"
-                                                            variant="outline"
+                                                            variant="ghost"
                                                             onClick={() => setDetailProspect({ ...prospect, campaignLink: cp })}
-                                                            title="Voir profil complet"
+                                                            className="text-slate-500 hover:text-slate-800 hover:bg-slate-100"
                                                         >
-                                                            👁️ Profil
+                                                            Profil
                                                         </Button>
                                                     </div>
                                                 </td>

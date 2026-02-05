@@ -189,17 +189,19 @@ export function CampaignSchedulerModal({ campaignId, onScheduled, hasSchedule = 
             <DialogTrigger asChild>
                 <Button
                     className={cn(
-                        "transition-all duration-300 shadow-sm gap-2 text-white font-medium border-0",
+                        "transition-all duration-300 gap-2 font-medium border-0",
                         hasSchedule
-                            ? "bg-slate-100 text-slate-400 cursor-not-allowed hover:bg-slate-100 shadow-none"
-                            : "bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 shadow-[0_0_15px_rgba(99,102,241,0.4)] hover:shadow-[0_0_20px_rgba(99,102,241,0.6)]"
+                            ? "bg-white text-violet-700 shadow-[0_0_15px_rgba(139,92,246,0.3)] hover:shadow-[0_0_20px_rgba(139,92,246,0.5)] border border-violet-100 ring-2 ring-violet-50/50"
+                            : "bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 shadow-[0_0_15px_rgba(99,102,241,0.4)] hover:shadow-[0_0_20px_rgba(99,102,241,0.6)] text-white"
                     )}
-                    disabled={hasSchedule}
                 >
                     {hasSchedule ? (
                         <>
-                            <CheckCircle2 className="w-4 h-4" />
-                            Planifié
+                            <div className="relative flex h-3 w-3">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                            </div>
+                            <span className="bg-gradient-to-r from-violet-600 to-fuchsia-600 bg-clip-text text-transparent font-bold">Planifié & Actif</span>
                         </>
                     ) : (
                         <>
