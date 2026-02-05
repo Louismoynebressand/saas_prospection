@@ -579,9 +579,16 @@ export function ProspectDetailModal({
                                                     </Button>
                                                 )}
                                                 {onSendEmail && displayEmail && (
-                                                    <Button onClick={onSendEmail} variant="default" className="h-8 text-xs bg-green-600 hover:bg-green-700">
-                                                        ✉️ Envoyer l'email
-                                                    </Button>
+                                                    <>
+                                                        <Button onClick={onSendEmail} variant="default" className="h-8 text-xs bg-green-600 hover:bg-green-700">
+                                                            ✉️ Envoyer l'email
+                                                        </Button>
+                                                        {onGenerateEmail && (
+                                                            <Button onClick={onGenerateEmail} variant="outline" className="h-8 text-xs border-dashed">
+                                                                <Sparkles className="w-3 h-3 mr-2" /> Régénérer
+                                                            </Button>
+                                                        )}
+                                                    </>
                                                 )}
                                             </div>
                                         </div>

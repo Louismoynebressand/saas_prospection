@@ -329,8 +329,12 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
                                             : (typeof prospect?.email_adresse_verified === 'string' ? prospect.email_adresse_verified : '-')
 
                                         return (
-                                            <tr key={cp.id} className="border-b hover:bg-gray-50">
-                                                <td className="p-4">
+                                            <tr
+                                                key={cp.id}
+                                                className="border-b hover:bg-gray-50 cursor-pointer transition-colors"
+                                                onClick={() => setDetailProspect({ ...prospect, campaignLink: cp })}
+                                            >
+                                                <td className="p-4" onClick={(e) => e.stopPropagation()}>
                                                     <Checkbox
                                                         checked={selectedProspects.has(cp.prospect_id)}
                                                         onCheckedChange={() => toggleProspect(cp.prospect_id)}
@@ -344,7 +348,7 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
                                                 </td>
                                                 <td className="p-4">{company}</td>
                                                 <td className="p-4 text-sm">{email}</td>
-                                                <td className="p-4">
+                                                <td className="p-4" onClick={(e) => e.stopPropagation()}>
                                                     <Select
                                                         value={cp.email_status}
                                                         onValueChange={(value) => handleUpdateStatus(cp.prospect_id, value as EmailStatus)}
@@ -367,7 +371,7 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
                                                         </SelectContent>
                                                     </Select>
                                                 </td>
-                                                <td className="p-4">
+                                                <td className="p-4" onClick={(e) => e.stopPropagation()}>
                                                     <div className="flex justify-end gap-2">
                                                         {cp.email_status === 'not_generated' ? (
                                                             <Button
@@ -383,13 +387,18 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
                                                                 size="sm"
                                                                 variant="ghost"
                                                                 className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                                                                onClick={() => setViewingEmail({
-                                                                    subject: cp.generated_email_subject || null,
-                                                                    content: cp.generated_email_content || null
-                                                                })}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation()
+                                                                    setViewingEmail({
+                                                                        subject: cp.generated_email_subject || null,
+                                                                        content: cp.generated_email_content || null,
+                                                                        // @ts-ignore - passing extra data for actions
+                                                                        prospectId: cp.prospect_id
+                                                                    })
+                                                                }}
                                                                 title="Voir l'email généré"
                                                             >
-                                                                <Eye className="w-4 h-4" />
+                                                                <Mail className="w-4 h-4 fill-blue-100" />
                                                             </Button>
                                                         )}
 
@@ -430,6 +439,16 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
                 onOpenChange={(open) => !open && setViewingEmail(null)}
                 email={viewingEmail}
                 campaign={campaign}
+                onSendEmail={viewingEmail ? () => {
+                    // @ts-ignore
+                    if (viewingEmail.prospectId) handleSendEmail(viewingEmail.prospectId)
+                    setViewingEmail(null)
+                } : undefined}
+                onGenerateEmail={viewingEmail ? () => {
+                    // @ts-ignore
+                    if (viewingEmail.prospectId) handleGenerateEmail(viewingEmail.prospectId)
+                    setViewingEmail(null)
+                } : undefined}
             />
 
             <ProspectViewModal

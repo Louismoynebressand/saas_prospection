@@ -4,7 +4,7 @@ import { z } from "zod"
 
 const smtpSchema = z.object({
     name: z.string().min(1, "Nom requis"),
-    provider: z.enum(['gmail', 'outlook', 'ionos', 'custom']),
+    provider: z.string().min(1, "Fournisseur requis"), // Relaxed from strict enum to allow all presets
     smtp_host: z.string().min(1, "Hôte requis"),
     smtp_port: z.number().int().positive(),
     smtp_user: z.string().email("Email utilisateur invalide"),
