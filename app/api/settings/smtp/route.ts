@@ -116,6 +116,8 @@ export async function POST(req: Request) {
     }
 }
 
+
+
 export async function DELETE(req: Request) {
     try {
         const supabase = await createClient()
@@ -130,16 +132,45 @@ export async function DELETE(req: Request) {
 
         if (!id) return NextResponse.json({ error: "Missing ID" }, { status: 400 })
 
+        // 1. Verify ownership first
+        const { data: existingConfig, error: verifyError } = await supabase
+            .from("smtp_configurations")
+            .select("id")
+            .eq("id", id)
+            .eq("user_id", user.id)
+            .single()
+
+        if (verifyError || !existingConfig) {
+            return NextResponse.json({ error: "Configuration not found or unauthorized" }, { status: 404 })
+        }
+
+        // 2. Handle Foreign Key Constraint manually
+        // Set smtp_configuration_id to NULL for any schedules using this config
+        // This prevents the "violates foreign key constraint" error
+        const { error: updateError } = await supabase
+            .from("campaign_schedules")
+            .update({ smtp_configuration_id: null }) // Set to NULL
+            .eq("smtp_configuration_id", id)
+
+        if (updateError) {
+            console.error("Error decoupling SMTP from schedules:", updateError)
+            // Proceed anyway? Or fail? Let's fail to be safe, but usually this should work.
+            // If we fail here, the user can't delete.
+            throw updateError
+        }
+
+        // 3. Delete the configuration
         const { error } = await supabase
             .from("smtp_configurations")
             .delete()
             .eq("id", id)
-            .eq("user_id", user.id) // Enforce ownership
+            .eq("user_id", user.id)
 
         if (error) throw error
 
         return NextResponse.json({ success: true })
     } catch (error: any) {
+        console.error("Delete SMTP Error:", error)
         return NextResponse.json({ error: error.message }, { status: 500 })
     }
 }

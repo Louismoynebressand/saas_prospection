@@ -1,12 +1,10 @@
-"use client"
-
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { CalendarIcon, Clock, Mail, AlertTriangle, XCircle, Loader2, Save, Edit, Send, Plus } from "lucide-react"
-import { format, addDays, isSameDay, startOfDay, isBefore } from "date-fns"
+import { CalendarIcon, Clock, Mail, AlertTriangle, XCircle, Loader2, Save, Edit, Send, Plus, X, Calendar as CalendarIconLucide } from "lucide-react"
+import { format, addDays, isSameDay, startOfDay, isBefore, getYear } from "date-fns"
 import { fr } from "date-fns/locale"
 import { cn } from "@/lib/utils"
 import {
@@ -32,8 +30,12 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
+import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Calendar } from "@/components/ui/calendar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { toast } from "sonner"
+import { getHolidaysForRange } from "@/lib/date-utils"
 
 interface PlanningTabProps {
     schedule: any
@@ -60,6 +62,11 @@ export function PlanningTab({ schedule, queueStats, onUpdate, onAddProspects }: 
     const [editDays, setEditDays] = useState<number[]>([])
     const [editSmtpId, setEditSmtpId] = useState<string>("")
 
+    // Holiday Edit State
+    const [editExcludeHolidays, setEditExcludeHolidays] = useState(false)
+    const [editBlockedDates, setEditBlockedDates] = useState<string[]>([])
+    const [customBlockDate, setCustomBlockDate] = useState<Date | undefined>(undefined)
+
     const [smtpConfigs, setSmtpConfigs] = useState<any[]>([])
 
     // Timeline State
@@ -71,6 +78,8 @@ export function PlanningTab({ schedule, queueStats, onUpdate, onAddProspects }: 
             setEditTimeWindow({ start: schedule.time_window_start, end: schedule.time_window_end })
             setEditDays(schedule.days_of_week || [])
             setEditSmtpId(schedule.smtp_configuration_id || "")
+            setEditExcludeHolidays(schedule.exclude_holidays || false)
+            setEditBlockedDates(schedule.blocked_dates || [])
         }
 
         if (schedule?.smtp_configuration_id) {
@@ -100,6 +109,17 @@ export function PlanningTab({ schedule, queueStats, onUpdate, onAddProspects }: 
             fetchAll()
         }
     }, [schedule, supabase])
+
+    // Load holidays logic for edit (only if turning ON for the first time)
+    useEffect(() => {
+        if (editExcludeHolidays && editBlockedDates.length === 0 && editOpen) {
+            const currentYear = getYear(new Date())
+            const nextYear = currentYear + 1
+            const holidays = getHolidaysForRange(currentYear, nextYear)
+            setEditBlockedDates(holidays.map(h => h.dateString))
+        }
+    }, [editExcludeHolidays, editOpen])
+
 
     const handleCancel = async () => {
         setCanceling(true)
@@ -133,7 +153,9 @@ export function PlanningTab({ schedule, queueStats, onUpdate, onAddProspects }: 
                     time_window_start: editTimeWindow.start,
                     time_window_end: editTimeWindow.end,
                     days_of_week: editDays,
-                    smtp_configuration_id: editSmtpId
+                    smtp_configuration_id: editSmtpId,
+                    exclude_holidays: editExcludeHolidays,
+                    blocked_dates: editBlockedDates
                 })
             })
             const data = await res.json()
@@ -159,6 +181,20 @@ export function PlanningTab({ schedule, queueStats, onUpdate, onAddProspects }: 
         )
     }
 
+    const addCustomDate = () => {
+        if (!customBlockDate) return
+        const dateStr = format(customBlockDate, "yyyy-MM-dd")
+        if (!editBlockedDates.includes(dateStr)) {
+            setEditBlockedDates(prev => [...prev, dateStr].sort())
+            toast.success("Date ajoutée")
+        }
+        setCustomBlockDate(undefined)
+    }
+
+    const removeBlockedDate = (dateStr: string) => {
+        setEditBlockedDates(prev => prev.filter(d => d !== dateStr))
+    }
+
     if (!schedule) {
         return (
             <div className="flex flex-col items-center justify-center p-12 text-center border-2 border-dashed rounded-xl bg-slate-50">
@@ -177,6 +213,9 @@ export function PlanningTab({ schedule, queueStats, onUpdate, onAddProspects }: 
     const remainingEmails = queueStats.pending
     const dailyLimit = schedule.daily_limit || 1
     const activeDays = schedule.days_of_week || [1, 2, 3, 4, 5]
+    // Use LIVE data from schedule for simulation
+    const blockedDatesSet = new Set(schedule.blocked_dates || [])
+    const isExcludingHolidays = schedule.exclude_holidays || false
 
     // Low Stock Logic
     const daysStock = remainingEmails / (dailyLimit || 1)
@@ -197,9 +236,13 @@ export function PlanningTab({ schedule, queueStats, onUpdate, onAddProspects }: 
         // Dynamic limit controlled by "Load More"
 
         const dayOfWeek = simulationDate.getDay() || 7 // 1-7
+        const dateStr = format(simulationDate, "yyyy-MM-dd")
+
         const isBeforeStart = isBefore(simulationDate, scheduleStart)
         const isOffDay = !activeDays.includes(dayOfWeek)
-        const isActive = !isBeforeStart && !isOffDay
+        const isBlocked = isExcludingHolidays && blockedDatesSet.has(dateStr)
+
+        const isActive = !isBeforeStart && !isOffDay && !isBlocked
 
         let sentCount = 0
         if (isActive && simulatedRemaining > 0) {
@@ -213,6 +256,7 @@ export function PlanningTab({ schedule, queueStats, onUpdate, onAddProspects }: 
             isActive,
             isBeforeStart,
             isOffDay,
+            isBlocked,
             isToday: isSameDay(simulationDate, today),
         })
 
@@ -310,7 +354,7 @@ export function PlanningTab({ schedule, queueStats, onUpdate, onAddProspects }: 
                                     Modifier
                                 </Button>
                             </DialogTrigger>
-                            <DialogContent>
+                            <DialogContent className="max-h-[85vh] overflow-y-auto">
                                 <DialogHeader>
                                     <DialogTitle>Modifier la planification</DialogTitle>
                                     <DialogDescription>Ajustez les paramètres en cours de route.</DialogDescription>
@@ -368,6 +412,68 @@ export function PlanningTab({ schedule, queueStats, onUpdate, onAddProspects }: 
                                             ))}
                                         </div>
                                     </div>
+
+                                    {/* HOLIDAY SECTION IN EDIT */}
+                                    <div className="space-y-4 pt-4 border-t">
+                                        <div className="flex flex-row items-center justify-between">
+                                            <div className="space-y-0.5">
+                                                <Label className="text-base font-semibold">Jours fériés</Label>
+                                                <p className="text-xs text-muted-foreground">
+                                                    Exclure les jours fériés.
+                                                </p>
+                                            </div>
+                                            <Switch
+                                                checked={editExcludeHolidays}
+                                                onCheckedChange={setEditExcludeHolidays}
+                                            />
+                                        </div>
+
+                                        {editExcludeHolidays && (
+                                            <div className="space-y-3">
+                                                <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-2 bg-slate-50 rounded-md border text-sm custom-scrollbar">
+                                                    {editBlockedDates.length === 0 && <span className="text-xs text-muted-foreground italic">Aucune date bloquée</span>}
+                                                    {editBlockedDates.map(date => (
+                                                        <Badge key={date} variant="secondary" className="bg-white border text-slate-600 gap-1 pl-2 pr-1">
+                                                            {format(new Date(date), "d MMM yyyy", { locale: fr })}
+                                                            <button onClick={() => removeBlockedDate(date)} className="hover:bg-slate-100 rounded-full p-0.5 transition-colors">
+                                                                <X className="w-3 h-3" />
+                                                            </button>
+                                                        </Badge>
+                                                    ))}
+                                                </div>
+
+                                                <div className="flex gap-2">
+                                                    <Popover>
+                                                        <PopoverTrigger asChild>
+                                                            <Button
+                                                                variant={"outline"}
+                                                                size="sm"
+                                                                className={cn(
+                                                                    "w-full justify-start text-left font-normal h-9",
+                                                                    !customBlockDate && "text-muted-foreground"
+                                                                )}
+                                                            >
+                                                                <CalendarIconLucide className="mr-2 h-4 w-4" />
+                                                                {customBlockDate ? format(customBlockDate, "PPP", { locale: fr }) : <span>Ajouter...</span>}
+                                                            </Button>
+                                                        </PopoverTrigger>
+                                                        <PopoverContent className="w-auto p-0" align="start">
+                                                            <Calendar
+                                                                mode="single"
+                                                                selected={customBlockDate}
+                                                                onSelect={setCustomBlockDate}
+                                                                initialFocus
+                                                            />
+                                                        </PopoverContent>
+                                                    </Popover>
+                                                    <Button size="sm" onClick={addCustomDate} disabled={!customBlockDate} variant="secondary">
+                                                        <Plus className="w-4 h-4" />
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
                                 </div>
                                 <DialogFooter>
                                     <Button variant="outline" onClick={() => setEditOpen(false)}>Annuler</Button>
@@ -397,6 +503,18 @@ export function PlanningTab({ schedule, queueStats, onUpdate, onAddProspects }: 
                                     {smtpName}
                                 </div>
                             </div>
+                        </div>
+
+                        <div className="pt-2 border-t border-slate-100 mt-2">
+                            {schedule.exclude_holidays ? (
+                                <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50">
+                                    🏝️ Jours fériés exclus ({schedule.blocked_dates?.length || 0} dates)
+                                </Badge>
+                            ) : (
+                                <Badge variant="outline" className="text-slate-500 border-slate-200">
+                                    Jours fériés inclus
+                                </Badge>
+                            )}
                         </div>
 
                         <div className="pt-2 border-t border-slate-100 mt-2">
@@ -457,7 +575,10 @@ export function PlanningTab({ schedule, queueStats, onUpdate, onAddProspects }: 
                                 let statusText = ""
                                 let statusClass = ""
 
-                                if (day.isBeforeStart) {
+                                if (day.isBlocked) {
+                                    statusText = "Férié"
+                                    statusClass = "bg-amber-50 border-amber-100 text-amber-600 opacity-70"
+                                } else if (day.isBeforeStart) {
                                     statusText = "Attente"
                                     statusClass = "bg-slate-50 border-slate-100 text-slate-300"
                                 } else if (day.isOffDay) {
@@ -491,8 +612,8 @@ export function PlanningTab({ schedule, queueStats, onUpdate, onAddProspects }: 
                                                 {day.sent}
                                             </Badge>
                                         ) : (
-                                            <span className="text-[9px] uppercase font-bold text-slate-300">
-                                                -
+                                            <span className={cn("text-[9px] uppercase font-bold", day.isBlocked ? "text-amber-400" : "text-slate-300")}>
+                                                {day.isBlocked ? "FERIÉ" : "-"}
                                             </span>
                                         )}
                                     </div>
@@ -506,6 +627,7 @@ export function PlanningTab({ schedule, queueStats, onUpdate, onAddProspects }: 
                     <p className="text-[10px] text-center text-muted-foreground pb-2 flex items-center justify-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-emerald-100 block"></span> Envoi
                         <span className="w-2 h-2 rounded-full bg-slate-100 block ml-2"></span> Pause
+                        <span className="w-2 h-2 rounded-full bg-amber-100 block ml-2"></span> Férié
                         <span className="ml-2">Faites défiler pour voir la suite →</span>
                     </p>
 

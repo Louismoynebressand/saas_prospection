@@ -1,6 +1,4 @@
-"use client"
-
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
@@ -10,13 +8,15 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
-import { format } from "date-fns"
+import { format, getYear } from "date-fns"
 import { fr } from "date-fns/locale"
-import { CalendarIcon, Clock, Mail, Play, AlertCircle, Loader2, ArrowRight, CheckCircle2, Sparkles } from "lucide-react"
+import { CalendarIcon, Clock, Mail, Play, AlertCircle, Loader2, ArrowRight, CheckCircle2, Sparkles, X, Plus } from "lucide-react"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import Link from "next/link"
+import { getHolidaysForRange } from "@/lib/date-utils"
 
 interface CampaignSchedulerModalProps {
     campaignId: string
@@ -37,6 +37,11 @@ export function CampaignSchedulerModal({ campaignId, onScheduled, hasSchedule = 
     const [days, setDays] = useState<number[]>([1, 2, 3, 4, 5]) // Mon-Fri default
     const [selectedSmtpId, setSelectedSmtpId] = useState<string>("")
 
+    // Holiday State
+    const [excludeHolidays, setExcludeHolidays] = useState(false)
+    const [blockedDates, setBlockedDates] = useState<string[]>([])
+    const [customBlockDate, setCustomBlockDate] = useState<Date | undefined>(undefined)
+
     // SMTP Check State
     const [checkingSmtp, setCheckingSmtp] = useState(true)
     const [smtpConfigs, setSmtpConfigs] = useState<any[]>([])
@@ -46,6 +51,16 @@ export function CampaignSchedulerModal({ campaignId, onScheduled, hasSchedule = 
             checkSmtpConfig()
         }
     }, [open])
+
+    // Load default holidays when toggle is ON
+    useEffect(() => {
+        if (excludeHolidays && blockedDates.length === 0) {
+            const currentYear = getYear(new Date())
+            const nextYear = currentYear + 1
+            const holidays = getHolidaysForRange(currentYear, nextYear)
+            setBlockedDates(holidays.map(h => h.dateString))
+        }
+    }, [excludeHolidays])
 
     const checkSmtpConfig = async () => {
         setCheckingSmtp(true)
@@ -101,7 +116,9 @@ export function CampaignSchedulerModal({ campaignId, onScheduled, hasSchedule = 
                     time_window_start: timeWindow.start,
                     time_window_end: timeWindow.end,
                     days_of_week: days,
-                    smtp_configuration_id: selectedSmtpId
+                    smtp_configuration_id: selectedSmtpId,
+                    exclude_holidays: excludeHolidays,
+                    blocked_dates: blockedDates
                 })
             })
 
@@ -130,6 +147,20 @@ export function CampaignSchedulerModal({ campaignId, onScheduled, hasSchedule = 
                 ? prev.filter(d => d !== day)
                 : [...prev, day].sort()
         )
+    }
+
+    const addCustomDate = () => {
+        if (!customBlockDate) return
+        const dateStr = format(customBlockDate, "yyyy-MM-dd")
+        if (!blockedDates.includes(dateStr)) {
+            setBlockedDates(prev => [...prev, dateStr].sort())
+            toast.success("Date ajoutée aux exclusions")
+        }
+        setCustomBlockDate(undefined)
+    }
+
+    const removeBlockedDate = (dateStr: string) => {
+        setBlockedDates(prev => prev.filter(d => d !== dateStr))
     }
 
     const weekDays = [
@@ -167,7 +198,7 @@ export function CampaignSchedulerModal({ campaignId, onScheduled, hasSchedule = 
                     )}
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-lg">
+            <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle className="text-xl flex items-center gap-2">
                         <Clock className="w-5 h-5 text-emerald-600" />
@@ -315,6 +346,68 @@ export function CampaignSchedulerModal({ campaignId, onScheduled, hasSchedule = 
                                 </div>
                             </div>
                         </div>
+
+                        {/* 4. Holiday Exclusion */}
+                        <div className="space-y-4 pt-2 border-t">
+                            <div className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                                <div className="space-y-0.5">
+                                    <Label className="text-base font-semibold">Jours fériés & Vacances</Label>
+                                    <p className="text-xs text-muted-foreground">
+                                        Ne pas envoyer d'emails les jours fériés (France) ou jours spécifiques.
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={excludeHolidays}
+                                    onCheckedChange={setExcludeHolidays}
+                                />
+                            </div>
+
+                            {excludeHolidays && (
+                                <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
+                                    <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-2 bg-slate-50 rounded-md border text-sm custom-scrollbar">
+                                        {blockedDates.length === 0 && <span className="text-xs text-muted-foreground italic">Aucune date bloquée</span>}
+                                        {blockedDates.map(date => (
+                                            <Badge key={date} variant="secondary" className="bg-white border text-slate-600 gap-1 pl-2 pr-1">
+                                                {format(new Date(date), "d MMM yyyy", { locale: fr })}
+                                                <button onClick={() => removeBlockedDate(date)} className="hover:bg-slate-100 rounded-full p-0.5 transition-colors">
+                                                    <X className="w-3 h-3" />
+                                                </button>
+                                            </Badge>
+                                        ))}
+                                    </div>
+
+                                    <div className="flex gap-2">
+                                        <Popover>
+                                            <PopoverTrigger asChild>
+                                                <Button
+                                                    variant={"outline"}
+                                                    size="sm"
+                                                    className={cn(
+                                                        "w-full justify-start text-left font-normal h-9",
+                                                        !customBlockDate && "text-muted-foreground"
+                                                    )}
+                                                >
+                                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                                    {customBlockDate ? format(customBlockDate, "PPP", { locale: fr }) : <span>Ajouter une date...</span>}
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-auto p-0" align="start">
+                                                <Calendar
+                                                    mode="single"
+                                                    selected={customBlockDate}
+                                                    onSelect={setCustomBlockDate}
+                                                    initialFocus
+                                                />
+                                            </PopoverContent>
+                                        </Popover>
+                                        <Button size="sm" onClick={addCustomDate} disabled={!customBlockDate} variant="secondary">
+                                            <Plus className="w-4 h-4" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
                     </div>
                 )}
 

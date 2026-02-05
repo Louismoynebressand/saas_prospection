@@ -8,7 +8,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     try {
         const body = await req.json()
-        const { start_date, daily_limit, time_window_start, time_window_end, days_of_week, smtp_configuration_id } = body
+        const { start_date, daily_limit, time_window_start, time_window_end, days_of_week, smtp_configuration_id, exclude_holidays, blocked_dates } = body
 
         if (!smtp_configuration_id) {
             return NextResponse.json({ success: false, error: "SMTP Configuration ID is required" }, { status: 400 })
@@ -25,7 +25,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                 time_window_end,
                 days_of_week,
                 status: 'active',
-                smtp_configuration_id
+                smtp_configuration_id,
+                exclude_holidays: exclude_holidays || false,
+                blocked_dates: blocked_dates || []
             })
             .select()
             .single()
@@ -189,7 +191,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     try {
         const body = await req.json()
-        const { daily_limit, time_window_start, time_window_end, days_of_week, smtp_configuration_id } = body
+        const { daily_limit, time_window_start, time_window_end, days_of_week, smtp_configuration_id, exclude_holidays, blocked_dates } = body
 
         // 1. Get Active Schedule
         const { data: schedule, error: schedError } = await supabase
@@ -210,6 +212,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         if (time_window_end) updates.time_window_end = time_window_end
         if (days_of_week) updates.days_of_week = days_of_week
         if (smtp_configuration_id) updates.smtp_configuration_id = smtp_configuration_id
+        if (exclude_holidays !== undefined) updates.exclude_holidays = exclude_holidays
+        if (blocked_dates) updates.blocked_dates = blocked_dates
         updates.updated_at = new Date().toISOString()
 
         const { error: updateError } = await supabase
