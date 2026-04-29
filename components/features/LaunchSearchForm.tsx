@@ -62,7 +62,7 @@ function CityAutocomplete({
     const [open, setOpen] = useState(false)
     const [searching, setSearching] = useState(false)
     const [selected, setSelected] = useState<SelectedCity | null>(null)
-    const debounceRef = useRef<NodeJS.Timeout>()
+    const debounceRef = useRef<NodeJS.Timeout | null>(null)
     const containerRef = useRef<HTMLDivElement>(null)
 
     const searchCities = useCallback(async (query: string) => {
@@ -85,7 +85,7 @@ function CityAutocomplete({
     const handleInput = (v: string) => {
         onChange(v)
         setSelected(null)
-        clearTimeout(debounceRef.current)
+        if (debounceRef.current) clearTimeout(debounceRef.current)
         debounceRef.current = setTimeout(() => searchCities(v), 250)
     }
 
