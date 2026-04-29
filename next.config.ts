@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  experimental: {
+    after: true, // Enable after() for post-response background tasks (n8n webhook)
+  },
 };
 
 export default nextConfig;

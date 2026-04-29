@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { logInfo, logError } from '@/lib/logger'
@@ -82,24 +82,18 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        logInfo('Scrape job launch requested', {
-            jobId,
-            debugId,
-            userId: user.id
-        })
-
-        // Get webhook URL from server env
         const webhookUrl = process.env.SCRAPE_WEBHOOK_URL || process.env.NEXT_PUBLIC_SCRAPE_WEBHOOK_URL
         if (!webhookUrl) {
             throw new Error('SCRAPE_WEBHOOK_URL not configured on server')
         }
 
-        logInfo('Scrape job launching (fire-and-forget)', { jobId, debugId, userId: user.id })
+        logInfo('Scrape job queued, triggering n8n via after()', { jobId, debugId, userId: user.id })
 
-        // FIRE-AND-FORGET: trigger webhook without waiting for n8n to finish
-        // n8n can take 3-5 minutes for deep search - we don't block on it
-        const fireWebhook = async () => {
+        // after() runs AFTER the response is sent but KEEPS the Vercel function alive
+        // This is the correct way to do background work in Next.js 15+ / Vercel
+        after(async () => {
             try {
+                console.log(`[after] Calling n8n webhook for job ${jobId}`)
                 const webhookResponse = await fetch(webhookUrl, {
                     method: 'POST',
                     headers: {
@@ -108,30 +102,25 @@ export async function POST(request: NextRequest) {
                     },
                     body: JSON.stringify(payload)
                 })
+
                 if (!webhookResponse.ok) {
                     const errorText = await webhookResponse.text()
-                    console.error(`[API] n8n webhook error: ${webhookResponse.status} - ${errorText}`)
-                    // Update job to error state
+                    console.error(`[after] n8n webhook error: ${webhookResponse.status} - ${errorText}`)
                     const supabaseErr = await createClient()
                     await supabaseErr.from('scrape_jobs').update({ statut: 'error' }).eq('debug_id', debugId)
                 } else {
-                    console.log(`[API] n8n webhook triggered successfully for job ${jobId}`)
+                    console.log(`[after] n8n webhook completed successfully for job ${jobId}`)
                 }
             } catch (err: any) {
-                console.error('[API] Failed to reach n8n webhook:', err.message)
-                // Update job to error state
+                console.error('[after] Failed to reach n8n:', err.message)
                 try {
                     const supabaseErr = await createClient()
                     await supabaseErr.from('scrape_jobs').update({ statut: 'error' }).eq('debug_id', debugId)
                 } catch { /* ignore */ }
             }
-        }
-
-        // Detach: don't await - let it run in background
-        fireWebhook()
+        })
 
         const duration = Date.now() - startTime
-        logInfo('Scrape job triggered, returning success immediately', { jobId, debugId, duration })
 
         return NextResponse.json({
             ok: true,
