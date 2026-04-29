@@ -94,58 +94,51 @@ export async function POST(request: NextRequest) {
             throw new Error('SCRAPE_WEBHOOK_URL not configured on server')
         }
 
-        // Call n8n webhook with timeout
-        console.log(`[API] calling webhook: ${webhookUrl}`); // DEBUG LOG
+        logInfo('Scrape job launching (fire-and-forget)', { jobId, debugId, userId: user.id })
 
-        const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 30000) // 30s max
-
-        try {
-            const webhookResponse = await fetch(webhookUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'User-Agent': 'SuperProspect/2.0'
-                },
-                body: JSON.stringify(payload),
-                signal: controller.signal
-            })
-
-            clearTimeout(timeoutId)
-
-            console.log(`[API] webhook response: ${webhookResponse.status}`); // DEBUG LOG
-
-            if (!webhookResponse.ok) {
-                const errorText = await webhookResponse.text()
-                console.error(`[API] webhook error body: ${errorText}`); // DEBUG LOG
-                throw new Error(`Webhook returned ${webhookResponse.status}: ${errorText}`)
+        // FIRE-AND-FORGET: trigger webhook without waiting for n8n to finish
+        // n8n can take 3-5 minutes for deep search - we don't block on it
+        const fireWebhook = async () => {
+            try {
+                const webhookResponse = await fetch(webhookUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'User-Agent': 'SuperProspect/2.0'
+                    },
+                    body: JSON.stringify(payload)
+                })
+                if (!webhookResponse.ok) {
+                    const errorText = await webhookResponse.text()
+                    console.error(`[API] n8n webhook error: ${webhookResponse.status} - ${errorText}`)
+                    // Update job to error state
+                    const supabaseErr = await createClient()
+                    await supabaseErr.from('scrape_jobs').update({ statut: 'error' }).eq('debug_id', debugId)
+                } else {
+                    console.log(`[API] n8n webhook triggered successfully for job ${jobId}`)
+                }
+            } catch (err: any) {
+                console.error('[API] Failed to reach n8n webhook:', err.message)
+                // Update job to error state
+                try {
+                    const supabaseErr = await createClient()
+                    await supabaseErr.from('scrape_jobs').update({ statut: 'error' }).eq('debug_id', debugId)
+                } catch { /* ignore */ }
             }
-
-            const duration = Date.now() - startTime
-
-            logInfo('Scrape job launched successfully', {
-                jobId,
-                debugId,
-                duration
-            })
-
-            return NextResponse.json({
-                ok: true,
-                jobId,
-                debugId,
-                duration
-            })
-
-        } catch (fetchError: any) {
-            clearTimeout(timeoutId)
-
-            // Handle timeout
-            if (fetchError.name === 'AbortError') {
-                throw new Error('Webhook timeout after 30 seconds')
-            }
-
-            throw fetchError
         }
+
+        // Detach: don't await - let it run in background
+        fireWebhook()
+
+        const duration = Date.now() - startTime
+        logInfo('Scrape job triggered, returning success immediately', { jobId, debugId, duration })
+
+        return NextResponse.json({
+            ok: true,
+            jobId,
+            debugId,
+            duration
+        })
 
     } catch (error: any) {
         const duration = Date.now() - startTime

@@ -15,10 +15,11 @@ import { toast } from "sonner"
 interface ScrapingProgressWidgetProps {
     jobId: string | number
     maxResults: number
+    enrichmentEnabled?: boolean
     onComplete?: () => void
 }
 
-export function ScrapingProgressWidget({ jobId, maxResults, onComplete }: ScrapingProgressWidgetProps) {
+export function ScrapingProgressWidget({ jobId, maxResults, enrichmentEnabled = true, onComplete }: ScrapingProgressWidgetProps) {
     const router = useRouter()
     const supabase = createClient()
 
@@ -31,12 +32,20 @@ export function ScrapingProgressWidget({ jobId, maxResults, onComplete }: Scrapi
         enriched: 0
     })
 
-    // Progress
-    const [progress, setProgress] = useState(5) // Start at 5% visually
+    // Progress - time-based simulation + real data
+    const [progress, setProgress] = useState(3) // Start at 3% visually
     const [confettiTriggered, setConfettiTriggered] = useState(false)
+
+    // Estimated total time in seconds based on params
+    // ~45s per result with deep search, ~12s without
+    const estimatedSeconds = enrichmentEnabled
+        ? Math.max(60, maxResults * 45)
+        : Math.max(20, maxResults * 12)
 
     // Refs
     const mountedRef = useRef(true)
+    const simulatedProgressRef = useRef(3) // track simulated value without re-renders
+    const startTimeRef = useRef(Date.now())
 
     // OPTIMIZED: Fetch stats using COUNT queries (Fast & Accurate like KPI cards)
     const fetchStats = useCallback(async () => {
@@ -73,19 +82,19 @@ export function ScrapingProgressWidget({ jobId, maxResults, onComplete }: Scrapi
                     enriched: enrichedCount || 0
                 })
 
-                // Calculate progress
-                const rawProgress = maxResults > 0
+                // Real data progress (based on actual prospects found)
+                const realProgress = maxResults > 0
                     ? Math.round((currentProspects / maxResults) * 100)
                     : 0
 
-                let visualProgress = Math.max(5, rawProgress) // Min 5%
+                // Use whichever is higher: simulated or real data
+                // Never go above 98% until actually complete
                 if (status !== 'completed' && status !== 'done' && status !== 'ALLfinish') {
-                    visualProgress = Math.min(visualProgress, 98)
+                    const combined = Math.max(simulatedProgressRef.current, realProgress)
+                    setProgress(Math.min(combined, 98))
                 } else {
-                    visualProgress = 100
+                    setProgress(100)
                 }
-
-                setProgress(visualProgress)
             }
         } catch (err) {
             console.error('[Widget] fetchStats error:', err)
@@ -120,6 +129,26 @@ export function ScrapingProgressWidget({ jobId, maxResults, onComplete }: Scrapi
             console.error('[Widget] Status check error:', err)
         }
     }, [jobId, supabase, onComplete])
+
+    // TIME-BASED SIMULATION: advance progress bar smoothly over estimated duration
+    useEffect(() => {
+        if (status === 'completed' || status === 'error') return
+
+        const interval = setInterval(() => {
+            if (!mountedRef.current || status === 'completed' || status === 'error') {
+                clearInterval(interval)
+                return
+            }
+            const elapsed = (Date.now() - startTimeRef.current) / 1000
+            // Use easing: slow start, accelerating, then plateauing at 92%
+            // Formula: 92 * (1 - e^(-3 * elapsed / estimatedSeconds))
+            const simulated = Math.min(92, Math.round(92 * (1 - Math.exp(-3 * elapsed / estimatedSeconds))))
+            simulatedProgressRef.current = simulated
+            setProgress(prev => Math.max(prev, simulated)) // never go backward
+        }, 1000)
+
+        return () => clearInterval(interval)
+    }, [status, estimatedSeconds])
 
     // Initial Mount
     useEffect(() => {

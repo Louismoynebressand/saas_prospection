@@ -140,6 +140,7 @@ export function LaunchSearchForm() {
             })
 
             setActiveJobId(jobId)
+            setLoading(false)
 
         } catch (err: any) {
             console.error(`[Client] Unexpected error (debugId: ${debugId}):`, err)
@@ -162,6 +163,7 @@ export function LaunchSearchForm() {
             <ScrapingProgressWidget
                 jobId={activeJobId}
                 maxResults={formData.maxResults}
+                enrichmentEnabled={formData.enrichmentEnabled}
             />
         )
     }
