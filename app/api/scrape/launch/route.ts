@@ -30,11 +30,13 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
         }
 
-        // Create the scrape_jobs row FIRST
+        // Create the scrape_jobs row FIRST (using real prod column names)
         const { data: newJob, error: jobError } = await supabase
             .from('scrape_jobs')
             .insert({
-                id_user: user.id,
+                id_user: user.id.toString(), // text column in prod
+                request_search: validated.query,
+                resuest_ville: validated.city,
                 statut: 'queued',
                 debug_id: debugId
             })
