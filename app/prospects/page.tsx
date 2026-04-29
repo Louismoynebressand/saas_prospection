@@ -80,7 +80,6 @@ export default function ProspectsPage() {
 
     const fetchAllProspects = async () => {
         try {
-            // Get authenticated user
             const supabase = createClient()
             const { data: { user } } = await supabase.auth.getUser()
 
@@ -90,29 +89,36 @@ export default function ProspectsPage() {
                 return
             }
 
-            // OPTIMIZED: Fetch all prospects for user directly (Single safe query)
-            // Instead of fetching jobs then using .in() which can be slow or overflow
+            // Try full query with rappel columns first
             const { data, error } = await supabase
                 .from('scrape_prospect')
                 .select(`
-                    id_prospect, 
-                    id_jobs, 
-                    id_user, 
-                    created_at,
-                    data_scrapping, 
-                    deep_search, 
-                    email_adresse_verified, 
-                    ville, 
-                    secteur,
-                    rappel_date,
-                    rappel_notes,
-                    crm_status
+                    id_prospect, id_jobs, id_user, created_at,
+                    data_scrapping, deep_search, email_adresse_verified,
+                    ville, secteur, rappel_date, rappel_notes, crm_status
                 `)
                 .eq('id_user', user.id)
                 .order('created_at', { ascending: false })
 
-            if (error) throw error
-            if (data) setProspects(data as ScrapeProspect[])
+            if (!error && data) {
+                setProspects(data as ScrapeProspect[])
+                return
+            }
+
+            // Fallback: rappel columns probably don't exist yet — retry without them
+            console.warn('Full query failed, retrying without rappel columns:', error?.message)
+            const { data: fallbackData, error: fallbackError } = await supabase
+                .from('scrape_prospect')
+                .select(`
+                    id_prospect, id_jobs, id_user, created_at,
+                    data_scrapping, deep_search, email_adresse_verified,
+                    ville, secteur
+                `)
+                .eq('id_user', user.id)
+                .order('created_at', { ascending: false })
+
+            if (fallbackError) throw fallbackError
+            if (fallbackData) setProspects(fallbackData as ScrapeProspect[])
         } catch (error) {
             console.error('Error fetching prospects:', error)
         } finally {
