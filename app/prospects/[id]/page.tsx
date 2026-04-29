@@ -6,7 +6,7 @@ import {
     ArrowLeft, Building2, Mail, Phone, MapPin, Globe, User,
     Star, Clock, CheckCircle2, XCircle, AlertCircle, Sparkles, Users, Store,
     Briefcase, Copy, ChevronLeft, ChevronRight, Share2, Trash2, FileDown, Printer,
-    Facebook, Instagram, Linkedin, Twitter, ChevronDown, Info, Zap, Loader2 as LoaderIcon
+    Facebook, Instagram, Linkedin, Twitter, ChevronDown, Info, Zap, Loader2 as LoaderIcon, Bell, BellOff, BellRing, Calendar as CalendarIcon, X
 } from "lucide-react"
 import { motion } from "framer-motion"
 import { differenceInYears, isValid } from "date-fns"
@@ -168,6 +168,12 @@ export default function ProspectPage() {
     const [newInfoCategory, setNewInfoCategory] = useState("")
     const [newInfoName, setNewInfoName] = useState("")
 
+    // --- RAPPEL State ---
+    const [rappelDate, setRappelDate] = useState<string>("")  // datetime-local string
+    const [rappelNotes, setRappelNotes] = useState<string>("")
+    const [isSavingRappel, setIsSavingRappel] = useState(false)
+    const [showRappelForm, setShowRappelForm] = useState(false)
+
     // --- NEW: Campaign Links State ---
     const [campaignLinks, setCampaignLinks] = useState<any[]>([])
 
@@ -189,6 +195,18 @@ export default function ProspectPage() {
             
             setCrmStatus((prospectData as any).crm_status || "A_CONTACTER")
             setCrmNotes((prospectData as any).crm_notes || "")
+
+            // Parse rappel
+            const rawRappelDate = (prospectData as any).rappel_date
+            if (rawRappelDate) {
+                // Convert ISO timestamp to datetime-local format (YYYY-MM-DDTHH:mm)
+                const d = new Date(rawRappelDate)
+                const localISO = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+                setRappelDate(localISO)
+            } else {
+                setRappelDate("")
+            }
+            setRappelNotes((prospectData as any).rappel_notes || "")
 
             // 2. Parse Scrapped Data JSON
             let parsedScrapped: ScrappedData = {}
@@ -424,6 +442,36 @@ export default function ProspectPage() {
             if (newNotes !== undefined) setCrmNotes(newNotes)
         }
         setIsSavingCrm(false)
+    }
+
+    const handleSaveRappel = async () => {
+        if (!rappelDate) { toast.error("Veuillez choisir une date"); return }
+        setIsSavingRappel(true)
+        const supabase = createClient()
+        const { error } = await supabase
+            .from('scrape_prospect')
+            .update({ rappel_date: new Date(rappelDate).toISOString(), rappel_notes: rappelNotes })
+            .eq('id_prospect', id)
+        if (error) {
+            toast.error(`Erreur Supabase : ${error.message}`)
+        } else {
+            toast.success("🔔 Rappel enregistré !")
+            setShowRappelForm(false)
+        }
+        setIsSavingRappel(false)
+    }
+
+    const handleClearRappel = async () => {
+        const supabase = createClient()
+        const { error } = await supabase
+            .from('scrape_prospect')
+            .update({ rappel_date: null, rappel_notes: null })
+            .eq('id_prospect', id)
+        if (!error) {
+            setRappelDate("")
+            setRappelNotes("")
+            toast.success("Rappel supprimé")
+        }
     }
 
     // --- DISPLAY VARS ---
@@ -751,6 +799,37 @@ export default function ProspectPage() {
 
                 <main className="flex-1 overflow-auto p-4 md:p-8">
                     <div className="max-w-7xl mx-auto space-y-6">
+
+                        {/* RAPPEL BANNER */}
+                        {rappelDate && (() => {
+                            const rappelDateTime = new Date(rappelDate)
+                            const now = new Date()
+                            const isPast = rappelDateTime <= now
+                            const isToday = rappelDateTime.toDateString() === now.toDateString()
+                            const diff = rappelDateTime.getTime() - now.getTime()
+                            const diffHours = Math.round(diff / (1000 * 60 * 60))
+                            const diffDays = Math.round(diff / (1000 * 60 * 60 * 24))
+                            const label = isPast ? "Rappel passé" : isToday ? `Dans ${diffHours}h` : `Dans ${diffDays} jour${diffDays > 1 ? 's' : ''}`
+                            const color = isPast ? "bg-red-50 border-red-300 text-red-800" : isToday ? "bg-orange-50 border-orange-300 text-orange-800" : "bg-amber-50 border-amber-200 text-amber-800"
+                            const icon = isPast ? <BellRing className="w-4 h-4 shrink-0 animate-pulse" /> : <Bell className="w-4 h-4 shrink-0" />
+                            return (
+                                <div className={`flex items-center justify-between gap-3 px-4 py-3 rounded-xl border ${color} shadow-sm`}>
+                                    <div className="flex items-center gap-3">
+                                        {icon}
+                                        <div>
+                                            <p className="font-semibold text-sm">
+                                                {isPast ? "⚠️ Rappel manqué" : "🔔 Rappel prévu"} — {rappelDateTime.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })} à {rappelDateTime.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                                                <span className="ml-2 text-xs font-normal opacity-70">({label})</span>
+                                            </p>
+                                            {rappelNotes && <p className="text-xs mt-0.5 opacity-80">{rappelNotes}</p>}
+                                        </div>
+                                    </div>
+                                    <button onClick={handleClearRappel} className="shrink-0 opacity-60 hover:opacity-100 transition-opacity" title="Supprimer le rappel">
+                                        <X className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            )
+                        })()}
                         <div className="flex flex-col md:flex-row gap-6 justify-between items-start md:items-center no-print">
                             <div className="space-y-2">
                                 <div className="flex items-center gap-2 w-full">
@@ -914,8 +993,79 @@ export default function ProspectPage() {
                                                 className="resize-none min-h-[120px] bg-white"
                                             />
                                         </div>
+
+                                        {/* RAPPEL SECTION */}
+                                        <div className="space-y-2 pt-4 border-t">
+                                            <div className="flex items-center justify-between">
+                                                <Label className="flex items-center gap-1.5"><Bell className="w-3.5 h-3.5 text-amber-500" /> Rappel</Label>
+                                                {rappelDate ? (
+                                                    <button
+                                                        onClick={() => setShowRappelForm(!showRappelForm)}
+                                                        className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                                                    >
+                                                        Modifier
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => setShowRappelForm(!showRappelForm)}
+                                                        className="text-xs text-indigo-600 hover:text-indigo-800 font-medium transition-colors"
+                                                    >
+                                                        + Définir un rappel
+                                                    </button>
+                                                )}
+                                            </div>
+
+                                            {/* Current rappel display */}
+                                            {rappelDate && !showRappelForm && (
+                                                <div className="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg p-2.5">
+                                                    <div>
+                                                        <p className="text-xs font-semibold text-amber-800">
+                                                            {new Date(rappelDate).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })} à {new Date(rappelDate).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                                                        </p>
+                                                        {rappelNotes && <p className="text-xs text-amber-700 mt-0.5 line-clamp-1">{rappelNotes}</p>}
+                                                    </div>
+                                                    <button onClick={handleClearRappel} className="text-amber-400 hover:text-red-500 transition-colors ml-2">
+                                                        <X className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </div>
+                                            )}
+
+                                            {/* Rappel form */}
+                                            {showRappelForm && (
+                                                <div className="space-y-2 bg-slate-50 rounded-lg p-3 border">
+                                                    <div>
+                                                        <label className="text-xs text-muted-foreground mb-1 block">Date & heure</label>
+                                                        <input
+                                                            type="datetime-local"
+                                                            value={rappelDate}
+                                                            onChange={(e) => setRappelDate(e.target.value)}
+                                                            className="w-full text-sm border rounded-md px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-xs text-muted-foreground mb-1 block">Note (optionnel)</label>
+                                                        <Textarea
+                                                            placeholder="Ex: Rappeler pour relancer l'offre, confirmer RDV..."
+                                                            value={rappelNotes}
+                                                            onChange={(e) => setRappelNotes(e.target.value)}
+                                                            className="resize-none min-h-[60px] bg-white text-sm"
+                                                        />
+                                                    </div>
+                                                    <div className="flex gap-2">
+                                                        <Button size="sm" onClick={handleSaveRappel} disabled={isSavingRappel} className="flex-1 bg-amber-500 hover:bg-amber-600 text-white text-xs h-8">
+                                                            {isSavingRappel ? <LoaderIcon className="w-3 h-3 animate-spin" /> : <Bell className="w-3 h-3 mr-1" />}
+                                                            Enregistrer
+                                                        </Button>
+                                                        <Button size="sm" variant="ghost" onClick={() => setShowRappelForm(false)} className="text-xs h-8">
+                                                            Annuler
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
                                     </CardContent>
                                 </Card>
+
                             </div>
 
                             {/* RIGHT COLUMN: DEEP SEARCH ETC */}

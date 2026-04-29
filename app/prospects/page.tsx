@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import {
-    Search, Filter, Columns, Download, Upload, Building2, Mail, Phone, MapPin, Calendar, Loader2, Zap, CheckSquare, Sparkles, Square, ExternalLink, Star, UserPlus
+    Search, Filter, Columns, Download, Upload, Building2, Mail, Phone, MapPin, Calendar, Loader2, Zap, CheckSquare, Sparkles, Square, ExternalLink, Star, UserPlus, Bell
 } from "lucide-react"
 import { motion } from "framer-motion"
 import { supabase } from "@/lib/supabase"
@@ -103,7 +103,10 @@ export default function ProspectsPage() {
                     deep_search, 
                     email_adresse_verified, 
                     ville, 
-                    secteur
+                    secteur,
+                    rappel_date,
+                    rappel_notes,
+                    crm_status
                 `)
                 .eq('id_user', user.id)
                 .order('created_at', { ascending: false })
@@ -223,7 +226,10 @@ export default function ProspectsPage() {
                 siret: deep.siret_siege,
                 sector: p.secteur,
                 emailStatus,
-                reviews: raw["Nombre d'avis"]
+                reviews: raw["Nombre d'avis"],
+                rappelDate: (p as any).rappel_date || null,
+                rappelNotes: (p as any).rappel_notes || null,
+                crmStatus: (p as any).crm_status || null,
             }
         });
 
@@ -667,7 +673,22 @@ export default function ProspectsPage() {
                                                 <TableCell className="font-medium">
                                                     <div className="flex items-center gap-2">
                                                         <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
-                                                        <span className="line-clamp-2 text-sm">{row.company}</span>
+                                                        <div className="flex flex-col gap-0.5">
+                                                            <span className="line-clamp-2 text-sm">{row.company}</span>
+                                                            {row.rappelDate && (() => {
+                                                                const rd = new Date(row.rappelDate)
+                                                                const now = new Date()
+                                                                const isPast = rd <= now
+                                                                const isToday = rd.toDateString() === now.toDateString()
+                                                                const color = isPast ? "text-red-600 bg-red-50 border-red-200" : isToday ? "text-orange-600 bg-orange-50 border-orange-200" : "text-amber-700 bg-amber-50 border-amber-200"
+                                                                return (
+                                                                    <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border w-fit ${color}`}>
+                                                                        <Bell className="w-2.5 h-2.5" />
+                                                                        {isPast ? "Rappel passé" : `Rappel ${rd.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}`}
+                                                                    </span>
+                                                                )
+                                                            })()}
+                                                        </div>
                                                     </div>
                                                 </TableCell>
                                             )}
