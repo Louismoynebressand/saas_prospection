@@ -594,13 +594,13 @@ export default function ProspectPage() {
             updatedScrapped.Rue = editForm.adresse
             updatedScrapped["Infos"] = editInfos
 
-            // Build update payload — email_adresse_verified is text[] in Supabase
+            // Build update payload
             const updatePayload: Record<string, any> = {
                 data_scrapping: updatedScrapped,
             }
             if (editForm.email) {
-                // Supabase column is text[], always send as array
-                updatePayload.email_adresse_verified = [editForm.email]
+                // Send as plain string — Supabase stores it as text
+                updatePayload.email_adresse_verified = editForm.email
             }
 
             const { error } = await supabase

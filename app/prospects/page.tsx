@@ -201,8 +201,13 @@ export default function ProspectsPage() {
             let email = null;
             let emailStatus = 'inconnu';
             if (p.email_adresse_verified && p.email_adresse_verified.length > 0) {
-                email = Array.isArray(p.email_adresse_verified) ? p.email_adresse_verified[0] : p.email_adresse_verified;
-                emailStatus = 'verifié';
+                let rawEmail = p.email_adresse_verified
+                // Handle case where it was stored as JSON array string e.g. '["a@b.com"]'
+                if (typeof rawEmail === 'string' && rawEmail.startsWith('[')) {
+                    try { rawEmail = JSON.parse(rawEmail)[0] } catch { /* keep as is */ }
+                }
+                email = Array.isArray(rawEmail) ? rawEmail[0] : rawEmail
+                emailStatus = 'verifié'
             } else if (raw.Email) {
                 email = raw.Email;
             } else if (deep.emails && deep.emails.length > 0) {
