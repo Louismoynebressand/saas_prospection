@@ -4,39 +4,12 @@ import { createClient } from '@/lib/supabase/server'
 import { logInfo, logError } from '@/lib/logger'
 
 const launchSchema = z.object({
-    jobId: z.union([z.string(), z.number()]),
-    debugId: z.string().uuid(),
-    payload: z.object({
-        job: z.object({
-            id: z.union([z.string(), z.number()]),
-            source: z.string(),
-            mapsUrl: z.string(),
-            query: z.string(),
-            location: z.object({
-                city: z.string(),
-                radiusKm: z.number().optional(),
-                geo: z.object({
-                    lat: z.number().nullable(),
-                    lng: z.number().nullable()
-                })
-            }),
-            limits: z.object({
-                maxResults: z.number()
-            }),
-            options: z.object({
-                deepScan: z.boolean(),
-                enrichEmails: z.boolean()
-            })
-        }),
-        actor: z.object({
-            userId: z.string(),
-            sessionId: z.string().nullable()
-        }),
-        meta: z.object({
-            searchId: z.union([z.number(), z.string()]),
-            debugId: z.string().uuid()
-        })
-    })
+    mapsUrl: z.string(),
+    query: z.string(),
+    city: z.string(),
+    maxResults: z.number(),
+    enrichmentEnabled: z.boolean(),
+    debugId: z.string().uuid()
 })
 
 export async function POST(request: NextRequest) {
@@ -49,13 +22,71 @@ export async function POST(request: NextRequest) {
         const validated = launchSchema.parse(body)
         debugId = validated.debugId
 
+        // Get user from session
+        const supabase = await createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+
+        if (!user) {
+            return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
+        }
+
+        // Create the scrape_jobs row FIRST
+        const { data: newJob, error: jobError } = await supabase
+            .from('scrape_jobs')
+            .insert({
+                id_user: user.id,
+                statut: 'queued',
+                debug_id: debugId
+            })
+            .select()
+            .single()
+
+        if (jobError || !newJob) {
+            throw new Error(`Failed to create job: ${jobError?.message || 'Unknown error'}`)
+        }
+
+        const jobId = newJob.id_jobs
+
+        // Construct the payload exactly as n8n expects it
+        const payload = {
+            job: {
+                id: jobId,
+                source: "google_maps",
+                mapsUrl: validated.mapsUrl,
+                query: validated.query,
+                location: {
+                    city: validated.city,
+                    radiusKm: 10,
+                    geo: {
+                        lat: null,
+                        lng: null
+                    }
+                },
+                limits: {
+                    maxResults: validated.maxResults
+                },
+                options: {
+                    deepScan: validated.enrichmentEnabled,
+                    enrichEmails: validated.enrichmentEnabled
+                }
+            },
+            actor: {
+                userId: user.id,
+                sessionId: null
+            },
+            meta: {
+                searchId: jobId,
+                debugId
+            }
+        }
+
         logInfo('Scrape job launch requested', {
-            jobId: validated.jobId,
+            jobId,
             debugId,
-            userId: validated.payload.actor.userId
+            userId: user.id
         })
 
-        // Get webhook URL from server env (checking both secure and public for compatibility)
+        // Get webhook URL from server env
         const webhookUrl = process.env.SCRAPE_WEBHOOK_URL || process.env.NEXT_PUBLIC_SCRAPE_WEBHOOK_URL
         if (!webhookUrl) {
             throw new Error('SCRAPE_WEBHOOK_URL not configured on server')
@@ -74,7 +105,7 @@ export async function POST(request: NextRequest) {
                     'Content-Type': 'application/json',
                     'User-Agent': 'SuperProspect/2.0'
                 },
-                body: JSON.stringify(validated.payload),
+                body: JSON.stringify(payload),
                 signal: controller.signal
             })
 
@@ -91,14 +122,14 @@ export async function POST(request: NextRequest) {
             const duration = Date.now() - startTime
 
             logInfo('Scrape job launched successfully', {
-                jobId: validated.jobId,
+                jobId,
                 debugId,
                 duration
             })
 
             return NextResponse.json({
                 ok: true,
-                jobId: validated.jobId,
+                jobId,
                 debugId,
                 duration
             })
