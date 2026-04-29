@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 
+export const maxDuration = 60; // Allow Vercel to wait up to 60s for n8n
+
 export async function POST(req: Request) {
     console.log('🚀 [API] /api/campaigns/analyze started');
     try {
