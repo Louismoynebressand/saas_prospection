@@ -493,14 +493,17 @@ export function LaunchSearchForm() {
                                 transition={{ delay: 0.3 }}
                                 className="space-y-2"
                             >
-                                <label className="text-sm font-semibold">Nombre de résultats max</label>
+                                <label className="text-sm font-semibold flex items-center justify-between">
+                                    <span>Nombre de résultats max</span>
+                                    <span className="text-xs font-normal text-muted-foreground">Limite : 50 prospects</span>
+                                </label>
                                 <Input
                                     type="number"
                                     min={1}
                                     max={50}
                                     className="h-12 border-2 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all"
                                     value={formData.maxResults}
-                                    onChange={(e) => setFormData({ ...formData, maxResults: parseInt(e.target.value) })}
+                                    onChange={(e) => setFormData({ ...formData, maxResults: Math.min(50, Math.max(1, parseInt(e.target.value) || 1)) })}
                                     onFocus={() => setIsCardFocused(true)}
                                     onBlur={() => setIsCardFocused(false)}
                                     disabled={loading}
@@ -569,6 +572,37 @@ export function LaunchSearchForm() {
                                     </p>
                                 </motion.div>
                             )}
+
+                            {/* Time estimate warning */}
+                            {(() => {
+                                const secs = formData.enrichmentEnabled
+                                    ? Math.max(60, formData.maxResults * 45)
+                                    : Math.max(20, formData.maxResults * 12)
+                                const mins = Math.ceil(secs / 60)
+                                const isLong = secs > 300 // > 5 min
+                                if (formData.maxResults <= 3) return null
+                                return (
+                                    <motion.div
+                                        key={`${formData.maxResults}-${formData.enrichmentEnabled}`}
+                                        initial={{ opacity: 0, y: 6 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        className={`rounded-xl border-2 p-3 text-xs leading-relaxed ${
+                                            isLong
+                                                ? 'bg-amber-50 border-amber-200 text-amber-800'
+                                                : 'bg-slate-50 border-slate-200 text-slate-600'
+                                        }`}
+                                    >
+                                        {isLong ? (
+                                            <>
+                                                <p className="font-bold mb-1">⏳ Recherche longue (~{mins} min)</p>
+                                                <p>Cette recherche va tourner en arrière-plan. Une fois lancée, vous pouvez fermer cette page — les résultats apparaîtront dans l'historique dès que c'est terminé.</p>
+                                            </>
+                                        ) : (
+                                            <p>⏱ Durée estimée : <strong>~{mins} min</strong>{formData.enrichmentEnabled ? ' avec Deep Search' : ''}</p>
+                                        )}
+                                    </motion.div>
+                                )
+                            })()}
                         </CardContent>
 
                         <CardFooter className="relative z-10">

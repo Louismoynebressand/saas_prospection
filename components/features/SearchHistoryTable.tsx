@@ -4,12 +4,15 @@ import { useEffect, useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
-import { MoreHorizontal, Search as SearchIcon, MapPin, Loader2, Sparkles } from "lucide-react"
+import { MoreHorizontal, Search as SearchIcon, Loader2, Sparkles, XCircle, RefreshCw, AlertTriangle } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { authenticatedFetch } from "@/lib/fetch-client"
 import { ScrapeJob } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { toast } from "sonner"
+import { v4 as uuidv4 } from "uuid"
 
 export function SearchHistoryTable({ limit }: { limit?: number }) {
     const router = useRouter()
@@ -17,54 +20,31 @@ export function SearchHistoryTable({ limit }: { limit?: number }) {
     const [searches, setSearches] = useState<ScrapeJob[]>([])
     const [counts, setCounts] = useState<Record<string, number>>({})
     const [loading, setLoading] = useState(true)
+    const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({})
 
     const fetchSearches = useCallback(async () => {
         try {
             const { data: { user } } = await supabase.auth.getUser()
+            if (!user) { setLoading(false); return }
 
-            if (!user) {
-                console.error('No authenticated user found')
-                setLoading(false)
-                return
-            }
-
-            // Fetch jobs from scrape_jobs (has all fields including JSON)
             let jobsQuery = supabase
                 .from('scrape_jobs')
-                .select(`
-                    id_jobs,
-                    id_user,
-                    request_search,
-                    resuest_ville,
-                    statut,
-                    created_at
-                `)
+                .select(`id_jobs, id_user, request_search, resuest_ville, statut, created_at`)
                 .eq('id_user', user.id)
                 .order('created_at', { ascending: false })
 
-            if (limit) {
-                jobsQuery = jobsQuery.limit(limit)
-            }
+            if (limit) jobsQuery = jobsQuery.limit(limit)
 
             const { data, error } = await jobsQuery
-
-            if (error) {
-                console.error('Error fetching jobs:', error)
-                throw error
-            }
+            if (error) throw error
 
             if (data) {
                 setSearches(data as ScrapeJob[])
 
-                // Fetch counts from view (eliminates N+1 queries!)
-                const { data: countsData, error: countsError } = await supabase
+                const { data: countsData } = await supabase
                     .from('scrape_jobs_with_counts')
                     .select('id_jobs, prospects_count')
                     .eq('id_user', user.id)
-
-                if (countsError) {
-                    console.error('Error fetching counts:', countsError)
-                }
 
                 const countMap: Record<string, number> = {}
                 if (countsData) {
@@ -83,28 +63,99 @@ export function SearchHistoryTable({ limit }: { limit?: number }) {
 
     useEffect(() => {
         fetchSearches()
-
-        // Realtime subscription
         const subscription = supabase
             .channel('scrape_jobs_list_changes')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'scrape_jobs' }, () => {
-                fetchSearches()
-            })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'scrape_jobs' }, () => fetchSearches())
             .subscribe()
-
-        return () => {
-            supabase.removeChannel(subscription)
-        }
+        return () => { supabase.removeChannel(subscription) }
     }, [fetchSearches, supabase])
+
+    // ── Cancel a stuck job ─────────────────────────────────────────────────────
+    const handleCancel = async (job: ScrapeJob) => {
+        setActionLoading(prev => ({ ...prev, [`cancel-${job.id_jobs}`]: true }))
+        try {
+            const { error } = await supabase
+                .from('scrape_jobs')
+                .update({ statut: 'cancelled' })
+                .eq('id_jobs', job.id_jobs)
+            if (error) throw error
+            toast.success("Recherche annulée")
+            fetchSearches()
+        } catch (err: any) {
+            toast.error("Erreur lors de l'annulation", { description: err.message })
+        } finally {
+            setActionLoading(prev => ({ ...prev, [`cancel-${job.id_jobs}`]: false }))
+        }
+    }
+
+    // ── Relaunch a stuck job ───────────────────────────────────────────────────
+    const handleRelaunch = async (job: ScrapeJob) => {
+        const query = job.request_search?.replace(/^"|"$/g, '') || ''
+        const city = job.resuest_ville || ''
+
+        if (!query || !city) {
+            toast.error("Impossible de relancer", { description: "Données manquantes (requête ou ville)" })
+            return
+        }
+
+        setActionLoading(prev => ({ ...prev, [`relaunch-${job.id_jobs}`]: true }))
+        try {
+            // 1. Cancel the stuck job
+            await supabase.from('scrape_jobs').update({ statut: 'cancelled' }).eq('id_jobs', job.id_jobs)
+
+            // 2. Geocode city via FR gov API
+            let lat = 0, lng = 0
+            try {
+                const geoRes = await fetch(
+                    `https://geo.api.gouv.fr/communes?nom=${encodeURIComponent(city)}&fields=centre&boost=population&limit=1`
+                )
+                const geoData = await geoRes.json()
+                if (geoData[0]?.centre?.coordinates) {
+                    [lng, lat] = geoData[0].centre.coordinates
+                }
+            } catch { /* fallback to name-based URL */ }
+
+            const mapsUrl = lat && lng
+                ? `https://www.google.com/maps/search/${encodeURIComponent(query)}/@${lat},${lng},13z`
+                : `https://www.google.com/maps/search/${encodeURIComponent(query + ' ' + city + ', France')}`
+
+            // 3. Relaunch via API
+            const debugId = uuidv4()
+            const response = await authenticatedFetch('/api/scrape/launch', {
+                method: 'POST',
+                body: JSON.stringify({
+                    mapsUrl,
+                    query,
+                    city,
+                    maxResults: 10,
+                    enrichmentEnabled: true,
+                    debugId
+                })
+            })
+
+            if (!response.ok) {
+                const err = await response.json()
+                throw new Error(err.error || 'Erreur lors du relancement')
+            }
+
+            toast.success("Recherche relancée ! 🚀", { description: `"${query}" à ${city}` })
+            fetchSearches()
+        } catch (err: any) {
+            toast.error("Erreur lors du relancement", { description: err.message })
+        } finally {
+            setActionLoading(prev => ({ ...prev, [`relaunch-${job.id_jobs}`]: false }))
+        }
+    }
 
     const getStatusBadge = (status: string) => {
         const statusMap: { [key: string]: { label: string; variant: "default" | "secondary" | "destructive" | "outline" } } = {
-            pending: { label: "En attente", variant: "secondary" },
-            queued: { label: "En file", variant: "outline" },
-            running: { label: "En cours", variant: "default" },
-            done: { label: "Terminé", variant: "default" },
-            ALLfinish: { label: "Terminé", variant: "default" },
-            error: { label: "Erreur", variant: "destructive" }
+            pending:   { label: "En attente", variant: "secondary" },
+            queued:    { label: "En file",    variant: "outline" },
+            running:   { label: "En cours",   variant: "default" },
+            done:      { label: "Terminé",    variant: "default" },
+            ALLfinish: { label: "Terminé",    variant: "default" },
+            error:     { label: "Erreur",     variant: "destructive" },
+            cancelled: { label: "Annulé",     variant: "secondary" },
         }
         const config = statusMap[status] || { label: status, variant: "secondary" as const }
         return <Badge variant={config.variant}>{config.label}</Badge>
@@ -112,43 +163,18 @@ export function SearchHistoryTable({ limit }: { limit?: number }) {
 
     const formatSearchTitle = (job: ScrapeJob) => {
         try {
-            // request_search is stored as JSON string of the actual query
             let searchQuery = "Recherche"
             let location = ""
-
-            // Extract search query
             if (job.request_search) {
-                if (typeof job.request_search === 'string') {
-                    try {
-                        // It's stored as JSON string, try to parse
-                        const parsed = JSON.parse(job.request_search)
-                        searchQuery = parsed || job.request_search.replace(/"/g, '')
-                    } catch {
-                        // If parsing fails, use as is (removing quotes)
-                        searchQuery = job.request_search.replace(/"/g, '')
-                    }
-                } else {
-                    searchQuery = job.request_search
-                }
+                try { searchQuery = JSON.parse(job.request_search) || job.request_search.replace(/"/g, '') }
+                catch { searchQuery = job.request_search.replace(/"/g, '') }
             }
-
-            // Extract location (ville)
-            if (job.resuest_ville) {
-                if (typeof job.resuest_ville === 'string') {
-                    location = job.resuest_ville
-                }
-            }
-
-            // Format: "Query • Location" or just "Query"
-            if (location && searchQuery) {
-                return `${searchQuery} • ${location}`
-            }
-            return searchQuery || "Recherche"
-        } catch (error) {
-            console.error('Error formatting search title:', error)
-            return "Recherche"
-        }
+            if (job.resuest_ville) location = job.resuest_ville
+            return location && searchQuery ? `${searchQuery} • ${location}` : searchQuery || "Recherche"
+        } catch { return "Recherche" }
     }
+
+    const isStuck = (status: string) => ['queued', 'running', 'pending'].includes(status)
 
     if (loading) {
         return (
@@ -177,7 +203,7 @@ export function SearchHistoryTable({ limit }: { limit?: number }) {
                     <TableHead>Deep Search</TableHead>
                     <TableHead>Statut</TableHead>
                     <TableHead>Date</TableHead>
-                    <TableHead className="w-[50px]"></TableHead>
+                    <TableHead className="w-[150px]">Actions</TableHead>
                 </TableRow>
             </TableHeader>
             <TableBody>
@@ -189,19 +215,25 @@ export function SearchHistoryTable({ limit }: { limit?: number }) {
                     >
                         <TableCell className="font-medium">
                             <div className="flex items-center gap-2">
-                                <SearchIcon className="h-4 w-4 text-muted-foreground shrink-0" />
+                                {isStuck(job.statut) ? (
+                                    <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
+                                ) : (
+                                    <SearchIcon className="h-4 w-4 text-muted-foreground shrink-0" />
+                                )}
                                 <span className="font-semibold text-foreground">
                                     {formatSearchTitle(job)}
                                 </span>
                             </div>
+                            {isStuck(job.statut) && (
+                                <p className="text-xs text-amber-600 mt-0.5 ml-6">
+                                    En attente de démarrage — peut nécessiter un relancement
+                                </p>
+                            )}
                         </TableCell>
                         <TableCell>
-                            <Badge variant="outline">
-                                {counts[job.id_jobs] ?? 0}
-                            </Badge>
+                            <Badge variant="outline">{counts[job.id_jobs] ?? 0}</Badge>
                         </TableCell>
                         <TableCell>
-                            {/* TODO: Could be enhanced with real deep search count if needed */}
                             <div className="flex items-center gap-2 text-muted-foreground">
                                 <Sparkles className="h-4 w-4 text-purple-600/50" />
                                 <span className="text-xs">-</span>
@@ -211,10 +243,41 @@ export function SearchHistoryTable({ limit }: { limit?: number }) {
                         <TableCell className="text-muted-foreground text-sm">
                             {format(new Date(job.created_at), "d MMM yyyy", { locale: fr })}
                         </TableCell>
-                        <TableCell>
-                            <Button variant="ghost" size="sm">
-                                <MoreHorizontal className="h-4 w-4" />
-                            </Button>
+                        <TableCell onClick={e => e.stopPropagation()}>
+                            {isStuck(job.statut) ? (
+                                <div className="flex items-center gap-1.5">
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-7 px-2 text-xs text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+                                        disabled={actionLoading[`relaunch-${job.id_jobs}`]}
+                                        onClick={() => handleRelaunch(job)}
+                                    >
+                                        {actionLoading[`relaunch-${job.id_jobs}`]
+                                            ? <Loader2 className="h-3 w-3 animate-spin" />
+                                            : <RefreshCw className="h-3 w-3 mr-1" />
+                                        }
+                                        Relancer
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive hover:bg-red-50"
+                                        disabled={actionLoading[`cancel-${job.id_jobs}`]}
+                                        onClick={() => handleCancel(job)}
+                                    >
+                                        {actionLoading[`cancel-${job.id_jobs}`]
+                                            ? <Loader2 className="h-3 w-3 animate-spin" />
+                                            : <XCircle className="h-3 w-3 mr-1" />
+                                        }
+                                        Annuler
+                                    </Button>
+                                </div>
+                            ) : (
+                                <Button variant="ghost" size="sm">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                            )}
                         </TableCell>
                     </TableRow>
                 ))}
