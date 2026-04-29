@@ -52,11 +52,16 @@ export function PersonalizationTab({ campaign, onUpdate }: PersonalizationTabPro
                         : item.prospect.data_scrapping
                 }))
                 // Normalize to simplified list for dropdown
-                setProspects(mapped.map((p: any) => ({
-                    id_prospect: p.id_prospect,
-                    resume: p.data?.name || p.data?.title || "Prospect sans nom",
-                    ville: p.data?.company_name || p.data?.company || "Entreprise inconnue"
-                } as any)))
+                setProspects(mapped.map((p: any) => {
+                    const data = p.data || {}
+                    const name = data.title || data.nom_complet || data.name || data.Titre || (data.nom ? `${data.prenom || ''} ${data.nom}`.trim() : null) || "Prospect sans nom"
+                    const company = data.company || data.companyName || data.societe || "Entreprise inconnue"
+                    return {
+                        id_prospect: p.id_prospect,
+                        resume: name,
+                        ville: company
+                    }
+                }))
             }
         }
         fetchProspects()
