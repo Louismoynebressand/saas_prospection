@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
 import { Download, Upload, UserPlus, ArrowLeft, Loader2 } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { ProspectImportData } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -12,8 +12,11 @@ import { CSVPreview } from '@/components/features/CSVPreview'
 import { ManualProspectForm } from '@/components/features/ManualProspectForm'
 import { toast } from 'sonner'
 
-export default function ProspectsImportPage() {
+function ImportPageContent() {
     const router = useRouter()
+    const searchParams = useSearchParams()
+    const defaultTab = searchParams.get('tab') === 'manual' ? 'manual' : 'csv'
+    
     const [parsedData, setParsedData] = useState<ProspectImportData[]>([])
     const [isImporting, setIsImporting] = useState(false)
 
@@ -127,7 +130,7 @@ export default function ProspectsImportPage() {
             </div>
 
             {/* Main Content */}
-            <Tabs defaultValue="csv" className="w-full">
+            <Tabs defaultValue={defaultTab} className="w-full">
                 <TabsList className="grid w-full max-w-md grid-cols-2">
                     <TabsTrigger value="csv" className="gap-2">
                         <Upload className="h-4 w-4" />
@@ -208,5 +211,13 @@ export default function ProspectsImportPage() {
                 </TabsContent>
             </Tabs>
         </div>
+    )
+}
+
+export default function ProspectsImportPage() {
+    return (
+        <Suspense fallback={<div className="flex items-center justify-center h-48"><Loader2 className="animate-spin text-muted-foreground w-8 h-8"/></div>}>
+            <ImportPageContent />
+        </Suspense>
     )
 }

@@ -20,6 +20,10 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
 import { EmailGenerationModal } from "@/components/features/EmailGenerationModal"
 import { toast } from "sonner"
 
@@ -97,7 +101,6 @@ const formatHours = (hoursStr: string) => {
     return hoursStr.replace(/ to /g, ' - ').replace(/:/g, 'h');
 }
 
-// Social Icon Mapper
 const getSocialIcon = (network: string) => {
     const n = network.toLowerCase()
     if (n.includes('facebook')) return <Facebook className="w-4 h-4 text-blue-600" />
@@ -105,6 +108,25 @@ const getSocialIcon = (network: string) => {
     if (n.includes('linkedin')) return <Linkedin className="w-4 h-4 text-blue-700" />
     if (n.includes('twitter') || n.includes('x.com')) return <Twitter className="w-4 h-4 text-sky-500" />
     return <Globe className="w-4 h-4 text-gray-500" />
+}
+
+const formatPhone = (phone: string | null | undefined) => {
+    if (!phone) return null;
+    let clean = phone.replace(/[^\d+]/g, '');
+    if (clean.startsWith('+33')) {
+        const rest = clean.slice(3);
+        if (rest.length === 9) {
+            const first = rest.slice(0, 1);
+            const pairs = rest.slice(1).match(/.{1,2}/g)?.join(' ') || '';
+            return `+33 ${first} ${pairs}`;
+        }
+        const pairs = rest.match(/.{1,2}/g)?.join(' ') || rest;
+        return `+33 ${pairs}`;
+    }
+    if (clean.length === 10 && clean.startsWith('0')) {
+        return clean.match(/.{1,2}/g)?.join(' ') || clean;
+    }
+    return phone;
 }
 
 export default function ProspectPage() {
@@ -126,6 +148,26 @@ export default function ProspectPage() {
     // Deep Search State
     const [isLaunchingDeepSearch, setIsLaunchingDeepSearch] = useState(false)
 
+    // --- NEW: CRM State ---
+    const [crmStatus, setCrmStatus] = useState<string>("A_CONTACTER")
+    const [crmNotes, setCrmNotes] = useState<string>("")
+    const [isSavingCrm, setIsSavingCrm] = useState(false)
+    const [showAllDetails, setShowAllDetails] = useState(false)
+
+    // --- EDIT State ---
+    const [isEditing, setIsEditing] = useState(false)
+    const [isSavingEdit, setIsSavingEdit] = useState(false)
+    const [editForm, setEditForm] = useState({
+        titre: "",
+        categorie: "",
+        email: "",
+        telephone: "",
+        adresse: ""
+    })
+    const [editInfos, setEditInfos] = useState<Record<string, Array<Record<string, boolean>>>>({})
+    const [newInfoCategory, setNewInfoCategory] = useState("")
+    const [newInfoName, setNewInfoName] = useState("")
+
     // --- NEW: Campaign Links State ---
     const [campaignLinks, setCampaignLinks] = useState<any[]>([])
 
@@ -144,6 +186,9 @@ export default function ProspectPage() {
 
             if (error) throw error
             setProspect(prospectData)
+            
+            setCrmStatus((prospectData as any).crm_status || "A_CONTACTER")
+            setCrmNotes((prospectData as any).crm_notes || "")
 
             // 2. Parse Scrapped Data JSON
             let parsedScrapped: ScrappedData = {}
@@ -359,6 +404,28 @@ export default function ProspectPage() {
         }
     }
 
+    const handleSaveCrm = async (newStatus?: string, newNotes?: string) => {
+        setIsSavingCrm(true)
+        const statusToSave = newStatus !== undefined ? newStatus : crmStatus
+        const notesToSave = newNotes !== undefined ? newNotes : crmNotes
+        const supabase = createClient()
+        const { error } = await supabase
+            .from('scrape_prospect')
+            .update({ crm_status: statusToSave, crm_notes: notesToSave })
+            .eq('id_prospect', id)
+        
+        if (error) {
+            toast.error("Erreur lors de la sauvegarde du CRM")
+        } else {
+            if (newStatus !== undefined || newNotes !== undefined) {
+                toast.success("Modifications sauvegardées")
+            }
+            if (newStatus !== undefined) setCrmStatus(newStatus)
+            if (newNotes !== undefined) setCrmNotes(newNotes)
+        }
+        setIsSavingCrm(false)
+    }
+
     // --- DISPLAY VARS ---
     const companyName = scrapped.Titre || deep.nom_raison_sociale || "Société Inconnue";
     const category = scrapped["Nom de catégorie"] || "Secteur inconnu";
@@ -446,7 +513,72 @@ export default function ProspectPage() {
         return null
     }
 
-    const phoneNumber = getPhoneNumber()
+    const phoneNumber = formatPhone(getPhoneNumber())
+
+    // --- EDIT ACTIONS ---
+    const handleEditToggle = () => {
+        if (!isEditing) {
+            setEditForm({
+                titre: companyName,
+                categorie: category,
+                email: displayEmail || "",
+                telephone: getPhoneNumber() || "",
+                adresse: address || ""
+            })
+            setEditInfos(scrapped["Infos"] ? JSON.parse(JSON.stringify(scrapped["Infos"])) : {})
+            setNewInfoCategory("")
+            setNewInfoName("")
+        }
+        setIsEditing(!isEditing)
+    }
+
+    const handleSaveEdit = async () => {
+        setIsSavingEdit(true)
+        try {
+            const supabase = createClient()
+            
+            // Construct updated scrapped data (everything stored in data_scrapping JSON)
+            const updatedScrapped = { ...scrapped }
+            updatedScrapped.Titre = editForm.titre
+            updatedScrapped["Nom de catégorie"] = editForm.categorie
+            updatedScrapped.Email = editForm.email
+            updatedScrapped["Téléphone"] = editForm.telephone
+            updatedScrapped.Rue = editForm.adresse
+            updatedScrapped["Infos"] = editInfos
+
+            // Build update payload — email_adresse_verified is text[] in Supabase
+            const updatePayload: Record<string, any> = {
+                data_scrapping: updatedScrapped,
+            }
+            if (editForm.email) {
+                // Supabase column is text[], always send as array
+                updatePayload.email_adresse_verified = [editForm.email]
+            }
+
+            const { error } = await supabase
+                .from('scrape_prospect')
+                .update(updatePayload)
+                .eq('id_prospect', id)
+
+            if (error) {
+                console.error("Supabase update error:", JSON.stringify(error))
+                toast.error(`Erreur Supabase : ${error.message}`)
+                return
+            }
+
+            toast.success("✅ Prospect mis à jour !")
+            setScrapped(updatedScrapped)
+            if (prospect && editForm.email) {
+                setProspect({ ...prospect, email_adresse_verified: [editForm.email] } as any)
+            }
+            setIsEditing(false)
+        } catch (error: any) {
+            console.error("Save edit error:", error)
+            toast.error(`Erreur : ${error?.message || 'Erreur inconnue'}`)
+        } finally {
+            setIsSavingEdit(false)
+        }
+    }
 
     // --- COMPONENTS ---
     const CopyButton = ({ text, label }: { text: string | undefined | null, label: string }) => {
@@ -577,6 +709,21 @@ export default function ProspectPage() {
                                 </AIButton>
                             ) : null}
 
+                            {isEditing ? (
+                                <Button 
+                                    variant="default" 
+                                    onClick={handleSaveEdit} 
+                                    disabled={isSavingEdit}
+                                    className="bg-green-600 hover:bg-green-700 text-white"
+                                >
+                                    {isSavingEdit ? <LoaderIcon className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
+                                    Sauvegarder
+                                </Button>
+                            ) : (
+                                <Button variant="outline" onClick={handleEditToggle}>
+                                    Modifier
+                                </Button>
+                            )}
 
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
@@ -606,15 +753,26 @@ export default function ProspectPage() {
                     <div className="max-w-7xl mx-auto space-y-6">
                         <div className="flex flex-col md:flex-row gap-6 justify-between items-start md:items-center no-print">
                             <div className="space-y-2">
-                                <div className="flex items-center gap-2">
-                                    <h1 className="text-3xl font-bold tracking-tight text-foreground">{companyName}</h1>
+                                <div className="flex items-center gap-2 w-full">
+                                    {isEditing ? (
+                                        <Input value={editForm.titre} onChange={(e) => setEditForm({...editForm, titre: e.target.value})} className="text-2xl md:text-3xl font-bold max-w-md h-12 bg-white" placeholder="Nom de l'entreprise" />
+                                    ) : (
+                                        <h1 className="text-3xl font-bold tracking-tight text-foreground">{companyName}</h1>
+                                    )}
                                     {renderDeepScanBadge()}
                                 </div>
                                 <div className="flex items-center gap-4 text-muted-foreground ml-1">
-                                    <span className="flex items-center gap-1"><Building2 className="w-4 h-4" /> {category}</span>
-                                    {rating && (
+                                    <span className="flex items-center gap-1">
+                                        <Building2 className="w-4 h-4 shrink-0" /> 
+                                        {isEditing ? (
+                                            <Input value={editForm.categorie} onChange={(e) => setEditForm({...editForm, categorie: e.target.value})} className="h-8 text-sm ml-1 w-48 bg-white" placeholder="Secteur / Catégorie" />
+                                        ) : (
+                                            category
+                                        )}
+                                    </span>
+                                    {rating && !isEditing && (
                                         <span className="flex items-center gap-1 text-amber-500 font-medium">
-                                            <Star className="w-4 h-4 fill-current" /> {rating} <span className="text-muted-foreground font-normal">({reviewCount})</span>
+                                            <Star className="w-4 h-4 fill-current shrink-0" /> {rating} <span className="text-muted-foreground font-normal">({reviewCount})</span>
                                         </span>
                                     )}
                                 </div>
@@ -648,7 +806,11 @@ export default function ProspectPage() {
                                             <div className="flex items-center gap-2 font-medium overflow-hidden">
                                                 <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
                                                 <div className="min-w-0 flex-1">
-                                                    <CopyButton text={displayEmail} label="Email" />
+                                                    {isEditing ? (
+                                                        <Input value={editForm.email} onChange={(e) => setEditForm({...editForm, email: e.target.value})} className="h-8 text-sm bg-white" placeholder="Email" />
+                                                    ) : (
+                                                        <CopyButton text={displayEmail} label="Email" />
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
@@ -656,8 +818,12 @@ export default function ProspectPage() {
                                         <div className="space-y-1">
                                             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Téléphone</span>
                                             <div className="flex items-center gap-2">
-                                                <Phone className="w-4 h-4 text-muted-foreground" />
-                                                <CopyButton text={phoneNumber} label="Téléphone" />
+                                                <Phone className="w-4 h-4 text-muted-foreground shrink-0" />
+                                                {isEditing ? (
+                                                    <Input value={editForm.telephone} onChange={(e) => setEditForm({...editForm, telephone: e.target.value})} className="h-8 text-sm bg-white" placeholder="Téléphone" />
+                                                ) : (
+                                                    <CopyButton text={phoneNumber} label="Téléphone" />
+                                                )}
                                             </div>
                                         </div>
                                         {/* Address */}
@@ -665,8 +831,12 @@ export default function ProspectPage() {
                                             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Adresse</span>
                                             <div className="flex items-start gap-2">
                                                 <MapPin className="w-4 h-4 text-muted-foreground mt-1 shrink-0" />
-                                                <div className="break-words">
-                                                    <CopyButton text={address} label="Adresse" />
+                                                <div className="break-words w-full">
+                                                    {isEditing ? (
+                                                        <Textarea value={editForm.adresse} onChange={(e) => setEditForm({...editForm, adresse: e.target.value})} className="text-sm min-h-[60px] bg-white resize-none" placeholder="Adresse complète" />
+                                                    ) : (
+                                                        <CopyButton text={address} label="Adresse" />
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
@@ -711,6 +881,41 @@ export default function ProspectPage() {
                                         </CardContent>
                                     </Card>
                                 )}
+
+                                {/* CRM NOTES & STATUS */}
+                                <Card>
+                                    <CardHeader className="pb-3">
+                                        <CardTitle className="text-base flex items-center gap-2"><Briefcase className="w-4 h-4 text-primary" /> CRM & Suivi</CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="space-y-4 text-sm">
+                                        <div className="space-y-2">
+                                            <Label>Statut Prospection</Label>
+                                            <Select value={crmStatus} onValueChange={(val) => handleSaveCrm(val, undefined)}>
+                                                <SelectTrigger className="bg-white">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="A_CONTACTER">À Contacter</SelectItem>
+                                                    <SelectItem value="CONTACTE">Contacté (Appel/Email)</SelectItem>
+                                                    <SelectItem value="INTERESSE">Intéressé</SelectItem>
+                                                    <SelectItem value="RDV_PRIS">RDV Planifié</SelectItem>
+                                                    <SelectItem value="PAS_INTERESSE">Pas Intéressé</SelectItem>
+                                                    <SelectItem value="CLIENT">Client</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>Notes d'appel / Suivi</Label>
+                                            <Textarea 
+                                                placeholder="Ajouter des notes sur ce prospect..." 
+                                                value={crmNotes}
+                                                onChange={(e) => setCrmNotes(e.target.value)}
+                                                onBlur={() => handleSaveCrm(undefined, crmNotes)}
+                                                className="resize-none min-h-[120px] bg-white"
+                                            />
+                                        </div>
+                                    </CardContent>
+                                </Card>
                             </div>
 
                             {/* RIGHT COLUMN: DEEP SEARCH ETC */}
@@ -829,31 +1034,126 @@ export default function ProspectPage() {
                                 )}
 
                                 {/* 4. Infos Details (Merged from Tab) */}
-                                {scrapped["Infos"] && Object.keys(scrapped["Infos"]).length > 0 && (
+                                {(scrapped["Infos"] || isEditing) && (
                                     <div className="space-y-4">
                                         <h4 className="font-semibold text-sm flex items-center gap-2 mb-3 text-foreground pt-4 border-t">
                                             <Info className="w-4 h-4 text-primary" /> Détails & Services
                                         </h4>
-                                        {Object.entries(scrapped["Infos"]).map(([category, items], idx) => (
-                                            <div key={idx} className="mb-4 last:mb-0 bg-white dark:bg-slate-900 p-4 rounded-lg border shadow-sm">
-                                                <h5 className="font-bold mb-3 pb-2 border-b text-xs text-muted-foreground uppercase tracking-wider">
-                                                    {category}
-                                                </h5>
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
-                                                    {items.map((item, i) => {
-                                                        const key = Object.keys(item)[0]
-                                                        const val = item[key]
-                                                        if (!val) return null
-                                                        return (
-                                                            <div key={i} className="flex items-start gap-2 text-sm text-muted-foreground group">
-                                                                <CheckCircle2 className="w-4 h-4 text-green-500/70 mt-0.5 shrink-0 group-hover:text-green-600 transition-colors" />
-                                                                <span className="group-hover:text-foreground transition-colors cursor-pointer" onClick={() => handleCopy(key)}>{key}</span>
-                                                            </div>
-                                                        )
-                                                    })}
+                                        {isEditing ? (
+                                            <div className="space-y-4 bg-white dark:bg-slate-900 p-4 rounded-lg border shadow-sm">
+                                                {Object.entries(editInfos).map(([category, items], idx) => (
+                                                    <div key={idx} className="mb-4">
+                                                        <h5 className="font-bold mb-2 text-xs text-muted-foreground uppercase tracking-wider">{category}</h5>
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {items.map((item, i) => {
+                                                                const key = Object.keys(item)[0]
+                                                                const val = item[key]
+                                                                if (!val) return null
+                                                                return (
+                                                                    <Badge key={i} variant="outline" className="flex items-center gap-1 bg-muted/50 text-foreground font-normal border-indigo-100">
+                                                                        {key}
+                                                                        <Trash2 
+                                                                            className="w-3 h-3 text-red-400 cursor-pointer hover:text-red-600 ml-1 transition-colors" 
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation()
+                                                                                const newInfos = { ...editInfos }
+                                                                                newInfos[category] = newInfos[category].filter((_, index) => index !== i)
+                                                                                if (newInfos[category].length === 0) delete newInfos[category]
+                                                                                setEditInfos(newInfos)
+                                                                            }}
+                                                                        />
+                                                                    </Badge>
+                                                                )
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                                <div className="flex flex-col sm:flex-row gap-2 mt-4 pt-4 border-t border-dashed">
+                                                    <Input 
+                                                        placeholder="Catégorie (ex: Services)" 
+                                                        value={newInfoCategory} 
+                                                        onChange={(e) => setNewInfoCategory(e.target.value)} 
+                                                        className="h-8 text-sm flex-1 bg-white"
+                                                    />
+                                                    <Input 
+                                                        placeholder="Valeur (ex: Livraison)" 
+                                                        value={newInfoName} 
+                                                        onChange={(e) => setNewInfoName(e.target.value)} 
+                                                        className="h-8 text-sm flex-1 bg-white"
+                                                    />
+                                                    <Button 
+                                                        variant="secondary" 
+                                                        size="sm" 
+                                                        className="h-8 shadow-sm border"
+                                                        onClick={(e) => {
+                                                            e.preventDefault()
+                                                            if (!newInfoCategory || !newInfoName) return
+                                                            const newInfos = { ...editInfos }
+                                                            if (!newInfos[newInfoCategory]) newInfos[newInfoCategory] = []
+                                                            newInfos[newInfoCategory].push({ [newInfoName]: true })
+                                                            setEditInfos(newInfos)
+                                                            setNewInfoCategory("")
+                                                            setNewInfoName("")
+                                                        }}
+                                                    >
+                                                        Ajouter
+                                                    </Button>
                                                 </div>
                                             </div>
-                                        ))}
+                                        ) : (
+                                            <div>
+                                                {!showAllDetails ? (
+                                                    <div className="space-y-3">
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {Object.entries(scrapped["Infos"] || {})
+                                                                .flatMap(([cat, items]) => items.map(item => ({ cat, key: Object.keys(item)[0], val: Object.values(item)[0] })))
+                                                                .filter(item => item.val)
+                                                                .slice(0, 3)
+                                                                .map((item, i) => (
+                                                                    <Badge key={i} variant="secondary" className="bg-white dark:bg-slate-900 border shadow-sm font-normal text-muted-foreground flex items-center gap-1.5 px-2.5 py-1">
+                                                                        <CheckCircle2 className="w-3.5 h-3.5 text-green-500/70" />
+                                                                        {item.key}
+                                                                    </Badge>
+                                                                ))
+                                                            }
+                                                        </div>
+                                                        {Object.keys(scrapped["Infos"] || {}).length > 0 && (
+                                                            <Button variant="ghost" size="sm" className="text-xs text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 -ml-2" onClick={() => setShowAllDetails(true)}>
+                                                                Voir tous les détails <ChevronDown className="ml-1 w-3 h-3" />
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                                                        {Object.entries(scrapped["Infos"] || {}).map(([category, items], idx) => (
+                                                            <div key={idx} className="bg-white dark:bg-slate-900 p-4 rounded-lg border shadow-sm">
+                                                                <h5 className="font-bold mb-3 pb-2 border-b text-xs text-muted-foreground uppercase tracking-wider">
+                                                                    {category}
+                                                                </h5>
+                                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
+                                                                    {items.map((item, i) => {
+                                                                        const key = Object.keys(item)[0]
+                                                                        const val = item[key]
+                                                                        if (!val) return null
+                                                                        return (
+                                                                            <div key={i} className="flex items-start gap-2 text-sm text-muted-foreground group">
+                                                                                <CheckCircle2 className="w-4 h-4 text-green-500/70 mt-0.5 shrink-0 group-hover:text-green-600 transition-colors" />
+                                                                                <span className="group-hover:text-foreground transition-colors cursor-pointer" onClick={(e) => { e.stopPropagation(); handleCopy(key); }}>{key}</span>
+                                                                            </div>
+                                                                        )
+                                                                    })}
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                        <div className="flex justify-start">
+                                                            <Button variant="ghost" size="sm" className="text-xs text-muted-foreground -ml-2 hover:bg-slate-100" onClick={() => setShowAllDetails(false)}>
+                                                                <ChevronDown className="mr-1 w-3 h-3 rotate-180" /> Réduire
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>

@@ -130,7 +130,8 @@ export async function POST(request: NextRequest) {
                 check_email: false,
                 succed_validation_smtp_email: false,
                 email_scrap_etat: null,
-                deep_search_charged: false,
+                crm_status: 'A_CONTACTER',
+                crm_notes: data.notes || null
             }
         })
 
