@@ -14,3 +14,4 @@ order by ordinal_position;
 select t.tgname, t.tgfoid::regprocedure as trigger_function, pg_get_triggerdef(t.oid) as trigger_def
 from pg_trigger t
 where t.tgrelid = 'public.scrape_prospect'::regclass and not t.tgisinternal;
+  
