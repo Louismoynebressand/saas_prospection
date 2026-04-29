@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { Search, MapPin, Rocket, Sparkles, Loader2, Info } from "lucide-react"
+import { Search, MapPin, Sparkles, Loader2, ChevronDown, Check } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import confetti from "canvas-confetti"
 import { v4 as uuidv4 } from 'uuid'
@@ -17,46 +17,190 @@ import { toast } from "sonner"
 import { ScrapingProgressWidget } from "./ScrapingProgressWidget"
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+interface FrenchCity {
+    nom: string
+    code: string
+    codesPostaux: string[]
+    centre: { type: string; coordinates: [number, number] } // [lng, lat]
+    codeDepartement: string
+    codeRegion: string
+}
+
+interface SelectedCity {
+    name: string
+    postalCode: string
+    departement: string
+    lat: number
+    lng: number
+}
+
+// ─── Country config (extensible) ──────────────────────────────────────────────
+const COUNTRIES = [
+    { code: 'FR', label: 'France', flag: '🇫🇷', searchSuffix: ', France', active: true },
+    // { code: 'BE', label: 'Belgique', flag: '🇧🇪', searchSuffix: ', Belgique', active: false },
+    // { code: 'CH', label: 'Suisse', flag: '🇨🇭', searchSuffix: ', Suisse', active: false },
+]
+
+// ─── CityAutocomplete component ───────────────────────────────────────────────
+function CityAutocomplete({
+    value,
+    onChange,
+    onSelect,
+    disabled,
+    onFocus,
+    onBlur,
+}: {
+    value: string
+    onChange: (v: string) => void
+    onSelect: (city: SelectedCity) => void
+    disabled?: boolean
+    onFocus?: () => void
+    onBlur?: () => void
+}) {
+    const [suggestions, setSuggestions] = useState<FrenchCity[]>([])
+    const [open, setOpen] = useState(false)
+    const [searching, setSearching] = useState(false)
+    const [selected, setSelected] = useState<SelectedCity | null>(null)
+    const debounceRef = useRef<NodeJS.Timeout>()
+    const containerRef = useRef<HTMLDivElement>(null)
+
+    const searchCities = useCallback(async (query: string) => {
+        if (query.length < 2) { setSuggestions([]); setOpen(false); return }
+        setSearching(true)
+        try {
+            const res = await fetch(
+                `https://geo.api.gouv.fr/communes?nom=${encodeURIComponent(query)}&fields=nom,code,codesPostaux,centre,codeDepartement,codeRegion&boost=population&limit=8`
+            )
+            const data: FrenchCity[] = await res.json()
+            setSuggestions(data)
+            setOpen(data.length > 0)
+        } catch {
+            setSuggestions([])
+        } finally {
+            setSearching(false)
+        }
+    }, [])
+
+    const handleInput = (v: string) => {
+        onChange(v)
+        setSelected(null)
+        clearTimeout(debounceRef.current)
+        debounceRef.current = setTimeout(() => searchCities(v), 250)
+    }
+
+    const handleSelect = (city: FrenchCity) => {
+        const postalCode = city.codesPostaux[0] || ''
+        const [lng, lat] = city.centre?.coordinates ?? [0, 0]
+        const sel: SelectedCity = {
+            name: city.nom,
+            postalCode,
+            departement: city.codeDepartement,
+            lat,
+            lng,
+        }
+        setSelected(sel)
+        onChange(`${city.nom} (${postalCode})`)
+        setSuggestions([])
+        setOpen(false)
+        onSelect(sel)
+    }
+
+    // Close on outside click
+    useEffect(() => {
+        const handler = (e: MouseEvent) => {
+            if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+                setOpen(false)
+            }
+        }
+        document.addEventListener('mousedown', handler)
+        return () => document.removeEventListener('mousedown', handler)
+    }, [])
+
+    return (
+        <div ref={containerRef} className="relative">
+            <div className="relative">
+                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <Input
+                    type="text"
+                    placeholder="ex: Lyon, Valence, Grenoble..."
+                    className="h-12 pl-9 pr-10 border-2 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all"
+                    value={value}
+                    onChange={e => handleInput(e.target.value)}
+                    onFocus={() => { onFocus?.(); if (suggestions.length > 0) setOpen(true) }}
+                    onBlur={onBlur}
+                    disabled={disabled}
+                    autoComplete="off"
+                />
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    {searching
+                        ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        : selected
+                            ? <Check className="h-4 w-4 text-green-500" />
+                            : null
+                    }
+                </div>
+            </div>
+
+            <AnimatePresence>
+                {open && suggestions.length > 0 && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -4 }}
+                        transition={{ duration: 0.12 }}
+                        className="absolute z-50 mt-1 w-full rounded-xl border border-indigo-100 bg-white shadow-xl overflow-hidden"
+                    >
+                        {suggestions.map((city, i) => (
+                            <button
+                                key={`${city.code}-${i}`}
+                                type="button"
+                                className="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-indigo-50 transition-colors group"
+                                onMouseDown={() => handleSelect(city)}
+                            >
+                                <div className="flex items-center gap-2">
+                                    <MapPin className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
+                                    <span className="font-medium text-sm text-foreground">{city.nom}</span>
+                                    <span className="text-xs text-muted-foreground">({city.codeDepartement})</span>
+                                </div>
+                                <span className="text-xs font-mono text-indigo-600 bg-indigo-50 group-hover:bg-white px-2 py-0.5 rounded-full transition-colors">
+                                    {city.codesPostaux[0]}
+                                </span>
+                            </button>
+                        ))}
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
+    )
+}
+
+// ─── Main form ────────────────────────────────────────────────────────────────
 export function LaunchSearchForm() {
     const router = useRouter()
     const [loading, setLoading] = useState(false)
     const [activeJobId, setActiveJobId] = useState<string | number | null>(null)
-    const [isCardFocused, setIsCardFocused] = useState(false) // For edge glow animation
+    const [isCardFocused, setIsCardFocused] = useState(false)
+    const [countryCode] = useState('FR') // 🇫🇷 locked for now, extensible later
     const [formData, setFormData] = useState({
         query: "",
-        city: "",
+        city: "",         // display string (e.g. "Valence (26000)")
         maxResults: 10,
         enrichmentEnabled: true,
     })
-
-    const geocodeCity = async (city: string): Promise<{ lat: number; lon: number } | null> => {
-        try {
-            const response = await fetch(
-                `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(city + ", France")}&format=json&limit=1`,
-                {
-                    headers: {
-                        'User-Agent': 'SuperProspect-App'
-                    }
-                }
-            )
-            const data = await response.json()
-            if (data && data[0]) {
-                return {
-                    lat: parseFloat(data[0].lat),
-                    lon: parseFloat(data[0].lon)
-                }
-            }
-            return null
-        } catch (error) {
-            console.error("Geocoding error:", error)
-            return null
-        }
-    }
+    const [selectedCity, setSelectedCity] = useState<SelectedCity | null>(null)
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
-        setLoading(true)
 
+        if (!selectedCity) {
+            toast.error("Ville requise", {
+                description: "Veuillez sélectionner une ville dans la liste de suggestions."
+            })
+            return
+        }
+
+        setLoading(true)
         const debugId = uuidv4()
         console.log(`[Client] Launching scrape job (debugId: ${debugId})`)
 
@@ -79,7 +223,6 @@ export function LaunchSearchForm() {
                 })
 
             if (quotaCheckError) {
-                console.error("Quota check error:", quotaCheckError)
                 toast.error("Erreur de vérification", {
                     description: "Impossible de vérifier vos quotas"
                 })
@@ -95,22 +238,20 @@ export function LaunchSearchForm() {
                 return
             }
 
-            const coords = await geocodeCity(formData.city)
+            // Build Google Maps URL using real GPS coordinates from the selected city
+            const country = COUNTRIES.find(c => c.code === countryCode)
+            const mapsUrl = selectedCity.lat && selectedCity.lng
+                ? `https://www.google.com/maps/search/${encodeURIComponent(formData.query)}/@${selectedCity.lat},${selectedCity.lng},13z`
+                : `https://www.google.com/maps/search/${encodeURIComponent(formData.query + ' ' + selectedCity.name + (country?.searchSuffix || ', France'))}`
 
-            let mapsUrl: string
-            if (coords) {
-                mapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(formData.query)}/@${coords.lat},${coords.lon},13z`
-            } else {
-                mapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(formData.query + " " + formData.city)}`
-            }
+            console.log(`[Client] mapsUrl: ${mapsUrl}`)
 
-            console.log(`[Client] Calling /api/scrape/launch with enrichment=${formData.enrichmentEnabled}`)
             const response = await authenticatedFetch('/api/scrape/launch', {
                 method: 'POST',
                 body: JSON.stringify({
                     mapsUrl,
                     query: formData.query,
-                    city: formData.city,
+                    city: selectedCity.name, // clean city name (no postal code) for n8n
                     maxResults: formData.maxResults,
                     enrichmentEnabled: formData.enrichmentEnabled,
                     debugId
@@ -125,19 +266,13 @@ export function LaunchSearchForm() {
             const result = await response.json()
             const jobId = result.jobId
 
-            console.log(`[Client] Job created with ID: ${jobId} (debugId: ${debugId})`)
-
             toast.success("Recherche lancée ! 🚀", {
                 description: formData.enrichmentEnabled
                     ? "L'IA enrichit vos prospects en temps réel..."
                     : "Prospection en cours...",
             })
 
-            confetti({
-                particleCount: 100,
-                spread: 70,
-                origin: { y: 0.6 }
-            })
+            confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } })
 
             setActiveJobId(jobId)
             setLoading(false)
@@ -148,9 +283,7 @@ export function LaunchSearchForm() {
                 description: (
                     <div>
                         <p>{err.message || "Une erreur est survenue lors du lancement"}</p>
-                        <p className="text-xs mt-1 opacity-70">
-                            ID de debug: {debugId.slice(0, 8)}
-                        </p>
+                        <p className="text-xs mt-1 opacity-70">ID de debug: {debugId.slice(0, 8)}</p>
                     </div>
                 )
             })
@@ -326,21 +459,32 @@ export function LaunchSearchForm() {
                                 transition={{ delay: 0.2 }}
                                 className="space-y-2"
                             >
-                                <label className="text-sm font-semibold flex items-center gap-2">
-                                    <MapPin className="w-4 h-4" />
-                                    Ville
+                                <label className="text-sm font-semibold flex items-center justify-between gap-2">
+                                    <span className="flex items-center gap-2">
+                                        <MapPin className="w-4 h-4" />
+                                        Ville
+                                    </span>
+                                    {/* Country badge — locked to 🇫🇷, extensible */}
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200 text-xs font-medium text-blue-700">
+                                        🇫🇷 France
+                                        <span className="text-blue-400 text-[10px]">(uniquement)</span>
+                                    </span>
                                 </label>
-                                <Input
-                                    type="text"
-                                    placeholder="ex: Lyon, Paris..."
-                                    className="h-12 border-2 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all"
+                                <CityAutocomplete
                                     value={formData.city}
-                                    onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                                    onChange={(v) => setFormData({ ...formData, city: v })}
+                                    onSelect={(city) => setSelectedCity(city)}
+                                    disabled={loading}
                                     onFocus={() => setIsCardFocused(true)}
                                     onBlur={() => setIsCardFocused(false)}
-                                    disabled={loading}
-                                    required
                                 />
+                                {selectedCity && (
+                                    <p className="text-xs text-green-600 flex items-center gap-1.5 pl-1">
+                                        <Check className="h-3 w-3" />
+                                        {selectedCity.name} ({selectedCity.postalCode}) — Dép. {selectedCity.departement}
+                                        &nbsp;·&nbsp;{selectedCity.lat.toFixed(4)}, {selectedCity.lng.toFixed(4)}
+                                    </p>
+                                )}
                             </motion.div>
 
                             <motion.div
