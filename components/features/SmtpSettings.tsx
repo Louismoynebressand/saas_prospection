@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { toast } from "sonner"
-import { Loader2, Plus, Trash2, CheckCircle2, Server, Mail, Shield, RefreshCw, Info, Building2, Globe, Zap, Edit2, Check, ExternalLink, BookOpen } from "lucide-react"
+import { Loader2, Plus, Trash2, CheckCircle2, Server, Mail, Shield, RefreshCw, Info, Building2, Globe, Zap, Edit2, Check, ExternalLink, BookOpen, Star } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface SmtpConfig {
@@ -459,6 +459,9 @@ export function SmtpSettings() {
     const [saving, setSaving] = useState(false)
     const [isVerified, setIsVerified] = useState(false)
     const [selectedCategory, setSelectedCategory] = useState<"public" | "pro" | "relay" | "custom">("public")
+    const [showDefaultDialog, setShowDefaultDialog] = useState(false)
+    const [pendingDefaultId, setPendingDefaultId] = useState<string | null>(null)
+    const [settingDefault, setSettingDefault] = useState(false)
 
     // Form State
     const [formData, setFormData] = useState({
@@ -662,12 +665,19 @@ export function SmtpSettings() {
             const data = await res.json()
 
             if (res.ok) {
+                const isNew = !formData.id
+                const savedId = data.config?.id
                 toast.success(formData.id ? "Configuration mise à jour !" : "Configuration enregistrée !", {
                     icon: <CheckCircle2 className="w-5 h-5 text-green-600" />
                 })
                 setIsDialogOpen(false)
                 fetchConfigs()
                 resetForm()
+                // Pour un nouveau compte, proposer de le définir comme défaut
+                if (isNew && savedId) {
+                    setPendingDefaultId(savedId)
+                    setShowDefaultDialog(true)
+                }
             } else {
                 toast.error("Erreur sauvegarde", {
                     description: data.error || "Impossible d'enregistrer.",
@@ -696,6 +706,30 @@ export function SmtpSettings() {
             }
         } catch (error) {
             toast.error("Erreur suppression")
+        }
+    }
+
+    const handleSetDefault = async (accountId: string) => {
+        setSettingDefault(true)
+        try {
+            const res = await fetch("/api/settings/sending-accounts/set-default", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ account_id: accountId }),
+            })
+            if (res.ok) {
+                toast.success("✅ Compte défini comme compte d'envoi par défaut !")
+                fetchConfigs()
+            } else {
+                const d = await res.json()
+                toast.error(d.error || "Erreur")
+            }
+        } catch {
+            toast.error("Erreur réseau")
+        } finally {
+            setSettingDefault(false)
+            setShowDefaultDialog(false)
+            setPendingDefaultId(null)
         }
     }
 
@@ -1139,7 +1173,30 @@ export function SmtpSettings() {
                 )}
             </div>
 
-
+            {/* Dialog : définir comme compte par défaut */}
+            <Dialog open={showDefaultDialog} onOpenChange={setShowDefaultDialog}>
+                <DialogContent className="max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Star className="w-5 h-5 text-amber-400" /> Compte par défaut ?
+                        </DialogTitle>
+                        <DialogDescription>
+                            Voulez-vous utiliser ce compte SMTP comme compte d'envoi par défaut pour toutes vos campagnes ?
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="gap-2">
+                        <Button variant="outline" onClick={() => { setShowDefaultDialog(false); setPendingDefaultId(null) }}>Non, merci</Button>
+                        <Button
+                            className="bg-amber-500 hover:bg-amber-600"
+                            disabled={settingDefault}
+                            onClick={() => pendingDefaultId && handleSetDefault(pendingDefaultId)}
+                        >
+                            {settingDefault ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Star className="w-4 h-4 mr-2" />}
+                            Oui, définir par défaut
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

@@ -7,12 +7,12 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import {
     Loader2, Plus, Trash2, CheckCircle2, Zap, Copy, ExternalLink,
-    Globe, Eye, EyeOff, AlertCircle, RefreshCw, Edit2, Webhook
+    Globe, Eye, EyeOff, AlertCircle, RefreshCw, Edit2, Webhook, Star
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -29,6 +29,7 @@ interface MailgunConfig {
     tracking_opens: boolean
     tracking_clicks: boolean
     is_active: boolean
+    is_default: boolean
     created_at: string
 }
 
@@ -65,6 +66,9 @@ export function MailgunSettings() {
     const [testing, setTesting] = useState(false)
     const [showApiKey, setShowApiKey] = useState(false)
     const [formData, setFormData] = useState(DEFAULT_FORM)
+    const [showDefaultDialog, setShowDefaultDialog] = useState(false)
+    const [pendingDefaultId, setPendingDefaultId] = useState<string | null>(null)
+    const [settingDefault, setSettingDefault] = useState(false)
 
     const appUrl = typeof window !== "undefined"
         ? window.location.origin
@@ -178,10 +182,17 @@ export function MailgunSettings() {
             })
             const data = await res.json()
             if (res.ok) {
+                const isNew = !formData.id
+                const savedId = data.config?.id
                 toast.success(formData.id ? "Compte mis à jour !" : "Compte Mailgun ajouté !")
                 setIsDialogOpen(false)
                 fetchConfigs()
                 resetForm()
+                // Pour un nouveau compte, proposer de le définir comme défaut
+                if (isNew && savedId) {
+                    setPendingDefaultId(savedId)
+                    setShowDefaultDialog(true)
+                }
             } else {
                 toast.error(data.error || "Erreur lors de la sauvegarde", { duration: 6000 })
             }
@@ -199,6 +210,30 @@ export function MailgunSettings() {
             if (res.ok) { toast.success("Compte supprimé"); fetchConfigs() }
             else { const d = await res.json(); toast.error(d.error || "Erreur suppression") }
         } catch { toast.error("Erreur suppression") }
+    }
+
+    const handleSetDefault = async (accountId: string) => {
+        setSettingDefault(true)
+        try {
+            const res = await fetch("/api/settings/sending-accounts/set-default", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ account_id: accountId }),
+            })
+            if (res.ok) {
+                toast.success("✅ Compte défini comme compte d'envoi par défaut !")
+                fetchConfigs()
+            } else {
+                const d = await res.json()
+                toast.error(d.error || "Erreur")
+            }
+        } catch {
+            toast.error("Erreur réseau")
+        } finally {
+            setSettingDefault(false)
+            setShowDefaultDialog(false)
+            setPendingDefaultId(null)
+        }
     }
 
     const copyWebhookUrl = () => {
@@ -410,7 +445,10 @@ export function MailgunSettings() {
                                     <div className="flex items-center gap-3">
                                         <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-orange-400 to-red-500 flex items-center justify-center text-white font-bold text-sm shadow-sm">MG</div>
                                         <div>
-                                            <CardTitle className="text-base">{config.name}</CardTitle>
+                                            <CardTitle className="text-base flex items-center gap-2">
+                                                {config.name}
+                                                {config.is_default && <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />}
+                                            </CardTitle>
                                             <CardDescription className="text-xs">{config.from_email} · {config.mailgun_domain}</CardDescription>
                                         </div>
                                     </div>
@@ -418,6 +456,9 @@ export function MailgunSettings() {
                                         <Badge variant="outline" className={cn("text-xs", config.mailgun_region === "EU" ? "border-blue-300 text-blue-700" : "border-gray-300 text-gray-600")}>
                                             <Globe className="w-3 h-3 mr-1" />{config.mailgun_region}
                                         </Badge>
+                                        {config.is_default && (
+                                            <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-xs">Par défaut</Badge>
+                                        )}
                                         <Badge className={config.is_active ? "bg-green-100 text-green-700 border-green-200" : "bg-gray-100 text-gray-500"}>
                                             {config.is_active ? "Actif" : "Inactif"}
                                         </Badge>
@@ -431,6 +472,11 @@ export function MailgunSettings() {
                                     {config.daily_limit && <span className="flex items-center gap-1"><AlertCircle className="w-3 h-3 text-amber-500" />{config.daily_limit}/jour</span>}
                                 </div>
                                 <div className="flex gap-2">
+                                    {!config.is_default && (
+                                        <Button size="sm" variant="outline" onClick={() => handleSetDefault(config.id)} className="gap-1 text-amber-600 border-amber-200 hover:bg-amber-50">
+                                            <Star className="w-3 h-3" /> Définir par défaut
+                                        </Button>
+                                    )}
                                     <Button size="sm" variant="outline" onClick={() => openDialog(config)} className="gap-1">
                                         <Edit2 className="w-3 h-3" /> Modifier
                                     </Button>
@@ -461,6 +507,31 @@ export function MailgunSettings() {
                     </CardContent>
                 </Card>
             )}
+
+            {/* Dialog : définir comme compte par défaut */}
+            <Dialog open={showDefaultDialog} onOpenChange={setShowDefaultDialog}>
+                <DialogContent className="max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Star className="w-5 h-5 text-amber-400" /> Compte par défaut ?
+                        </DialogTitle>
+                        <DialogDescription>
+                            Voulez-vous utiliser ce compte Mailgun comme compte d'envoi par défaut pour toutes vos campagnes ?
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="gap-2">
+                        <Button variant="outline" onClick={() => { setShowDefaultDialog(false); setPendingDefaultId(null) }}>Non, merci</Button>
+                        <Button
+                            className="bg-amber-500 hover:bg-amber-600"
+                            disabled={settingDefault}
+                            onClick={() => pendingDefaultId && handleSetDefault(pendingDefaultId)}
+                        >
+                            {settingDefault ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Star className="w-4 h-4 mr-2" />}
+                            Oui, définir par défaut
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

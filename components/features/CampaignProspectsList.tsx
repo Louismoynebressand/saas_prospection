@@ -7,7 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
-import { Loader2, UserPlus, Mail, Send, Eye } from "lucide-react"
+import { Loader2, UserPlus, Mail, Send, Eye, Zap, Server, Star, Settings } from "lucide-react"
 import { AddProspectsToCampaignModal } from "./AddProspectsToCampaignModal"
 import { ProspectViewModal } from "./ProspectViewModal"
 import { ProspectDetailModal } from "./ProspectDetailModal"
@@ -66,18 +66,19 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
             const supabase = createClient()
             const { data, error } = await supabase
                 .from('smtp_configurations')
-                .select('*')
+                .select('id, name, from_email, provider, is_default, mailgun_domain')
                 .eq('is_active', true)
+                .order('is_default', { ascending: false }) // défaut en premier
                 .order('created_at', { ascending: false })
 
             if (!error && data) {
                 setSmtpConfigs(data)
-                if (data.length > 0) {
-                    setSelectedSmtpId(data[0].id)
-                }
+                // Présélectionner le compte par défaut, sinon le premier
+                const defaultAccount = data.find(c => c.is_default) || data[0]
+                if (defaultAccount) setSelectedSmtpId(defaultAccount.id)
             }
         } catch (error) {
-            console.error('Error loading SMTP configs:', error)
+            console.error('Error loading sending configs:', error)
         } finally {
             setLoadingSmtp(false)
         }
@@ -567,34 +568,83 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
                                 <AlertCircle className="w-6 h-6 text-amber-600" />
                             </div>
                             <div className="space-y-1">
-                                <p className="font-semibold text-amber-900">Aucun compte SMTP configuré</p>
-                                <p className="text-sm text-amber-700">Vous devez connecter une adresse email pour envoyer des campagnes.</p>
+                                <p className="font-semibold text-amber-900">Aucun compte d'envoi configuré</p>
+                                <p className="text-sm text-amber-700">Configurez un compte SMTP ou Mailgun pour envoyer des campagnes.</p>
                             </div>
                             <Button asChild variant="outline" className="mt-2">
-                                <Link href="/emails">Configurer un email</Link>
+                                <Link href="/emails">Configurer un compte d'envoi</Link>
                             </Button>
                         </div>
                     ) : (
                         <div className="space-y-4 py-4">
+                            {/* Compte par défaut affiché en haut */}
+                            {smtpConfigs.find(c => c.is_default) && (
+                                <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 rounded-lg border border-amber-200 text-sm">
+                                    <Star className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                                    <span className="text-amber-800">
+                                        Compte par défaut : <strong>{smtpConfigs.find(c => c.is_default)?.from_email}</strong>
+                                    </span>
+                                </div>
+                            )}
+
                             <div className="space-y-2">
                                 <Label>Compte d'envoi</Label>
                                 <Select value={selectedSmtpId} onValueChange={setSelectedSmtpId}>
                                     <SelectTrigger>
-                                        <SelectValue placeholder="Sélectionner un email..." />
+                                        <SelectValue placeholder="Sélectionner un compte..." />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {smtpConfigs.map(config => (
-                                            <SelectItem key={config.id} value={config.id}>
-                                                {config.from_email}
-                                            </SelectItem>
-                                        ))}
+                                        {smtpConfigs.map(config => {
+                                            const isMailgun = config.provider === 'mailgun_api'
+                                            return (
+                                                <SelectItem key={config.id} value={config.id}>
+                                                    <div className="flex items-center gap-2">
+                                                        {isMailgun
+                                                            ? <Zap className="w-3 h-3 text-orange-500 shrink-0" />
+                                                            : <Server className="w-3 h-3 text-blue-500 shrink-0" />
+                                                        }
+                                                        <span className="truncate">{config.from_email}</span>
+                                                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ml-1 ${
+                                                            isMailgun
+                                                                ? 'bg-orange-100 text-orange-700'
+                                                                : 'bg-blue-100 text-blue-700'
+                                                        }`}>
+                                                            {isMailgun ? 'Mailgun' : 'SMTP'}
+                                                        </span>
+                                                        {config.is_default && (
+                                                            <Star className="w-3 h-3 text-amber-400 shrink-0" />
+                                                        )}
+                                                    </div>
+                                                </SelectItem>
+                                            )
+                                        })}
                                     </SelectContent>
                                 </Select>
-                                {smtpConfigs.length > 0 && selectedSmtpId && (
-                                    <p className="text-xs text-muted-foreground">
-                                        L'email sera envoyé via <strong>{smtpConfigs.find(c => c.id === selectedSmtpId)?.from_email}</strong>.
-                                    </p>
-                                )}
+
+                                {selectedSmtpId && (() => {
+                                    const selected = smtpConfigs.find(c => c.id === selectedSmtpId)
+                                    if (!selected) return null
+                                    const isMailgun = selected.provider === 'mailgun_api'
+                                    return (
+                                        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                                            {isMailgun
+                                                ? <><Zap className="w-3 h-3 text-orange-500" />Envoi via <strong>Mailgun API</strong> — tracking ouvertures/clics disponible</>   
+                                                : <><Server className="w-3 h-3 text-blue-500" />Envoi via <strong>SMTP</strong> — {selected.from_email}</>
+                                            }
+                                        </p>
+                                    )
+                                })()}
+                            </div>
+
+                            {/* Lien pour changer le compte par défaut */}
+                            <div className="flex items-center justify-between pt-1 border-t">
+                                <p className="text-xs text-muted-foreground">Pour changer le compte par défaut :</p>
+                                <Button asChild variant="ghost" size="sm" className="text-xs h-7 gap-1">
+                                    <Link href="/emails">
+                                        <Settings className="w-3 h-3" />
+                                        Paramètres d'envoi
+                                    </Link>
+                                </Button>
                             </div>
                         </div>
                     )}
