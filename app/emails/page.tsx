@@ -9,9 +9,17 @@ import { Server, Zap, BarChart2 } from "lucide-react"
 
 export default function EmailsPage() {
     return (
-        <div className="space-y-4 md:space-y-6 animate-in fade-in duration-500">
+        <div className="space-y-4 md:space-y-6 animate-in fade-in duration-500 relative max-w-[1400px] mx-auto">
+            {/* Background Glows */}
+            <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none -z-10">
+                <div className="absolute top-[-10%] left-[-5%] w-[40%] h-[40%] bg-emerald-500/10 rounded-full blur-3xl opacity-50 animate-pulse" />
+                <div className="absolute top-[40%] right-[-10%] w-[30%] h-[30%] bg-blue-500/10 rounded-full blur-3xl opacity-40 delay-700 animate-pulse" />
+            </div>
+
             <div>
-                <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Prospection Mail</h1>
+                <h1 className="text-2xl md:text-3xl font-bold tracking-tight truncate bg-gradient-to-r from-emerald-900 to-blue-900 dark:from-emerald-200 dark:to-blue-300 bg-clip-text text-transparent pb-1">
+                    Prospection Mail
+                </h1>
                 <p className="text-muted-foreground mt-0.5 text-sm md:text-base">
                     Campagnes, configurations d'envoi et emails personnalisés IA.
                 </p>

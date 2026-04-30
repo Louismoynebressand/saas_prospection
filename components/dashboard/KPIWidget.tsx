@@ -32,7 +32,7 @@ interface KPIWidgetProps {
 
 const accentMap = {
     violet: {
-        bg: "from-violet-500/10 via-violet-400/5 to-transparent",
+        bg: "from-violet-500/20 via-violet-400/10 to-transparent",
         iconBg: "bg-violet-100/80 dark:bg-violet-900/30",
         icon: "text-violet-600 dark:text-violet-400",
         glow: "hover:shadow-violet-200/40 dark:hover:shadow-violet-900/40",
@@ -41,7 +41,7 @@ const accentMap = {
         pulse: "bg-violet-400",
     },
     indigo: {
-        bg: "from-indigo-500/10 via-indigo-400/5 to-transparent",
+        bg: "from-indigo-500/20 via-indigo-400/10 to-transparent",
         iconBg: "bg-indigo-100/80 dark:bg-indigo-900/30",
         icon: "text-indigo-600 dark:text-indigo-400",
         glow: "hover:shadow-indigo-200/40 dark:hover:shadow-indigo-900/40",
@@ -50,7 +50,7 @@ const accentMap = {
         pulse: "bg-indigo-400",
     },
     fuchsia: {
-        bg: "from-fuchsia-500/10 via-fuchsia-400/5 to-transparent",
+        bg: "from-fuchsia-500/20 via-fuchsia-400/10 to-transparent",
         iconBg: "bg-fuchsia-100/80 dark:bg-fuchsia-900/30",
         icon: "text-fuchsia-600 dark:text-fuchsia-400",
         glow: "hover:shadow-fuchsia-200/40",
@@ -59,7 +59,7 @@ const accentMap = {
         pulse: "bg-fuchsia-400",
     },
     emerald: {
-        bg: "from-emerald-500/10 via-emerald-400/5 to-transparent",
+        bg: "from-emerald-500/15 via-emerald-400/10 to-transparent",
         iconBg: "bg-emerald-100/80 dark:bg-emerald-900/30",
         icon: "text-emerald-600 dark:text-emerald-400",
         glow: "hover:shadow-emerald-200/40",
@@ -68,7 +68,7 @@ const accentMap = {
         pulse: "bg-emerald-400",
     },
     cyan: {
-        bg: "from-cyan-500/10 via-cyan-400/5 to-transparent",
+        bg: "from-cyan-500/15 via-cyan-400/10 to-transparent",
         iconBg: "bg-cyan-100/80 dark:bg-cyan-900/30",
         icon: "text-cyan-600 dark:text-cyan-400",
         glow: "hover:shadow-cyan-200/40",
@@ -77,7 +77,7 @@ const accentMap = {
         pulse: "bg-cyan-400",
     },
     amber: {
-        bg: "from-amber-500/10 via-amber-400/5 to-transparent",
+        bg: "from-amber-500/15 via-amber-400/10 to-transparent",
         iconBg: "bg-amber-100/80 dark:bg-amber-900/30",
         icon: "text-amber-600 dark:text-amber-400",
         glow: "hover:shadow-amber-200/40",
@@ -86,7 +86,7 @@ const accentMap = {
         pulse: "bg-amber-400",
     },
     rose: {
-        bg: "from-rose-500/10 via-rose-400/5 to-transparent",
+        bg: "from-rose-500/15 via-rose-400/10 to-transparent",
         iconBg: "bg-rose-100/80 dark:bg-rose-900/30",
         icon: "text-rose-600 dark:text-rose-400",
         glow: "hover:shadow-rose-200/40",
@@ -116,7 +116,7 @@ export function KPIWidget({
     return (
         <Card
             className={cn(
-                "group relative overflow-hidden",
+                "group relative overflow-hidden h-full min-h-[130px] flex flex-col",
                 "transition-all duration-300 ease-in-out",
                 "bg-white/70 dark:bg-slate-900/50",
                 "backdrop-blur-md",
@@ -130,7 +130,7 @@ export function KPIWidget({
         >
             {/* Gradient background accent */}
             <div className={cn(
-                "absolute inset-0 bg-gradient-to-br opacity-60 pointer-events-none transition-opacity duration-500 group-hover:opacity-100",
+                "absolute inset-0 bg-gradient-to-br opacity-80 pointer-events-none transition-opacity duration-500 group-hover:opacity-100",
                 accent.bg
             )} />
 

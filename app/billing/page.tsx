@@ -102,10 +102,18 @@ export default function BillingPage() {
     if (loading) return <div className="flex justify-center items-center h-full"><Loader2 className="animate-spin h-8 w-8" /></div>
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 animate-in fade-in duration-500 relative max-w-[1400px] mx-auto">
+            {/* Background Glows */}
+            <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none -z-10">
+                <div className="absolute top-[-10%] right-[10%] w-[40%] h-[40%] bg-yellow-500/10 rounded-full blur-3xl opacity-50 animate-pulse" />
+                <div className="absolute bottom-[10%] left-[-5%] w-[35%] h-[35%] bg-cyan-500/10 rounded-full blur-3xl opacity-40 delay-700 animate-pulse" />
+            </div>
+
             <div>
-                <h1 className="text-3xl font-bold tracking-tight">Forfait & Facturation</h1>
-                <p className="text-muted-foreground mt-1">
+                <h1 className="text-2xl md:text-3xl font-bold tracking-tight truncate bg-gradient-to-r from-yellow-600 to-cyan-600 dark:from-yellow-200 dark:to-cyan-300 bg-clip-text text-transparent pb-1">
+                    Forfait & Facturation
+                </h1>
+                <p className="text-muted-foreground mt-1 text-sm md:text-base">
                     Gérez votre abonnement et consultez votre plan actuel
                 </p>
             </div>

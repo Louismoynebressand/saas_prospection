@@ -66,48 +66,51 @@ export function StatsCards() {
 
     return (
         <>
-            <Card>
-                <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-medium flex items-center gap-2 text-indigo-700">
+            <Card className="relative overflow-hidden bg-white/70 dark:bg-slate-900/50 backdrop-blur-md border-indigo-100 dark:border-indigo-900/30 hover:shadow-lg hover:shadow-indigo-200/40 transition-all hover:-translate-y-0.5 min-h-[120px]">
+                <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/20 via-indigo-400/10 to-transparent opacity-80 pointer-events-none" />
+                <CardHeader className="pb-3 relative z-10">
+                    <CardTitle className="text-sm font-medium flex items-center gap-2 text-indigo-700 dark:text-indigo-400">
                         <RefreshCw className="h-4 w-4" />
                         Emails Générés
                     </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="relative z-10">
                     <div className="text-2xl font-bold animate-in fade-in">
                         {loading ? "-" : stats.generated}
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">Prêts ou envoyés</p>
+                    <p className="text-xs text-muted-foreground mt-1 font-medium">Prêts ou envoyés</p>
                 </CardContent>
             </Card>
 
-            <Card>
-                <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-medium flex items-center gap-2 text-green-700">
+            <Card className="relative overflow-hidden bg-white/70 dark:bg-slate-900/50 backdrop-blur-md border-emerald-100 dark:border-emerald-900/30 hover:shadow-lg hover:shadow-emerald-200/40 transition-all hover:-translate-y-0.5 min-h-[120px]">
+                <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/15 via-emerald-400/10 to-transparent opacity-80 pointer-events-none" />
+                <CardHeader className="pb-3 relative z-10">
+                    <CardTitle className="text-sm font-medium flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
                         <MailCheck className="h-4 w-4" />
                         Emails Envoyés
                     </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="relative z-10">
                     <div className="text-2xl font-bold animate-in fade-in">
                         {loading ? "-" : stats.sent}
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">Campagnes actives</p>
+                    <p className="text-xs text-muted-foreground mt-1 font-medium">Campagnes actives</p>
                 </CardContent>
             </Card>
 
-            <Card>
-                <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-medium flex items-center gap-2 text-blue-600">
+            <Card className="relative overflow-hidden bg-white/70 dark:bg-slate-900/50 backdrop-blur-md border-cyan-100 dark:border-cyan-900/30 hover:shadow-lg hover:shadow-cyan-200/40 transition-all hover:-translate-y-0.5 min-h-[120px]">
+                <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/15 via-cyan-400/10 to-transparent opacity-80 pointer-events-none" />
+                <CardHeader className="pb-3 relative z-10">
+                    <CardTitle className="text-sm font-medium flex items-center gap-2 text-cyan-700 dark:text-cyan-400">
                         <Eye className="h-4 w-4" />
                         Taux Ouverture
                     </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="relative z-10">
                     <div className="text-2xl font-bold animate-in fade-in">
                         {loading ? "-" : `${openRate}%`}
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">Estimé</p>
+                    <p className="text-xs text-muted-foreground mt-1 font-medium">Estimé</p>
                 </CardContent>
             </Card>
         </>

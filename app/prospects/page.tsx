@@ -313,11 +313,19 @@ export default function ProspectsPage() {
     }
 
     return (
-        <div className="space-y-4 md:space-y-6">
+        <div className="space-y-4 md:space-y-6 relative max-w-[1400px] mx-auto">
+            {/* Background Glows */}
+            <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none -z-10">
+                <div className="absolute top-[-10%] right-[-5%] w-[40%] h-[40%] bg-violet-500/10 rounded-full blur-3xl opacity-50 animate-pulse" />
+                <div className="absolute top-[40%] left-[-10%] w-[30%] h-[30%] bg-fuchsia-500/10 rounded-full blur-3xl opacity-40 delay-700 animate-pulse" />
+            </div>
+
             {/* Header — responsive */}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
-                    <h1 className="text-2xl md:text-3xl font-bold tracking-tight truncate">Tous les Prospects</h1>
+                    <h1 className="text-2xl md:text-3xl font-bold tracking-tight truncate bg-gradient-to-r from-violet-900 to-fuchsia-900 dark:from-violet-200 dark:to-fuchsia-300 bg-clip-text text-transparent pb-1">
+                        Tous les Prospects
+                    </h1>
                     <p className="text-muted-foreground mt-0.5 text-sm">
                         Liste complète de vos prospects scrappés
                     </p>
