@@ -346,190 +346,81 @@ export default function ProspectsPage() {
             </div>
 
             {/* Filters Bar */}
-            <Card>
-                <CardContent className="pt-4 pb-4">
-                    <div className="flex flex-wrap gap-2">
-                        {/* Search */}
-                        <div className="relative flex-1">
-                            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                placeholder="Rechercher par société, catégorie, ville..."
-                                className="pl-9"
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                            />
-                        </div>
-
+            <Card className="border-border/50 shadow-sm">
+                <CardContent className="pt-3 pb-3">
+                    {/* Ligne 1 : barre de recherche pleine largeur */}
+                    <div className="relative w-full mb-2">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            placeholder="Rechercher par société, catégorie, ville..."
+                            className="pl-9 w-full"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                        />
+                    </div>
+                    {/* Ligne 2 : filtres */}
+                    <div className="flex flex-wrap gap-1.5">
                         {/* Date Filter */}
                         <Popover>
                             <PopoverTrigger asChild>
-                                <Button variant="outline" className="gap-2">
-                                    <Calendar className="h-4 w-4" />
-                                    {dateFilter === 'all' ? 'Toutes dates' :
-                                        dateFilter === 'today' ? "Aujourd'hui" :
-                                            dateFilter === 'week' ? 'Cette semaine' :
-                                                dateFilter === 'month' ? 'Ce mois' :
-                                                    (customDateRange.from || customDateRange.to) ?
-                                                        `${customDateRange.from ? format(customDateRange.from, "d MMM", { locale: fr }) : '...'} - ${customDateRange.to ? format(customDateRange.to, "d MMM", { locale: fr }) : '...'}` :
-                                                        'Personnalisé'}
+                                <Button variant="outline" size="sm" className="gap-1.5 h-8 text-xs">
+                                    <Calendar className="h-3.5 w-3.5" />
+                                    {dateFilter === 'all' ? 'Dates' :
+                                        dateFilter === 'today' ? "Auj." :
+                                            dateFilter === 'week' ? 'Semaine' :
+                                                dateFilter === 'month' ? 'Mois' : 'Perso'}
                                 </Button>
                             </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="end">
-                                <div className="p-3 space-y-2">
-                                    <div className="space-y-1">
-                                        <Button
-                                            variant={dateFilter === 'all' ? 'default' : 'ghost'}
-                                            size="sm"
-                                            className="w-full justify-start"
-                                            onClick={() => setDateFilter('all')}
-                                        >
-                                            Toutes dates
+                            <PopoverContent className="w-auto p-0" align="start">
+                                <div className="p-3 space-y-1">
+                                    {(['all','today','week','month'] as const).map(f => (
+                                        <Button key={f} variant={dateFilter === f ? 'default' : 'ghost'} size="sm" className="w-full justify-start text-xs" onClick={() => setDateFilter(f)}>
+                                            {f === 'all' ? 'Toutes dates' : f === 'today' ? "Aujourd'hui" : f === 'week' ? 'Cette semaine' : 'Ce mois'}
                                         </Button>
-                                        <Button
-                                            variant={dateFilter === 'today' ? 'default' : 'ghost'}
-                                            size="sm"
-                                            className="w-full justify-start"
-                                            onClick={() => setDateFilter('today')}
-                                        >
-                                            Aujourd'hui
-                                        </Button>
-                                        <Button
-                                            variant={dateFilter === 'week' ? 'default' : 'ghost'}
-                                            size="sm"
-                                            className="w-full justify-start"
-                                            onClick={() => setDateFilter('week')}
-                                        >
-                                            Cette semaine
-                                        </Button>
-                                        <Button
-                                            variant={dateFilter === 'month' ? 'default' : 'ghost'}
-                                            size="sm"
-                                            className="w-full justify-start"
-                                            onClick={() => setDateFilter('month')}
-                                        >
-                                            Ce mois
-                                        </Button>
-
-                                        {/* Custom Date Button */}
-                                        <Popover>
-                                            <PopoverTrigger asChild>
-                                                <Button
-                                                    variant={dateFilter === 'custom' ? 'default' : 'ghost'}
-                                                    size="sm"
-                                                    className="w-full justify-start"
-                                                >
-                                                    📅 Date personnalisée
-                                                </Button>
-                                            </PopoverTrigger>
-                                            <PopoverContent
-                                                className="w-auto p-4"
-                                                align="center"
-                                                sideOffset={4}
-                                            >
-                                                <div className="space-y-4">
-                                                    <div className="flex items-center justify-between mb-2">
-                                                        <p className="text-sm font-semibold">Sélection de période</p>
+                                    ))}
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <Button variant={dateFilter === 'custom' ? 'default' : 'ghost'} size="sm" className="w-full justify-start text-xs">
+                                                📅 Date personnalisée
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-4" align="center" sideOffset={4}>
+                                            <div className="space-y-3">
+                                                <p className="text-sm font-semibold">Sélection de période</p>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <div>
+                                                        <label className="text-xs text-muted-foreground mb-1 block">Début</label>
+                                                        <Input type="date" value={customDateRange.from ? format(customDateRange.from, "yyyy-MM-dd") : ''} onChange={(e) => { setCustomDateRange({ ...customDateRange, from: e.target.value ? new Date(e.target.value) : undefined }); setDateFilter('custom') }} className="h-8 text-xs" />
                                                     </div>
-
-                                                    {/* Text Inputs for Date Selection */}
-                                                    <div className="grid grid-cols-2 gap-2">
-                                                        <div>
-                                                            <label className="text-xs text-gray-600 dark:text-gray-400 mb-1 block">Date de début</label>
-                                                            <Input
-                                                                type="date"
-                                                                value={customDateRange.from ? format(customDateRange.from, "yyyy-MM-dd") : ''}
-                                                                onChange={(e) => {
-                                                                    const newDate = e.target.value ? new Date(e.target.value) : undefined
-                                                                    setCustomDateRange({ ...customDateRange, from: newDate })
-                                                                    setDateFilter('custom')
-                                                                }}
-                                                                className="h-9 text-sm"
-                                                            />
-                                                        </div>
-                                                        <div>
-                                                            <label className="text-xs text-gray-600 dark:text-gray-400 mb-1 block">Date de fin</label>
-                                                            <Input
-                                                                type="date"
-                                                                value={customDateRange.to ? format(customDateRange.to, "yyyy-MM-dd") : ''}
-                                                                onChange={(e) => {
-                                                                    const newDate = e.target.value ? new Date(e.target.value) : undefined
-                                                                    setCustomDateRange({ ...customDateRange, to: newDate })
-                                                                    setDateFilter('custom')
-                                                                }}
-                                                                className="h-9 text-sm"
-                                                            />
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Calendar Component */}
-                                                    <div className="border-t pt-3">
-                                                        <CalendarComponent
-                                                            mode="range"
-                                                            selected={{ from: customDateRange.from, to: customDateRange.to }}
-                                                            onSelect={(range: any) => {
-                                                                setCustomDateRange({ from: range?.from, to: range?.to })
-                                                                setDateFilter('custom')
-                                                            }}
-                                                            numberOfMonths={2}
-                                                        />
+                                                    <div>
+                                                        <label className="text-xs text-muted-foreground mb-1 block">Fin</label>
+                                                        <Input type="date" value={customDateRange.to ? format(customDateRange.to, "yyyy-MM-dd") : ''} onChange={(e) => { setCustomDateRange({ ...customDateRange, to: e.target.value ? new Date(e.target.value) : undefined }); setDateFilter('custom') }} className="h-8 text-xs" />
                                                     </div>
                                                 </div>
-                                            </PopoverContent>
-                                        </Popover>
-                                    </div>
+                                                <CalendarComponent mode="range" selected={{ from: customDateRange.from, to: customDateRange.to }} onSelect={(range: any) => { setCustomDateRange({ from: range?.from, to: range?.to }); setDateFilter('custom') }} numberOfMonths={1} />
+                                            </div>
+                                        </PopoverContent>
+                                    </Popover>
                                 </div>
                             </PopoverContent>
                         </Popover>
 
-                        {/* Category Filter - Multi-selection */}
+                        {/* Category Filter */}
                         {categories.length > 0 && (
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                    <Button variant="outline" className="gap-2">
-                                        <Filter className="h-4 w-4" />
-                                        {filterCategories.size === 0 ? 'Toutes catégories' :
-                                            filterCategories.size === 1 ? Array.from(filterCategories)[0] :
-                                                `${filterCategories.size} catégories`}
+                                    <Button variant="outline" size="sm" className="gap-1.5 h-8 text-xs">
+                                        <Filter className="h-3.5 w-3.5" />
+                                        {filterCategories.size === 0 ? 'Catégories' : filterCategories.size === 1 ? Array.from(filterCategories)[0].slice(0,12) : `${filterCategories.size} cat.`}
                                     </Button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="max-h-[300px] overflow-y-auto">
+                                <DropdownMenuContent align="start" className="max-h-[280px] overflow-y-auto">
                                     <DropdownMenuLabel>Sélection multiple</DropdownMenuLabel>
                                     <DropdownMenuSeparator />
-                                    {filterCategories.size > 0 && (
-                                        <>
-                                            <div className="px-2 py-1.5">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    className="w-full text-xs"
-                                                    onClick={() => setFilterCategories(new Set())}
-                                                >
-                                                    Effacer la sélection
-                                                </Button>
-                                            </div>
-                                            <DropdownMenuSeparator />
-                                        </>
-                                    )}
-                                    {categories.map(cat => {
-                                        const isSelected = filterCategories.has(cat);
-                                        return (
-                                            <DropdownMenuCheckboxItem
-                                                key={cat}
-                                                checked={isSelected}
-                                                onCheckedChange={(checked) => {
-                                                    const newSet = new Set(filterCategories);
-                                                    if (checked) {
-                                                        newSet.add(cat);
-                                                    } else {
-                                                        newSet.delete(cat);
-                                                    }
-                                                    setFilterCategories(newSet);
-                                                }}
-                                            >
-                                                {cat}
-                                            </DropdownMenuCheckboxItem>
-                                        );
-                                    })}
+                                    {filterCategories.size > 0 && (<><div className="px-2 py-1"><Button variant="ghost" size="sm" className="w-full text-xs" onClick={() => setFilterCategories(new Set())}>Effacer</Button></div><DropdownMenuSeparator /></>)}
+                                    {categories.map(cat => (
+                                        <DropdownMenuCheckboxItem key={cat} checked={filterCategories.has(cat)} onCheckedChange={(checked) => { const s = new Set(filterCategories); checked ? s.add(cat) : s.delete(cat); setFilterCategories(s) }}>{cat}</DropdownMenuCheckboxItem>
+                                    ))}
                                 </DropdownMenuContent>
                             </DropdownMenu>
                         )}
@@ -537,99 +428,76 @@ export default function ProspectsPage() {
                         {/* Quick Filters */}
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button variant="outline" className="gap-2">
-                                    <Filter className="h-4 w-4" />
+                                <Button variant="outline" size="sm" className="gap-1.5 h-8 text-xs">
+                                    <Filter className="h-3.5 w-3.5" />
                                     Filtres
                                 </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
+                            <DropdownMenuContent align="start">
                                 <DropdownMenuLabel>Filtres rapides</DropdownMenuLabel>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuCheckboxItem checked={filterHasEmail} onCheckedChange={setFilterHasEmail}>
-                                    Avec Email
-                                </DropdownMenuCheckboxItem>
-                                <DropdownMenuCheckboxItem checked={filterHasPhone} onCheckedChange={setFilterHasPhone}>
-                                    Avec Téléphone
-                                </DropdownMenuCheckboxItem>
+                                <DropdownMenuCheckboxItem checked={filterHasEmail} onCheckedChange={setFilterHasEmail}>Avec Email</DropdownMenuCheckboxItem>
+                                <DropdownMenuCheckboxItem checked={filterHasPhone} onCheckedChange={setFilterHasPhone}>Avec Téléphone</DropdownMenuCheckboxItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
 
                         {/* Column Visibility */}
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button variant="outline" size="icon">
-                                    <Columns className="h-4 w-4" />
+                                <Button variant="outline" size="sm" className="h-8 w-8 p-0">
+                                    <Columns className="h-3.5 w-3.5" />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                                <DropdownMenuLabel>Colonnes visibles</DropdownMenuLabel>
+                                <DropdownMenuLabel>Colonnes</DropdownMenuLabel>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuCheckboxItem checked={visibleColumns.company} onCheckedChange={(b) => setVisibleColumns(prev => ({ ...prev, company: !!b }))}>Société</DropdownMenuCheckboxItem>
-                                <DropdownMenuCheckboxItem checked={visibleColumns.category} onCheckedChange={(b) => setVisibleColumns(prev => ({ ...prev, category: !!b }))}>Catégorie</DropdownMenuCheckboxItem>
-                                <DropdownMenuCheckboxItem checked={visibleColumns.contact} onCheckedChange={(b) => setVisibleColumns(prev => ({ ...prev, contact: !!b }))}>Email</DropdownMenuCheckboxItem>
-                                <DropdownMenuCheckboxItem checked={visibleColumns.phone} onCheckedChange={(b) => setVisibleColumns(prev => ({ ...prev, phone: !!b }))}>Téléphone</DropdownMenuCheckboxItem>
-                                <DropdownMenuCheckboxItem checked={visibleColumns.city} onCheckedChange={(b) => setVisibleColumns(prev => ({ ...prev, city: !!b }))}>Ville</DropdownMenuCheckboxItem>
-                                <DropdownMenuCheckboxItem checked={visibleColumns.deep} onCheckedChange={(checked) => setVisibleColumns(prev => ({ ...prev, deep: checked }))}>Deep Search</DropdownMenuCheckboxItem>
-                                <DropdownMenuCheckboxItem checked={visibleColumns.date} onCheckedChange={(b) => setVisibleColumns(prev => ({ ...prev, date: !!b }))}>Date</DropdownMenuCheckboxItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuLabel className="text-xs text-muted-foreground">Colonnes supplémentaires</DropdownMenuLabel>
-                                <DropdownMenuCheckboxItem checked={visibleColumns.website} onCheckedChange={(b) => setVisibleColumns(prev => ({ ...prev, website: !!b }))}>Site Web</DropdownMenuCheckboxItem>
-                                <DropdownMenuCheckboxItem checked={visibleColumns.linkedin} onCheckedChange={(b) => setVisibleColumns(prev => ({ ...prev, linkedin: !!b }))}>LinkedIn</DropdownMenuCheckboxItem>
-                                <DropdownMenuCheckboxItem checked={visibleColumns.address} onCheckedChange={(b) => setVisibleColumns(prev => ({ ...prev, address: !!b }))}>Adresse</DropdownMenuCheckboxItem>
-                                <DropdownMenuCheckboxItem checked={visibleColumns.rating} onCheckedChange={(b) => setVisibleColumns(prev => ({ ...prev, rating: !!b }))}>Score/Avis</DropdownMenuCheckboxItem>
-                                <DropdownMenuCheckboxItem checked={visibleColumns.siret} onCheckedChange={(b) => setVisibleColumns(prev => ({ ...prev, siret: !!b }))}>SIRET</DropdownMenuCheckboxItem>
-                                <DropdownMenuCheckboxItem checked={visibleColumns.sector} onCheckedChange={(b) => setVisibleColumns(prev => ({ ...prev, sector: !!b }))}>Secteur</DropdownMenuCheckboxItem>
-                                <DropdownMenuCheckboxItem checked={visibleColumns.emailStatus} onCheckedChange={(b) => setVisibleColumns(prev => ({ ...prev, emailStatus: !!b }))}>Statut Email</DropdownMenuCheckboxItem>
+                                <DropdownMenuCheckboxItem checked={visibleColumns.company} onCheckedChange={(b) => setVisibleColumns(p => ({ ...p, company: !!b }))}>Société</DropdownMenuCheckboxItem>
+                                <DropdownMenuCheckboxItem checked={visibleColumns.category} onCheckedChange={(b) => setVisibleColumns(p => ({ ...p, category: !!b }))}>Catégorie</DropdownMenuCheckboxItem>
+                                <DropdownMenuCheckboxItem checked={visibleColumns.contact} onCheckedChange={(b) => setVisibleColumns(p => ({ ...p, contact: !!b }))}>Email</DropdownMenuCheckboxItem>
+                                <DropdownMenuCheckboxItem checked={visibleColumns.phone} onCheckedChange={(b) => setVisibleColumns(p => ({ ...p, phone: !!b }))}>Téléphone</DropdownMenuCheckboxItem>
+                                <DropdownMenuCheckboxItem checked={visibleColumns.city} onCheckedChange={(b) => setVisibleColumns(p => ({ ...p, city: !!b }))}>Ville</DropdownMenuCheckboxItem>
+                                <DropdownMenuCheckboxItem checked={visibleColumns.deep} onCheckedChange={(b) => setVisibleColumns(p => ({ ...p, deep: !!b }))}>Deep Search</DropdownMenuCheckboxItem>
+                                <DropdownMenuCheckboxItem checked={visibleColumns.date} onCheckedChange={(b) => setVisibleColumns(p => ({ ...p, date: !!b }))}>Date</DropdownMenuCheckboxItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
                     </div>
                 </CardContent>
             </Card>
 
-            {/* Results Count and Selection Mode */}
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                    <p className="text-sm text-muted-foreground">
-                        {processedData.length} prospect{processedData.length > 1 ? 's' : ''} trouvé{processedData.length > 1 ? 's' : ''}
-                        {selectedProspects.size > 0 && (
-                            <span className="ml-2 text-primary font-medium">
-                                • {selectedProspects.size} sélectionné{selectedProspects.size > 1 ? 's' : ''}
-                            </span>
-                        )}
-                    </p>
 
-                    {/* Selection Mode Toggle */}
+            {/* Results Count and Selection Mode */}
+            <div className="flex items-center justify-between gap-2">
+                <p className="text-sm text-muted-foreground">
+                    <span className="font-semibold text-foreground">{processedData.length}</span> prospect{processedData.length > 1 ? 's' : ''}
+                    {selectedProspects.size > 0 && (
+                        <span className="ml-2 text-indigo-600 font-medium">
+                            • {selectedProspects.size} sélectionné{selectedProspects.size > 1 ? 's' : ''}
+                        </span>
+                    )}
+                </p>
+                <div className="flex items-center gap-2">
                     <Button
                         variant={selectionMode || selectedProspects.size > 0 ? "default" : "outline"}
                         size="sm"
-                        onClick={() => {
-                            setSelectionMode(!selectionMode);
-                            if (selectionMode && selectedProspects.size === 0) {
-                                // If turning off and no selections, just toggle
-                            }
+                        onClick={(e) => {
+                            e.stopPropagation()
+                            setSelectionMode(prev => !prev)
                         }}
-                        className="gap-2"
+                        className="gap-1.5 h-8 text-xs"
                     >
                         {selectionMode || selectedProspects.size > 0 ? (
-                            <CheckSquare className="h-4 w-4" />
+                            <CheckSquare className="h-3.5 w-3.5" />
                         ) : (
-                            <Square className="h-4 w-4" />
+                            <Square className="h-3.5 w-3.5" />
                         )}
-                        Mode Sélection
+                        Sélection
                     </Button>
+                    {selectedProspects.size > 0 && (
+                        <AIButton onClick={handleBatchDeepSearch} disabled={isLaunchingBatch} loading={isLaunchingBatch} variant="primary" className="gap-1.5 h-8 text-xs">
+                            Deep Search ({selectedProspects.size})
+                        </AIButton>
+                    )}
                 </div>
-
-                {selectedProspects.size > 0 && (
-                    <AIButton
-                        onClick={handleBatchDeepSearch}
-                        disabled={isLaunchingBatch}
-                        loading={isLaunchingBatch}
-                        variant="primary"
-                        className="gap-2"
-                    >
-                        Lancer Deep Search ({selectedProspects.size})
-                    </AIButton>
-                )}
             </div>
 
             {/* Table */}

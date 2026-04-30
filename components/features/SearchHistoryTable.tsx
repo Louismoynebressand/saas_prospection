@@ -195,93 +195,98 @@ export function SearchHistoryTable({ limit }: { limit?: number }) {
     }
 
     return (
-        <Table>
-            <TableHeader>
-                <TableRow>
-                    <TableHead>Recherche</TableHead>
-                    <TableHead>Prospects</TableHead>
-                    <TableHead>Deep Search</TableHead>
-                    <TableHead>Statut</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead className="w-[150px]">Actions</TableHead>
-                </TableRow>
-            </TableHeader>
-            <TableBody>
-                {searches.map((job) => (
-                    <TableRow
-                        key={job.id_jobs}
-                        className="cursor-pointer hover:bg-muted/50"
-                        onClick={() => router.push(`/searches/${job.id_jobs}`)}
-                    >
-                        <TableCell className="font-medium">
-                            <div className="flex items-center gap-2">
-                                {isStuck(job.statut) ? (
-                                    <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
-                                ) : (
-                                    <SearchIcon className="h-4 w-4 text-muted-foreground shrink-0" />
-                                )}
-                                <span className="font-semibold text-foreground">
-                                    {formatSearchTitle(job)}
-                                </span>
-                            </div>
-                            {isStuck(job.statut) && (
-                                <p className="text-xs text-amber-600 mt-0.5 ml-6">
-                                    En attente de démarrage — peut nécessiter un relancement
-                                </p>
-                            )}
-                        </TableCell>
-                        <TableCell>
-                            <Badge variant="outline">{counts[job.id_jobs] ?? 0}</Badge>
-                        </TableCell>
-                        <TableCell>
-                            <div className="flex items-center gap-2 text-muted-foreground">
-                                <Sparkles className="h-4 w-4 text-purple-600/50" />
-                                <span className="text-xs">-</span>
-                            </div>
-                        </TableCell>
-                        <TableCell>{getStatusBadge(job.statut)}</TableCell>
-                        <TableCell className="text-muted-foreground text-sm">
-                            {format(new Date(job.created_at), "d MMM yyyy", { locale: fr })}
-                        </TableCell>
-                        <TableCell onClick={e => e.stopPropagation()}>
-                            {isStuck(job.statut) ? (
-                                <div className="flex items-center gap-1.5">
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-7 px-2 text-xs text-amber-700 hover:bg-amber-50 hover:text-amber-800"
-                                        disabled={actionLoading[`relaunch-${job.id_jobs}`]}
-                                        onClick={() => handleRelaunch(job)}
-                                    >
-                                        {actionLoading[`relaunch-${job.id_jobs}`]
-                                            ? <Loader2 className="h-3 w-3 animate-spin" />
-                                            : <RefreshCw className="h-3 w-3 mr-1" />
-                                        }
-                                        Relancer
-                                    </Button>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive hover:bg-red-50"
-                                        disabled={actionLoading[`cancel-${job.id_jobs}`]}
-                                        onClick={() => handleCancel(job)}
-                                    >
-                                        {actionLoading[`cancel-${job.id_jobs}`]
-                                            ? <Loader2 className="h-3 w-3 animate-spin" />
-                                            : <XCircle className="h-3 w-3 mr-1" />
-                                        }
-                                        Annuler
-                                    </Button>
-                                </div>
-                            ) : (
-                                <Button variant="ghost" size="sm">
-                                    <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                            )}
-                        </TableCell>
+        <div className="overflow-x-auto -mx-4 md:mx-0">
+            <Table className="min-w-[580px] md:min-w-0">
+                <TableHeader>
+                    <TableRow>
+                        <TableHead className="py-2">Recherche</TableHead>
+                        <TableHead className="py-2 w-[80px]">Prospects</TableHead>
+                        <TableHead className="py-2 w-[110px]">Deep Search</TableHead>
+                        <TableHead className="py-2 w-[90px]">Statut</TableHead>
+                        <TableHead className="py-2 w-[90px]">Date</TableHead>
+                        <TableHead className="py-2 w-[130px]">Actions</TableHead>
                     </TableRow>
-                ))}
-            </TableBody>
-        </Table>
+                </TableHeader>
+                <TableBody>
+                    {searches.map((job) => (
+                        <TableRow
+                            key={job.id_jobs}
+                            className="cursor-pointer hover:bg-muted/50"
+                            onClick={() => router.push(`/searches/${job.id_jobs}`)}
+                        >
+                            <TableCell className="py-2.5 font-medium">
+                                <div className="flex items-center gap-2">
+                                    {isStuck(job.statut) ? (
+                                        <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
+                                    ) : (
+                                        <SearchIcon className="h-4 w-4 text-muted-foreground shrink-0" />
+                                    )}
+                                    <span className="font-semibold text-foreground text-sm">
+                                        {formatSearchTitle(job)}
+                                    </span>
+                                </div>
+                                {isStuck(job.statut) && (
+                                    <p className="text-xs text-amber-600 mt-0.5 ml-6">
+                                        En attente — peut nécessiter un relancement
+                                    </p>
+                                )}
+                            </TableCell>
+                            <TableCell className="py-2.5">
+                                <Badge variant="outline" className="text-xs">{counts[job.id_jobs] ?? 0}</Badge>
+                            </TableCell>
+                            <TableCell className="py-2.5">
+                                {(counts[job.id_jobs] ?? 0) > 0 ? (
+                                    <div className="flex items-center gap-1.5">
+                                        <Sparkles className="h-3.5 w-3.5 text-purple-500 fill-purple-100" />
+                                        <span className="text-xs font-medium text-purple-700">Oui</span>
+                                    </div>
+                                ) : (
+                                    <span className="text-xs text-muted-foreground">Non</span>
+                                )}
+                            </TableCell>
+                            <TableCell className="py-2.5">{getStatusBadge(job.statut)}</TableCell>
+                            <TableCell className="py-2.5 text-muted-foreground text-xs">
+                                {format(new Date(job.created_at), "d MMM yyyy", { locale: fr })}
+                            </TableCell>
+                            <TableCell className="py-2.5" onClick={e => e.stopPropagation()}>
+                                {isStuck(job.statut) ? (
+                                    <div className="flex items-center gap-1">
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-7 px-2 text-xs text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+                                            disabled={actionLoading[`relaunch-${job.id_jobs}`]}
+                                            onClick={() => handleRelaunch(job)}
+                                        >
+                                            {actionLoading[`relaunch-${job.id_jobs}`]
+                                                ? <Loader2 className="h-3 w-3 animate-spin" />
+                                                : <RefreshCw className="h-3 w-3 mr-1" />
+                                            }
+                                            Relancer
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive hover:bg-red-50"
+                                            disabled={actionLoading[`cancel-${job.id_jobs}`]}
+                                            onClick={() => handleCancel(job)}
+                                        >
+                                            {actionLoading[`cancel-${job.id_jobs}`]
+                                                ? <Loader2 className="h-3 w-3 animate-spin" />
+                                                : <XCircle className="h-3 w-3" />
+                                            }
+                                        </Button>
+                                    </div>
+                                ) : (
+                                    <Button variant="ghost" size="sm" className="h-7">
+                                        <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                )}
+                            </TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+        </div>
     )
 }

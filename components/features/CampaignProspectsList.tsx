@@ -250,32 +250,32 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
     })
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-4">
             {/* Header with stats */}
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-2xl font-bold">Prospects de la campagne</CardTitle>
-                    {onAddProspects && (
-                        <Button onClick={onAddProspects}>
-                            <UserPlus className="w-4 h-4 mr-2" />
-                            Ajouter des prospects
-                        </Button>
-                    )}
+            <Card className="border-border/50">
+                <CardHeader className="pb-2 pt-4 px-4">
+                    <div className="flex items-center justify-between gap-3">
+                        <CardTitle className="text-base md:text-xl font-bold">Prospects</CardTitle>
+                        {onAddProspects && (
+                            <Button onClick={onAddProspects} size="sm" className="gap-1.5 shrink-0">
+                                <UserPlus className="w-3.5 h-3.5" />
+                                <span className="hidden sm:inline">Ajouter des prospects</span>
+                                <span className="sm:hidden">Ajouter</span>
+                            </Button>
+                        )}
+                    </div>
                 </CardHeader>
-                <CardContent>
-                    <div className="flex gap-6 text-sm">
-                        <div>
-                            <span className="text-muted-foreground">Total : </span>
-                            <span className="font-semibold">{stats.total}</span>
-                        </div>
-                        <div>
-                            <span className="text-muted-foreground">Générés : </span>
-                            <span className="font-semibold text-blue-600">{stats.generated}</span>
-                        </div>
-                        <div>
-                            <span className="text-muted-foreground">Envoyés : </span>
-                            <span className="font-semibold text-green-600">{stats.sent}</span>
-                        </div>
+                <CardContent className="px-4 pb-3">
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
+                            <span className="font-bold">{stats.total}</span> total
+                        </span>
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
+                            <span className="font-bold">{stats.generated}</span> générés
+                        </span>
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700">
+                            <span className="font-bold">{stats.sent}</span> envoyés
+                        </span>
                     </div>
                 </CardContent>
             </Card>

@@ -81,6 +81,22 @@
     overflow-x: hidden;
     max-width: 100vw;
   }
+
+  /* ─── Mobile safe area padding (bottom nav = 64px + inset) ─── */
+  @media (max-width: 767px) {
+    main, [data-main-content] {
+      padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px) + 8px);
+    }
+  }
+
+  /* ─── Sticky topbar stabilization ─── */
+  [data-topbar] {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    will-change: transform;
+    transform: translateZ(0);
+  }
 }
 
 :root {
