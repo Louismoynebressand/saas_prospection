@@ -2,11 +2,10 @@
 
 import { CampaignList } from "@/components/features/CampaignList"
 import { StatsCards } from "@/components/features/StatsCards"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Mail, Send, TrendingUp, Eye } from "lucide-react"
-
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SmtpSettings } from "@/components/features/SmtpSettings"
+import { MailgunSettings } from "@/components/features/MailgunSettings"
+import { Server, Zap } from "lucide-react"
 
 export default function EmailsPage() {
     return (
@@ -21,22 +20,32 @@ export default function EmailsPage() {
             <Tabs defaultValue="campaigns" className="space-y-6">
                 <TabsList>
                     <TabsTrigger value="campaigns">Campagnes & Stats</TabsTrigger>
-                    <TabsTrigger value="settings">Comptes d'envoi (SMTP)</TabsTrigger>
+                    <TabsTrigger value="smtp" className="gap-1.5">
+                        <Server className="w-3.5 h-3.5" />
+                        Comptes SMTP
+                    </TabsTrigger>
+                    <TabsTrigger value="mailgun" className="gap-1.5">
+                        <Zap className="w-3.5 h-3.5" />
+                        Mailgun API
+                    </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="campaigns" className="space-y-6">
-                    {/* Global Stats */}
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                         <StatsCards />
                     </div>
-
                     <CampaignList />
                 </TabsContent>
 
-                <TabsContent value="settings">
+                <TabsContent value="smtp">
                     <SmtpSettings />
+                </TabsContent>
+
+                <TabsContent value="mailgun">
+                    <MailgunSettings />
                 </TabsContent>
             </Tabs>
         </div>
     )
 }
+

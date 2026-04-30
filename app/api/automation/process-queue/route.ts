@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { sendMailgunEmail } from "@/lib/mailgun"
 
 // CRON Endpoint to process the queue
 // Secured by a shared secret (CRON_SECRET)
@@ -153,74 +154,170 @@ export async function GET(req: NextRequest) {
                 }
 
                 if (!smtpConfig) {
-                    await supabase.from('email_queue').update({ status: 'failed', error_message: 'No active SMTP configuration found' }).eq('id', item.id)
+                    await supabase.from('email_queue').update({ status: 'failed', error_message: 'No active sending configuration found' }).eq('id', item.id)
                     continue
                 }
 
-                // Prepare Payload for n8n
-                const payload = {
-                    to: prospect.email,
-                    subject: generatedEmail.subject,
-                    body: generatedEmail.body,
-                    prospect_id: prospect.id_prospect,
-                    campaign_id: schedule.campaign_id,
-                    smtp_config: {
-                        host: smtpConfig.smtp_host,
-                        port: smtpConfig.smtp_port,
-                        user: smtpConfig.smtp_user,
-                        pass: smtpConfig.smtp_password,
-                        from_name: smtpConfig.from_name || campaignData.campaign_name,
-                        from_email: smtpConfig.from_email
-                    },
-                    metadata: {
-                        first_name: prospect.first_name,
-                        last_name: prospect.last_name,
-                        company: prospect.company,
-                        campaign_name: campaignData.campaign_name
+                // ================================================================
+                // BIFURCATION : Mailgun API natif vs SMTP via n8n
+                // ================================================================
+                const isMailgun = smtpConfig.provider === 'mailgun_api'
+
+                if (isMailgun) {
+                    // ---- MAILGUN API NATIF ----
+                    try {
+                        if (!smtpConfig.mailgun_api_key || !smtpConfig.mailgun_domain) {
+                            throw new Error('Configuration Mailgun incomplète (api_key ou domain manquant)')
+                        }
+
+                        // Créer d'abord le tracking email_sends
+                        const { data: emailSend, error: sendInsertError } = await supabase
+                            .from('email_sends')
+                            .insert({
+                                user_id: campaignData.user_id,
+                                campaign_id: schedule.campaign_id,
+                                lead_id: prospect.id_prospect,
+                                sending_account_id: smtpConfig.id,
+                                provider: 'mailgun',
+                                from_email: smtpConfig.from_email,
+                                to_email: prospect.email,
+                                subject: generatedEmail.subject,
+                                html: generatedEmail.body,
+                                status: 'prepared',
+                            })
+                            .select('id')
+                            .single()
+
+                        if (sendInsertError) {
+                            console.error('Failed to insert email_send tracking:', sendInsertError)
+                        }
+
+                        const result = await sendMailgunEmail(
+                            {
+                                id: smtpConfig.id,
+                                mailgun_domain: smtpConfig.mailgun_domain,
+                                mailgun_region: smtpConfig.mailgun_region || 'US',
+                                mailgun_api_key: smtpConfig.mailgun_api_key,
+                                from_email: smtpConfig.from_email,
+                                from_name: smtpConfig.from_name,
+                                reply_to: smtpConfig.reply_to,
+                                tracking_opens: smtpConfig.tracking_opens !== false,
+                                tracking_clicks: smtpConfig.tracking_clicks !== false,
+                            },
+                            {
+                                to: prospect.email,
+                                subject: generatedEmail.subject,
+                                html: generatedEmail.body,
+                                text: generatedEmail.body_text || undefined,
+                                campaign_id: schedule.campaign_id,
+                                lead_id: prospect.id_prospect,
+                                email_send_id: emailSend?.id || undefined,
+                                user_id: campaignData.user_id,
+                            }
+                        )
+
+                        if (result.success) {
+                            // Mettre à jour le tracking email_sends
+                            if (emailSend?.id) {
+                                await supabase.from('email_sends').update({
+                                    status: 'accepted',
+                                    provider_message_id: result.messageId || null,
+                                    sent_at: new Date().toISOString(),
+                                    raw_provider_response: result.rawResponse as Record<string, unknown>,
+                                }).eq('id', emailSend.id)
+                            }
+
+                            // Marquer la queue comme envoyée
+                            await supabase.from('email_queue').update({
+                                status: 'sent',
+                                sent_at: new Date().toISOString()
+                            }).eq('id', item.id)
+
+                            // Mettre à jour campaign_prospects
+                            await supabase.from('campaign_prospects')
+                                .update({ email_status: 'sent', email_sent_at: new Date().toISOString() })
+                                .eq('campaign_id', schedule.campaign_id)
+                                .eq('prospect_id', prospect.id_prospect)
+
+                            console.log(`✅ [Mailgun] Email envoyé à ${prospect.email} (msgId: ${result.messageId})`)
+                            processedCount++
+                        } else {
+                            const errMsg = result.error || 'Erreur Mailgun inconnue'
+                            if (emailSend?.id) {
+                                await supabase.from('email_sends').update({
+                                    status: 'failed',
+                                    failed_at: new Date().toISOString(),
+                                    error_message: errMsg,
+                                }).eq('id', emailSend.id)
+                            }
+                            await supabase.from('email_queue').update({ status: 'failed', error_message: errMsg }).eq('id', item.id)
+                            console.error(`❌ [Mailgun] Échec envoi à ${prospect.email}: ${errMsg}`)
+                        }
+                    } catch (err: any) {
+                        const errMsg = err.message || 'Erreur Mailgun'
+                        console.error('Mailgun Send Error:', err)
+                        await supabase.from('email_queue').update({ status: 'failed', error_message: errMsg }).eq('id', item.id)
                     }
-                }
 
-                // TRIGGER n8n WEBHOOK
-                const HARDCODED_WEBHOOK = "https://n8n.srv903375.hstgr.cloud/webhook/neuraflow_scrappeur_envoi_mail_smtp"
-                const webhookUrl = process.env.N8N_SENDING_WEBHOOK_URL || HARDCODED_WEBHOOK
-
-                if (!webhookUrl) {
-                    await supabase.from('email_queue').update({ status: 'failed', error_message: 'Configuration Error: Missing Webhook URL' }).eq('id', item.id)
-                    console.error("Missing N8N_SENDING_WEBHOOK_URL")
-                    continue
-                }
-
-                try {
-                    const response = await fetch(webhookUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    })
-
-                    if (response.ok) {
-                        // Mark as SENT
-                        await supabase.from('email_queue').update({
-                            status: 'sent',
-                            sent_at: new Date().toISOString()
-                        }).eq('id', item.id)
-
-                        // Update Prospect Status is handling via 'campaign_prospects'
-                        await supabase.from('campaign_prospects')
-                            .update({ email_status: 'sent', email_sent_at: new Date().toISOString() })
-                            .eq('campaign_id', schedule.campaign_id)
-                            .eq('prospect_id', prospect.id_prospect)
-
-                        // Also update the main prospect table for global visibility if needed
-                        // But campaign_prospects is the source of truth for THIS campaign.
-                        // We can optionally update scrape_prospect if there's a global 'status' logic.
-
-                        processedCount++
-                    } else {
-                        throw new Error(`Webhook error: ${response.statusText}`)
+                } else {
+                    // ---- SMTP VIA n8n (comportement existant inchangé) ----
+                    const payload = {
+                        to: prospect.email,
+                        subject: generatedEmail.subject,
+                        body: generatedEmail.body,
+                        prospect_id: prospect.id_prospect,
+                        campaign_id: schedule.campaign_id,
+                        smtp_config: {
+                            host: smtpConfig.smtp_host,
+                            port: smtpConfig.smtp_port,
+                            user: smtpConfig.smtp_user,
+                            pass: smtpConfig.smtp_password,
+                            from_name: smtpConfig.from_name || campaignData.campaign_name,
+                            from_email: smtpConfig.from_email
+                        },
+                        metadata: {
+                            first_name: prospect.first_name,
+                            last_name: prospect.last_name,
+                            company: prospect.company,
+                            campaign_name: campaignData.campaign_name
+                        }
                     }
-                } catch (err: any) {
-                    console.error("Sending Error:", err)
-                    await supabase.from('email_queue').update({ status: 'failed', error_message: err.message }).eq('id', item.id)
+
+                    const HARDCODED_WEBHOOK = "https://n8n.srv903375.hstgr.cloud/webhook/neuraflow_scrappeur_envoi_mail_smtp"
+                    const webhookUrl = process.env.N8N_SENDING_WEBHOOK_URL || HARDCODED_WEBHOOK
+
+                    if (!webhookUrl) {
+                        await supabase.from('email_queue').update({ status: 'failed', error_message: 'Configuration Error: Missing Webhook URL' }).eq('id', item.id)
+                        console.error("Missing N8N_SENDING_WEBHOOK_URL")
+                        continue
+                    }
+
+                    try {
+                        const response = await fetch(webhookUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        })
+
+                        if (response.ok) {
+                            await supabase.from('email_queue').update({
+                                status: 'sent',
+                                sent_at: new Date().toISOString()
+                            }).eq('id', item.id)
+
+                            await supabase.from('campaign_prospects')
+                                .update({ email_status: 'sent', email_sent_at: new Date().toISOString() })
+                                .eq('campaign_id', schedule.campaign_id)
+                                .eq('prospect_id', prospect.id_prospect)
+
+                            processedCount++
+                        } else {
+                            throw new Error(`Webhook error: ${response.statusText}`)
+                        }
+                    } catch (err: any) {
+                        console.error("SMTP/n8n Sending Error:", err)
+                        await supabase.from('email_queue').update({ status: 'failed', error_message: err.message }).eq('id', item.id)
+                    }
                 }
             }
             results.push({ campaign: schedule.campaign_id, processed: processedCount })
