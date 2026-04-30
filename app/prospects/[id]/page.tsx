@@ -501,29 +501,48 @@ export default function ProspectPage() {
         emailStatusLabel = 'Non Vérifié';
     }
 
-    const displayEmail = (prospect?.email_adresse_verified && prospect?.email_adresse_verified.length > 0)
+    const rawDisplayEmail = (prospect?.email_adresse_verified && prospect?.email_adresse_verified.length > 0)
         ? (Array.isArray(prospect.email_adresse_verified) ? prospect.email_adresse_verified[0] : prospect.email_adresse_verified)
         : (scrapped.Email || (deep.emails && deep.emails[0]));
+
+    // Clean email: remove brackets/quotes if stored as JSON string ["email@x.com"]
+    const cleanEmail = (raw: any): string | null => {
+        if (!raw) return null;
+        let s = String(raw).trim();
+        // Remove surrounding brackets and quotes: ["email"] or ['email']
+        if (s.startsWith('[') && s.endsWith(']')) {
+            try {
+                const parsed = JSON.parse(s);
+                if (Array.isArray(parsed) && parsed.length > 0) return String(parsed[0]).trim();
+            } catch { s = s.slice(1, -1); }
+        }
+        // Remove surrounding quotes
+        if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+            s = s.slice(1, -1);
+        }
+        return s || null;
+    }
+    const displayEmail = cleanEmail(rawDisplayEmail);
 
     const renderEmailBadge = () => {
         if (!displayEmail) {
             if (emailStatus === 'pas_domaine') {
-                return <Badge variant="outline" className="text-orange-500 border-orange-200 bg-orange-50">Pas de domaine</Badge>
+                return <Badge variant="outline" className="text-orange-500 border-orange-200 bg-orange-50 text-xs">Pas de domaine</Badge>
             }
-            return <Badge variant="secondary" className="text-muted-foreground">Aucun email (Checké)</Badge>
+            return <Badge variant="secondary" className="text-muted-foreground text-xs">Aucun email</Badge>
         }
 
         switch (emailStatus) {
             case 'valide':
-                return <Badge variant="default" className="bg-green-600 hover:bg-green-700 gap-1"><CheckCircle2 className="w-3 h-3" /> {emailStatusLabel}</Badge>
+                return <Badge className="bg-emerald-500 hover:bg-emerald-600 text-white gap-1 text-xs shadow-sm"><CheckCircle2 className="w-3 h-3" /> Vérifié</Badge>
             case 'echec':
-                return <Badge variant="destructive" className="gap-1"><XCircle className="w-3 h-3" /> {emailStatusLabel}</Badge>
+                return <Badge variant="destructive" className="gap-1 text-xs"><XCircle className="w-3 h-3" /> Échec check</Badge>
             case 'pas_domaine':
-                return <Badge variant="outline" className="text-orange-500 border-orange-200 bg-orange-50">{emailStatusLabel}</Badge>
+                return <Badge variant="outline" className="text-orange-500 border-orange-200 bg-orange-50 text-xs">{emailStatusLabel}</Badge>
             case 'non_verifie':
-                return <Badge variant="secondary" className="gap-1 text-muted-foreground"><AlertCircle className="w-3 h-3" /> {emailStatusLabel}</Badge>
+                return <Badge variant="secondary" className="gap-1 text-xs text-muted-foreground"><AlertCircle className="w-3 h-3" /> Non vérifié</Badge>
             default:
-                return <Badge variant="outline" className="gap-1 text-muted-foreground"><Info className="w-3 h-3" /> {emailStatusLabel}</Badge>
+                return <Badge variant="outline" className="gap-1 text-xs text-muted-foreground"><Info className="w-3 h-3" /> Inconnu</Badge>
         }
     }
 
@@ -727,55 +746,58 @@ export default function ProspectPage() {
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
-                            {/* Bouton Générer Email (Masqué si déjà généré) */}
+                        <div className="flex items-center gap-1.5">
+                            {/* Bouton Générer Email */}
                             {!campaignLinks.some(l => l.email_status === 'generated' || l.email_status === 'sent') && (
                                 <Button
                                     variant="default"
+                                    size="sm"
                                     onClick={() => setIsEmailModalOpen(true)}
-                                    className="bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-lg shadow-indigo-500/20"
+                                    className="bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-lg shadow-indigo-500/20 gap-1.5"
                                 >
-                                    <Sparkles className="mr-2 h-4 w-4" />
-                                    Générer Email
+                                    <Sparkles className="h-3.5 w-3.5" />
+                                    <span className="hidden sm:inline">Générer Email</span>
                                 </Button>
                             )}
 
-                            {/* Bouton Deep Search si pas encore fait */}
-                            {!deep || Object.keys(deep).length === 0 ? (
+                            {/* Deep Search si pas encore fait */}
+                            {(!deep || Object.keys(deep).length === 0) && (
                                 <AIButton
                                     onClick={handleLaunchDeepSearch}
                                     disabled={isLaunchingDeepSearch}
                                     loading={isLaunchingDeepSearch}
                                     variant="primary"
-                                    className="gap-2"
+                                    className="gap-1.5 text-sm"
                                 >
-                                    {isLaunchingDeepSearch ? (
-                                        "Lancement en cours..."
-                                    ) : (
-                                        <span>Lancer Deep Search</span>
-                                    )}
+                                    <span className="hidden sm:inline">{isLaunchingDeepSearch ? "En cours..." : "Deep Search"}</span>
+                                    <span className="sm:hidden"><Sparkles className="h-3.5 w-3.5" /></span>
                                 </AIButton>
-                            ) : null}
+                            )}
 
                             {isEditing ? (
-                                <Button 
-                                    variant="default" 
-                                    onClick={handleSaveEdit} 
+                                <Button
+                                    variant="default"
+                                    size="sm"
+                                    onClick={handleSaveEdit}
                                     disabled={isSavingEdit}
-                                    className="bg-green-600 hover:bg-green-700 text-white"
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
                                 >
-                                    {isSavingEdit ? <LoaderIcon className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
-                                    Sauvegarder
+                                    {isSavingEdit ? <LoaderIcon className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                                    <span className="hidden sm:inline">Sauvegarder</span>
                                 </Button>
                             ) : (
-                                <Button variant="outline" onClick={handleEditToggle}>
-                                    Modifier
+                                <Button variant="outline" size="sm" onClick={handleEditToggle} className="gap-1.5">
+                                    <span className="hidden sm:inline">Modifier</span>
+                                    <span className="sm:hidden text-xs">Edit</span>
                                 </Button>
                             )}
 
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                    <Button variant="outline">Actions <ChevronDown className="ml-2 h-4 w-4" /></Button>
+                                    <Button variant="outline" size="sm" className="gap-1">
+                                        <span className="hidden sm:inline">Actions</span>
+                                        <ChevronDown className="h-3.5 w-3.5" />
+                                    </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
                                     <DropdownMenuItem onClick={handleShare}>
@@ -797,7 +819,7 @@ export default function ProspectPage() {
                     </div>
                 </header>
 
-                <main className="flex-1 overflow-auto p-4 md:p-8">
+                <main className="flex-1 overflow-auto p-4 md:p-8 pb-24 md:pb-8">
                     <div className="max-w-7xl mx-auto space-y-6">
 
                         {/* RAPPEL BANNER */}
