@@ -1,14 +1,23 @@
 -- =================================================================
--- MIGRATION : Intégration Mailgun Natif
+-- MIGRATION : Intégration Mailgun Natif (VERSION CORRIGÉE)
 -- Date: 2026-04-30
--- Description: Extension smtp_configurations + tables email_sends et email_events
 -- =================================================================
 
 -- -----------------------------------------------------------------
--- MIGRATION 1 : Étendre smtp_configurations pour Mailgun API
+-- MIGRATION 1a : Rendre smtp_host/port/user/password nullable
+-- pour accueillir les comptes Mailgun (qui n'ont pas de config SMTP)
+-- NE CASSE PAS les comptes SMTP existants (valeurs conservées)
 -- -----------------------------------------------------------------
--- Ces colonnes ne concernent que les comptes provider='mailgun_api'
--- Les colonnes SMTP existantes restent inchangées
+
+ALTER TABLE smtp_configurations
+  ALTER COLUMN smtp_host DROP NOT NULL,
+  ALTER COLUMN smtp_port DROP NOT NULL,
+  ALTER COLUMN smtp_user DROP NOT NULL,
+  ALTER COLUMN smtp_password DROP NOT NULL;
+
+-- -----------------------------------------------------------------
+-- MIGRATION 1b : Colonnes Mailgun dans smtp_configurations
+-- -----------------------------------------------------------------
 
 ALTER TABLE smtp_configurations
   ADD COLUMN IF NOT EXISTS mailgun_domain TEXT,
@@ -21,14 +30,15 @@ ALTER TABLE smtp_configurations
   ADD COLUMN IF NOT EXISTS mailgun_webhook_signing_key TEXT;
 
 -- -----------------------------------------------------------------
--- MIGRATION 2 : Table email_sends — tracking des envois Mailgun
+-- MIGRATION 2 : Table email_sends
+-- Note: lead_id = UUID sans FK car scrape_prospect PK = id_prospect (bigint)
 -- -----------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS email_sends (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   campaign_id UUID REFERENCES cold_email_campaigns(id) ON DELETE SET NULL,
-  lead_id UUID REFERENCES scrape_prospect(id) ON DELETE SET NULL,
+  lead_id UUID,
   sending_account_id UUID REFERENCES smtp_configurations(id) ON DELETE SET NULL,
   provider TEXT NOT NULL DEFAULT 'mailgun',
   provider_message_id TEXT,
@@ -51,7 +61,6 @@ CREATE TABLE IF NOT EXISTS email_sends (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- RLS
 ALTER TABLE email_sends ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Users can view own email_sends"
@@ -66,14 +75,13 @@ CREATE POLICY "Users can update own email_sends"
   ON email_sends FOR UPDATE
   USING (auth.uid() = user_id);
 
--- Indexes
 CREATE INDEX IF NOT EXISTS idx_email_sends_user ON email_sends(user_id);
 CREATE INDEX IF NOT EXISTS idx_email_sends_provider_msg ON email_sends(provider_message_id);
 CREATE INDEX IF NOT EXISTS idx_email_sends_campaign ON email_sends(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_email_sends_status ON email_sends(status);
 
 -- -----------------------------------------------------------------
--- MIGRATION 3 : Table email_events — événements reçus via webhook
+-- MIGRATION 3 : Table email_events
 -- -----------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS email_events (
@@ -91,8 +99,6 @@ CREATE TABLE IF NOT EXISTS email_events (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Pas de RLS (accès service_role uniquement via webhook)
--- Indexes
 CREATE INDEX IF NOT EXISTS idx_email_events_send_id ON email_events(email_send_id);
 CREATE INDEX IF NOT EXISTS idx_email_events_provider_msg ON email_events(provider_message_id);
 CREATE INDEX IF NOT EXISTS idx_email_events_event_type ON email_events(event_type);

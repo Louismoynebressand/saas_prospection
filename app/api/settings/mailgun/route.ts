@@ -99,12 +99,9 @@ export async function POST(req: Request) {
             is_active: validation.data.is_active,
             mailgun_webhook_signing_key: validation.data.mailgun_webhook_signing_key || null,
             updated_at: new Date().toISOString(),
-            // Colonnes SMTP nullifiées (non utilisées pour Mailgun)
-            smtp_host: null,
-            smtp_port: null,
-            smtp_user: null,
-            smtp_password: null,
+            // smtp_host, smtp_port, smtp_user, smtp_password : omis (nullable, non utilisés pour Mailgun)
         }
+
 
         if (id) {
             // Update
