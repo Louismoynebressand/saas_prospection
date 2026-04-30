@@ -384,10 +384,22 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
                                         // Robust company extraction
                                         const company = data.company || data.companyName || data.societe || prospect?.secteur || '-'
 
-                                        // Email extraction
-                                        const email = (Array.isArray(prospect?.email_adresse_verified) && prospect.email_adresse_verified.length > 0)
-                                            ? prospect.email_adresse_verified[0]
-                                            : (typeof prospect?.email_adresse_verified === 'string' ? prospect.email_adresse_verified : '-')
+                                        // Email extraction — gère array JS, string JSON ["..."], ou string simple
+                                        let email = '-'
+                                        const rawEmail = prospect?.email_adresse_verified
+                                        if (Array.isArray(rawEmail) && rawEmail.length > 0) {
+                                            email = rawEmail[0]
+                                        } else if (typeof rawEmail === 'string' && rawEmail.trim().startsWith('[')) {
+                                            // C'est une string JSON de tableau ex: ["email@example.com"]
+                                            try {
+                                                const parsed = JSON.parse(rawEmail)
+                                                email = Array.isArray(parsed) && parsed.length > 0 ? parsed[0] : rawEmail
+                                            } catch {
+                                                email = rawEmail
+                                            }
+                                        } else if (typeof rawEmail === 'string' && rawEmail.length > 0) {
+                                            email = rawEmail
+                                        }
 
                                         return (
                                             <tr
@@ -424,6 +436,7 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
                                                         <SelectContent>
                                                             <SelectItem value="not_generated">Non généré</SelectItem>
                                                             <SelectItem value="generated">Généré</SelectItem>
+                                                            <SelectItem value="sending">En cours d'envoi</SelectItem>
                                                             <SelectItem value="sent">Envoyé</SelectItem>
                                                             <SelectItem value="opened">Ouvert</SelectItem>
                                                             <SelectItem value="clicked">Cliqué</SelectItem>
