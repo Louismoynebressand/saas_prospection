@@ -12,7 +12,7 @@ export interface SearchJobPage {
 
 // ===== CAMPAIGN-PROSPECT MANAGEMENT =====
 
-export type EmailStatus = 'not_generated' | 'generated' | 'sent' | 'opened' | 'clicked' | 'bounced' | 'replied'
+export type EmailStatus = 'not_generated' | 'generated' | 'sending' | 'sent' | 'opened' | 'clicked' | 'bounced' | 'replied'
 
 export interface CampaignProspectLink {
     id: string
