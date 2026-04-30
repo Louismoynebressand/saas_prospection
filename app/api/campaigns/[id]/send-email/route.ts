@@ -124,19 +124,15 @@ export async function POST(
                 }
 
                 // ----------------------------------------------------------------
-                // 3. Mettre email_sends en "accepted" + campaign_prospects en "sent"
-                //    (sera raffiné par le callback n8n avec le vrai mailgun_id)
+                // 3. n8n a REÇU la demande, mais n'a pas encore envoyé le mail.
+                //    → email_sends reste "prepared" (sera mis à "accepted" par callback)
+                //    → campaign_prospects passe à "sending" (en cours)
+                //    Le callback /api/webhooks/email-events mettra "sent" quand confirmé.
                 // ----------------------------------------------------------------
-                if (emailSendId) {
-                    await supabase.from('email_sends').update({
-                        status: 'accepted',
-                        sent_at: new Date().toISOString(),
-                    }).eq('id', emailSendId)
-                }
+                // email_sends reste à 'prepared' — pas de mise à jour ici volontairement
 
                 await supabase.from('campaign_prospects').update({
-                    email_status: 'sent',
-                    email_sent_at: new Date().toISOString(),
+                    email_status: 'sending',
                     updated_at: new Date().toISOString()
                 }).eq('id', cp.id)
 
@@ -144,7 +140,7 @@ export async function POST(
                     prospect_id: cp.prospect_id,
                     email_send_id: emailSendId,
                     success: true,
-                    sent_at: new Date().toISOString()
+                    status: 'sending'
                 })
 
             } catch (err: unknown) {

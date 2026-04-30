@@ -159,7 +159,7 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
             if (!response.ok) throw new Error('Erreur envoi')
 
             const result = await response.json()
-            toast.success(`${result.sent} email(s) envoyé(s)`)
+            toast.success(`${result.sent} email(s) en cours d'envoi ⏳`)
             loadProspects()
             setSelectedProspects(new Set())
             setShowSendDialog(false)
@@ -209,6 +209,7 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
     const getStatusColor = (status: EmailStatus) => {
         switch (status) {
             case 'sent': return 'bg-green-100 text-green-800'
+            case 'sending': return 'bg-amber-100 text-amber-800'
             case 'opened': return 'bg-cyan-100 text-cyan-800'
             case 'clicked': return 'bg-indigo-100 text-indigo-800'
             case 'generated': return 'bg-blue-100 text-blue-800'
@@ -221,6 +222,7 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
     const getStatusLabel = (status: EmailStatus) => {
         switch (status) {
             case 'sent': return 'Envoyé'
+            case 'sending': return 'En cours...'
             case 'opened': return 'Ouvert'
             case 'clicked': return 'Cliqué'
             case 'generated': return 'Généré'
@@ -600,13 +602,13 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
                                                 <SelectItem key={config.id} value={config.id}>
                                                     <div className="flex items-center gap-2">
                                                         {isMailgun
-                                                            ? <Zap className="w-3 h-3 text-orange-500 shrink-0" />
+                                                            ? <Zap className="w-3 h-3 text-indigo-500 shrink-0" />
                                                             : <Server className="w-3 h-3 text-blue-500 shrink-0" />
                                                         }
                                                         <span className="truncate">{config.from_email}</span>
                                                         <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ml-1 ${
                                                             isMailgun
-                                                                ? 'bg-orange-100 text-orange-700'
+                                                                ? 'bg-indigo-100 text-indigo-700'
                                                                 : 'bg-blue-100 text-blue-700'
                                                         }`}>
                                                             {isMailgun ? 'Mailgun' : 'SMTP'}
@@ -628,7 +630,7 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
                                     return (
                                         <p className="text-xs text-muted-foreground flex items-center gap-1.5">
                                             {isMailgun
-                                                ? <><Zap className="w-3 h-3 text-orange-500" />Envoi via <strong>Mailgun API</strong> — tracking ouvertures/clics disponible</>   
+                                                ? <><Zap className="w-3 h-3 text-indigo-500" />Envoi via <strong>Mailgun API</strong> — tracking ouvertures/clics disponible</>   
                                                 : <><Server className="w-3 h-3 text-blue-500" />Envoi via <strong>SMTP</strong> — {selected.from_email}</>
                                             }
                                         </p>

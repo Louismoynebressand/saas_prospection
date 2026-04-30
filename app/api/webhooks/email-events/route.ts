@@ -110,6 +110,27 @@ export async function POST(request: NextRequest) {
                     .eq('prospect_id', prospect_id)
             }
 
+            // 1c. Mettre aussi email_sends à 'accepted' si on a l'email_send_id
+            if (email_send_id) {
+                const updateData: Record<string, unknown> = {
+                    status: 'accepted',
+                    sent_at: now,
+                }
+                if (mailgun_id) updateData.provider_message_id = mailgun_id.replace(/[<>]/g, '')
+                if (from_email) updateData.from_email = from_email
+                if (to_email) updateData.to_email = to_email
+                if (subject) updateData.subject = subject
+
+                const { error: sendUpdateError } = await supabase
+                    .from('email_sends')
+                    .update(updateData)
+                    .eq('id', email_send_id)
+
+                if (sendUpdateError) {
+                    console.error('Failed to update email_sends:', sendUpdateError)
+                }
+            }
+
             console.log(`✅ [email-events] Envoi confirmé – mailgun_id: ${mailgun_id || 'N/A'} – email_send_id: ${email_send_id || 'N/A'}`)
             return NextResponse.json({ success: true, action: 'send_confirmed' })
         }
