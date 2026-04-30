@@ -74,7 +74,7 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
             if (!error && data) {
                 setSmtpConfigs(data)
                 // Présélectionner le compte par défaut, sinon le premier
-                const defaultAccount = data.find(c => c.is_default) || data[0]
+                const defaultAccount = data.find((c: any) => c.is_default) || data[0]
                 if (defaultAccount) setSelectedSmtpId(defaultAccount.id)
             }
         } catch (error) {
