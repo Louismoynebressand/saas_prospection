@@ -2,16 +2,22 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, List, Search, Users, Settings, CreditCard, Mail, LogOut, TrendingUp, Loader2, ShieldCheck, ChevronDown, Calendar } from "lucide-react"
+import {
+    LayoutDashboard, List, Search, Users, Settings, CreditCard,
+    Mail, LogOut, TrendingUp, ShieldCheck, ChevronDown, Calendar,
+    X
+} from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { Progress } from "@/components/ui/progress"
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
+import { useSidebar } from "@/components/providers/SidebarContext"
 
 export function Sidebar() {
     const pathname = usePathname()
+    const { isOpen, close } = useSidebar()
     const [isQuotaExpanded, setIsQuotaExpanded] = useState(false)
     const [quotas, setQuotas] = useState<{
         scraps: { used: number; total: number }
@@ -20,12 +26,9 @@ export function Sidebar() {
         checkEmails: { used: number; total: number }
     } | null>(null)
 
-    // Removed fetchProfile logic
-
     const fetchQuotas = async (userId: string) => {
         try {
             const supabase = createClient()
-            // Fetch Quotas
             const { data: quotaData, error } = await supabase
                 .from('quotas')
                 .select(`
@@ -44,7 +47,6 @@ export function Sidebar() {
 
             if (error) {
                 console.error("Error fetching quotas:", error)
-                // Set default quotas immediately to exit loading state
                 setQuotas({
                     scraps: { used: 0, total: 20 },
                     deepSearch: { used: 0, total: 5 },
@@ -62,8 +64,6 @@ export function Sidebar() {
                     checkEmails: { used: quotaData.check_email_used || 0, total: quotaData.check_email_limit || 20 }
                 })
             } else {
-                // No data returned - set defaults
-                console.warn("No quota data found for user, using defaults")
                 setQuotas({
                     scraps: { used: 0, total: 20 },
                     deepSearch: { used: 0, total: 5 },
@@ -73,7 +73,6 @@ export function Sidebar() {
             }
         } catch (err) {
             console.error("Exception fetching quotas:", err)
-            // Always set default quotas to prevent infinite loading
             setQuotas({
                 scraps: { used: 0, total: 20 },
                 deepSearch: { used: 0, total: 5 },
@@ -87,55 +86,36 @@ export function Sidebar() {
         const supabase = createClient()
         let channel: ReturnType<typeof supabase.channel> | null = null
 
-        // Listen to auth state changes to handle session availability
         const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange(
             async (event: string, session: any) => {
                 const user = session?.user
 
                 if (user) {
-                    // User is authenticated - fetch data immediately
-                    // Add timeout safeguard to prevent infinite loading if Supabase SDK hangs
                     const fetchDataPromise = fetchQuotas(user.id)
-
                     const timeoutPromise = new Promise((resolve) => {
                         setTimeout(() => {
                             console.error("⚠️ [Sidebar] Data fetch timed out (5s). Forcing UI load.")
                             resolve("timeout")
                         }, 5000)
                     })
-
                     await Promise.race([fetchDataPromise, timeoutPromise])
 
-                    // Setup Realtime subscription AFTER having a valid user
                     if (!channel) {
                         let debounceTimer: NodeJS.Timeout
-
                         channel = supabase
                             .channel(`quotas-updates-${user.id}`)
                             .on(
                                 'postgres_changes',
-                                {
-                                    event: '*',
-                                    schema: 'public',
-                                    table: 'quotas',
-                                    filter: `user_id=eq.${user.id}` // Server-side filter
-                                },
+                                { event: '*', schema: 'public', table: 'quotas', filter: `user_id=eq.${user.id}` },
                                 () => {
-                                    // Quota changed - refetch with DEBOUNCE
-                                    // Prevents flooding during mass-inserts (scraping)
                                     clearTimeout(debounceTimer)
-                                    debounceTimer = setTimeout(() => {
-                                        fetchQuotas(user.id)
-                                    }, 2000)
+                                    debounceTimer = setTimeout(() => { fetchQuotas(user.id) }, 2000)
                                 }
                             )
                             .subscribe()
                     }
                 } else {
-                    // User logged out - reset state
                     setQuotas(null)
-
-                    // Cleanup channel if exists
                     if (channel) {
                         supabase.removeChannel(channel)
                         channel = null
@@ -144,14 +124,16 @@ export function Sidebar() {
             }
         )
 
-        // Cleanup on unmount
         return () => {
             authSubscription?.unsubscribe()
-            if (channel) {
-                supabase.removeChannel(channel)
-            }
+            if (channel) { supabase.removeChannel(channel) }
         }
     }, [])
+
+    // Close drawer on navigation (mobile)
+    useEffect(() => {
+        close()
+    }, [pathname])
 
     const navigation = [
         { name: "Tableau de bord", href: "/dashboard", icon: LayoutDashboard },
@@ -168,7 +150,6 @@ export function Sidebar() {
         { name: "Forfait", href: "/billing", icon: CreditCard },
     ]
 
-    // Calculate Global Quota Percentage
     const getGlobalQuotaValid = () => {
         if (!quotas) return 0
         const s = (quotas.scraps.used / quotas.scraps.total)
@@ -178,19 +159,41 @@ export function Sidebar() {
         return Math.min(100, Math.round(((s + d + c + e) / 4) * 100))
     }
 
-    return (
-        <div className="flex h-screen w-64 flex-col border-r bg-card">
-            {/* Header & Main Nav - Scrollable Area */}
+    const sidebarContent = (
+        <div className="flex h-full flex-col">
+            {/* Header */}
             <div className="flex-1 overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent">
-                <div className="flex items-center gap-2 font-bold text-xl text-primary mb-8">
-                    <div className="h-8 w-8 rounded-lg bg-primary text-white flex items-center justify-center">N</div>
-                    SUPER Prospect
+                <div className="flex items-center justify-between mb-8">
+                    <div className="flex items-center gap-2 font-bold text-xl text-primary">
+                        <div className="h-8 w-8 rounded-lg bg-primary text-white flex items-center justify-center shrink-0">N</div>
+                        {/* Label visible on desktop and mobile drawer, hidden on tablet collapsed */}
+                        <span className="sidebar-label">SUPER Prospect</span>
+                    </div>
+                    {/* Close button — mobile only */}
+                    <button
+                        onClick={close}
+                        className="md:hidden flex items-center justify-center h-8 w-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                        aria-label="Fermer le menu"
+                    >
+                        <X className="h-5 w-5" />
+                    </button>
                 </div>
 
-                <Button className="w-full gap-2 mb-6" size="lg" asChild>
+                <Button className="w-full gap-2 mb-6 sidebar-label-flex" size="lg" asChild>
                     <Link href="/recherche-prospect">
-                        <Search className="h-4 w-4" />
-                        Nouvelle recherche
+                        <Search className="h-4 w-4 shrink-0" />
+                        <span className="sidebar-label">Nouvelle recherche</span>
+                    </Link>
+                </Button>
+
+                {/* Compact icon button for tablet collapsed */}
+                <Button
+                    className="w-full mb-6 sidebar-icon-only justify-center"
+                    size="icon"
+                    asChild
+                >
+                    <Link href="/recherche-prospect" title="Nouvelle recherche">
+                        <Search className="h-5 w-5" />
                     </Link>
                 </Button>
 
@@ -202,6 +205,7 @@ export function Sidebar() {
                             <Link
                                 key={item.name}
                                 href={item.href}
+                                title={item.name}
                                 className={cn(
                                     "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-200 relative overflow-hidden group",
                                     isActive
@@ -215,17 +219,16 @@ export function Sidebar() {
                                 {isActive && (
                                     <div className="absolute left-0 top-0 bottom-0 w-1 bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
                                 )}
-                                <Icon className="h-4 w-4" />
-                                {item.name}
+                                <Icon className="h-4 w-4 shrink-0" />
+                                <span className="sidebar-label">{item.name}</span>
                             </Link>
                         )
                     })}
                 </nav>
             </div>
 
-            {/* Footer Section - Always Visible */}
-            <div className="flex-shrink-0 border-t bg-card p-6">
-
+            {/* Footer */}
+            <div className="flex-shrink-0 border-t bg-card p-4">
                 <div className="grid gap-2 mb-4">
                     {configNavigation.map((item) => {
                         const Icon = item.icon
@@ -234,6 +237,7 @@ export function Sidebar() {
                             <Link
                                 key={item.name}
                                 href={item.href}
+                                title={item.name}
                                 className={cn(
                                     "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-all duration-200",
                                     isActive
@@ -241,17 +245,16 @@ export function Sidebar() {
                                         : "text-muted-foreground hover:bg-muted hover:text-foreground"
                                 )}
                             >
-                                <Icon className="h-4 w-4" />
-                                {item.name}
+                                <Icon className="h-4 w-4 shrink-0" />
+                                <span className="sidebar-label">{item.name}</span>
                             </Link>
                         )
                     })}
                 </div>
 
-                {/* Upgrade Button - Above Quotas */}
                 <Button
                     variant="outline"
-                    className="w-full mb-4 bg-white border-2 border-purple-300 text-purple-700 
+                    className="w-full mb-4 sidebar-label-flex bg-white border-2 border-purple-300 text-purple-700 
                                hover:bg-purple-50 hover:border-purple-400
                                shadow-[0_0_15px_rgba(168,85,247,0.3)] 
                                hover:shadow-[0_0_25px_rgba(168,85,247,0.5)]
@@ -259,13 +262,25 @@ export function Sidebar() {
                     asChild
                 >
                     <Link href="/billing">
-                        <TrendingUp className="mr-2 h-4 w-4" />
-                        Upgrade Plan
+                        <TrendingUp className="mr-2 h-4 w-4 shrink-0" />
+                        <span className="sidebar-label">Upgrade Plan</span>
                     </Link>
                 </Button>
 
-                {/* Condensed Quotas Section */}
-                <div className="pt-4 border-t">
+                {/* Upgrade icon-only for collapsed tablet */}
+                <Button
+                    variant="outline"
+                    className="w-full mb-4 sidebar-icon-only justify-center border-purple-300 text-purple-700"
+                    size="icon"
+                    asChild
+                >
+                    <Link href="/billing" title="Upgrade Plan">
+                        <TrendingUp className="h-4 w-4" />
+                    </Link>
+                </Button>
+
+                {/* Quotas — hidden in collapsed mode */}
+                <div className="pt-4 border-t sidebar-label">
                     {quotas ? (
                         <div className="space-y-2">
                             <div
@@ -282,37 +297,22 @@ export function Sidebar() {
                                 </div>
                             </div>
 
-                            {/* Expanded Details */}
                             {isQuotaExpanded && (
                                 <div className="space-y-3 pt-2 animate-in slide-in-from-top-2 fade-in duration-200">
-                                    <div className="space-y-1">
-                                        <div className="flex justify-between text-[10px] text-muted-foreground">
-                                            <span>Scraps</span>
-                                            <span>{quotas.scraps.used}/{quotas.scraps.total}</span>
+                                    {[
+                                        { label: "Scraps", data: quotas.scraps },
+                                        { label: "Deep Search", data: quotas.deepSearch },
+                                        { label: "Cold Emails", data: quotas.coldEmails },
+                                        { label: "Check Emails", data: quotas.checkEmails },
+                                    ].map(({ label, data }) => (
+                                        <div key={label} className="space-y-1">
+                                            <div className="flex justify-between text-[10px] text-muted-foreground">
+                                                <span>{label}</span>
+                                                <span>{data.used}/{data.total}</span>
+                                            </div>
+                                            <Progress value={(data.used / data.total) * 100} className="h-1" />
                                         </div>
-                                        <Progress value={(quotas.scraps.used / quotas.scraps.total) * 100} className="h-1" />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <div className="flex justify-between text-[10px] text-muted-foreground">
-                                            <span>Deep Search</span>
-                                            <span>{quotas.deepSearch.used}/{quotas.deepSearch.total}</span>
-                                        </div>
-                                        <Progress value={(quotas.deepSearch.used / quotas.deepSearch.total) * 100} className="h-1" />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <div className="flex justify-between text-[10px] text-muted-foreground">
-                                            <span>Cold Emails</span>
-                                            <span>{quotas.coldEmails.used}/{quotas.coldEmails.total}</span>
-                                        </div>
-                                        <Progress value={(quotas.coldEmails.used / quotas.coldEmails.total) * 100} className="h-1" />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <div className="flex justify-between text-[10px] text-muted-foreground">
-                                            <span>Check Emails</span>
-                                            <span>{quotas.checkEmails.used}/{quotas.checkEmails.total}</span>
-                                        </div>
-                                        <Progress value={(quotas.checkEmails.used / quotas.checkEmails.total) * 100} className="h-1" />
-                                    </div>
+                                    ))}
                                 </div>
                             )}
                         </div>
@@ -324,5 +324,39 @@ export function Sidebar() {
                 </div>
             </div>
         </div>
+    )
+
+    return (
+        <>
+            {/* ─── DESKTOP + TABLET LANDSCAPE (≥ 1024px): sidebar normale ─── */}
+            <div className="hidden lg:flex h-screen w-64 flex-col border-r bg-card shrink-0">
+                {sidebarContent}
+            </div>
+
+            {/* ─── TABLET PORTRAIT (768–1023px): sidebar collapsed icons ─── */}
+            <div className="hidden md:flex lg:hidden h-screen w-16 flex-col border-r bg-card shrink-0 sidebar-collapsed">
+                {sidebarContent}
+            </div>
+
+            {/* ─── MOBILE (< 768px): Drawer overlay ─── */}
+            {/* Backdrop */}
+            <div
+                className={cn(
+                    "fixed inset-0 z-40 bg-black/50 backdrop-blur-sm transition-opacity duration-300 md:hidden",
+                    isOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+                )}
+                onClick={close}
+                aria-hidden="true"
+            />
+            {/* Drawer panel */}
+            <div
+                className={cn(
+                    "fixed top-0 left-0 z-50 h-full w-72 bg-card border-r shadow-2xl transition-transform duration-300 ease-in-out md:hidden flex flex-col",
+                    isOpen ? "translate-x-0" : "-translate-x-full"
+                )}
+            >
+                {sidebarContent}
+            </div>
+        </>
     )
 }

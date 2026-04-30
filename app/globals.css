@@ -259,3 +259,84 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ─── Safe-area support (iPhone notch / home bar) ─── */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* ─── Sidebar responsive — collapsed mode (tablet portrait) ─── */
+
+/* 
+ * .sidebar-collapsed: applied to the md:flex lg:hidden sidebar wrapper.
+ * In collapsed mode, we hide text labels and show only icons.
+ */
+.sidebar-collapsed .sidebar-label {
+  display: none;
+}
+
+/* The normal full button (label + icon) — hidden in collapsed */
+.sidebar-collapsed .sidebar-label-flex {
+  display: none;
+}
+
+/* The icon-only button — hidden by default, shown in collapsed */
+.sidebar-icon-only {
+  display: none;
+}
+.sidebar-collapsed .sidebar-icon-only {
+  display: flex;
+}
+
+/* Center nav items in collapsed mode */
+.sidebar-collapsed nav a {
+  justify-content: center;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+}
+
+/* Remove the hover pl-4 shift in collapsed mode */
+.sidebar-collapsed nav a:hover {
+  padding-left: 0.75rem;
+}
+
+/* Active state adjustments for collapsed */
+.sidebar-collapsed nav a.border-l-4 {
+  border-left: none;
+  border-bottom: 2px solid;
+  padding-left: 0.75rem;
+}
+
+/* Config nav collapsed */
+.sidebar-collapsed .grid > a {
+  justify-content: center;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* Quotas section hidden in collapsed */
+.sidebar-collapsed .pt-4.border-t {
+  display: none;
+}
+
+/* Header in collapsed: center the logo icon */
+.sidebar-collapsed .flex.items-center.justify-between {
+  justify-content: center;
+}
+
+/* Hide close button in collapsed (it's md: hidden anyway) */
+.sidebar-collapsed button[aria-label="Fermer le menu"] {
+  display: none;
+}
+
+/* ─── Responsive table/grid utilities ─── */
+@media (max-width: 767px) {
+  /* Reduce table font sizes on mobile */
+  .mobile-table-compact th,
+  .mobile-table-compact td {
+    font-size: 0.75rem;
+    padding: 0.5rem 0.75rem;
+  }
+}
