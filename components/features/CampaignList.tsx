@@ -82,22 +82,27 @@ export function CampaignList() {
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-4 md:space-y-6">
             <motion.div
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="flex items-center justify-between"
+                className="flex items-center justify-between gap-3"
             >
-                <div>
-                    <h2 className="text-2xl font-bold flex items-center gap-2">
-                        <Sparkles className="w-6 h-6 text-indigo-600" />
+                <div className="min-w-0">
+                    <h2 className="text-xl md:text-2xl font-bold flex items-center gap-2 truncate">
+                        <Sparkles className="w-5 h-5 text-indigo-600 shrink-0" />
                         Vos Campagnes
                     </h2>
-                    <p className="text-sm text-muted-foreground mt-1">Profils de prospection IA configurés</p>
+                    <p className="text-xs md:text-sm text-muted-foreground mt-0.5">Profils de prospection IA configurés</p>
                 </div>
-                <Button onClick={handleCreate} className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700">
-                    <Plus className="mr-2 h-4 w-4" />
-                    Créer une campagne
+                <Button
+                    onClick={handleCreate}
+                    size="sm"
+                    className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 shrink-0 gap-1.5"
+                >
+                    <Plus className="h-4 w-4" />
+                    <span className="hidden sm:inline">Créer une campagne</span>
+                    <span className="sm:hidden">Créer</span>
                 </Button>
             </motion.div>
 

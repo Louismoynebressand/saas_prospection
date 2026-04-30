@@ -313,37 +313,42 @@ export default function ProspectsPage() {
     }
 
     return (
-        <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Tous les Prospects</h1>
-                    <p className="text-muted-foreground mt-1">
-                        Liste complète de tous vos prospects scrappés
+        <div className="space-y-4 md:space-y-6">
+            {/* Header — responsive */}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                    <h1 className="text-2xl md:text-3xl font-bold tracking-tight truncate">Tous les Prospects</h1>
+                    <p className="text-muted-foreground mt-0.5 text-sm">
+                        Liste complète de vos prospects scrappés
                     </p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 shrink-0">
                     <Button
                         variant="outline"
+                        size="sm"
                         onClick={() => router.push('/prospects/import?tab=manual')}
-                        className="gap-2"
+                        className="gap-1.5"
                     >
-                        <UserPlus className="h-4 w-4" />
-                        Ajouter un prospect
+                        <UserPlus className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">Ajouter</span>
+                        <span className="sm:hidden">+</span>
                     </Button>
                     <Button
+                        size="sm"
                         onClick={() => router.push('/prospects/import')}
-                        className="gap-2"
+                        className="gap-1.5"
                     >
-                        <Upload className="h-4 w-4" />
-                        Importer des prospects
+                        <Upload className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">Importer</span>
+                        <span className="sm:hidden">Import</span>
                     </Button>
                 </div>
             </div>
 
             {/* Filters Bar */}
             <Card>
-                <CardContent className="pt-6">
-                    <div className="flex flex-col md:flex-row gap-4">
+                <CardContent className="pt-4 pb-4">
+                    <div className="flex flex-wrap gap-2">
                         {/* Search */}
                         <div className="relative flex-1">
                             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -630,8 +635,8 @@ export default function ProspectsPage() {
             {/* Table */}
             <Card>
                 <CardContent className="p-0">
-                    <div className="rounded-md border-0">
-                        <Table>
+                    <div className="rounded-md border-0 overflow-x-auto">
+                        <Table className="min-w-[600px] md:min-w-0">
                             <TableHeader>
                                 <TableRow>
                                     {(selectionMode || selectedProspects.size > 0) && (

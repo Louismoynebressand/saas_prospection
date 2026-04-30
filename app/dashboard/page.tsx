@@ -174,7 +174,7 @@ export default function DashboardPage() {
     const hasData = stats.totalProspects > 0 || stats.totalSearches > 0
 
     return (
-        <div className="space-y-8 max-w-[1400px] mx-auto relative">
+        <div className="space-y-6 md:space-y-8 max-w-[1400px] mx-auto relative">
             {/* Background Glows */}
             <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none -z-10">
                 <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-violet-500/10 rounded-full blur-3xl opacity-50 animate-pulse" />
@@ -183,186 +183,77 @@ export default function DashboardPage() {
             </div>
 
             {/* Header */}
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-violet-900 to-indigo-900 dark:from-white dark:to-slate-300 bg-clip-text text-transparent">
+                    <h1 className="text-2xl md:text-3xl font-bold tracking-tight bg-gradient-to-r from-violet-900 to-indigo-900 dark:from-white dark:to-slate-300 bg-clip-text text-transparent">
                         Tableau de bord
                     </h1>
-                    <p className="text-muted-foreground mt-1 text-lg">
-                        Vue d'ensemble de votre activité de prospection
+                    <p className="text-muted-foreground mt-0.5 text-sm md:text-base">
+                        Vue d’ensemble de votre activité
                     </p>
                 </div>
                 <QuickActions />
             </div>
 
             {/* KPI Grid */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.4, delay: 0.1 }}
-                >
-                    <KPIWidget
-                        title="Prospects scrapés"
-                        icon={Users}
-                        value={stats.totalProspects}
-                        subtitle="Profils détectés au total"
-                        loading={loading}
-                        error={error || undefined}
-                        onRetry={fetchDashboardStats}
-                        isEmpty={!loading && stats.totalProspects === 0}
-                        emptyMessage="Aucun prospect pour le moment"
-                        className="border-violet-200/50"
-                        emptyAction={{
-                            label: "Lancer une recherche",
-                            href: "/recherche-prospect"
-                        }}
-                    />
+            <div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4">
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.1 }}>
+                    <KPIWidget title="Prospects scrapés" icon={Users} value={stats.totalProspects}
+                        subtitle="Profils détectés" loading={loading} error={error || undefined}
+                        onRetry={fetchDashboardStats} isEmpty={!loading && stats.totalProspects === 0}
+                        emptyMessage="Aucun prospect" accentColor="violet"
+                        emptyAction={{ label: "Lancer une recherche", href: "/recherche-prospect" }} />
                 </motion.div>
 
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.4, delay: 0.2 }}
-                >
-                    <KPIWidget
-                        title="Recherches effectuées"
-                        icon={Search}
-                        value={stats.totalSearches}
-                        subtitle={
-                            stats.activeSearches > 0
-                                ? `${stats.activeSearches} en cours`
-                                : "Toutes terminées"
-                        }
-                        loading={loading}
-                        error={error || undefined}
-                        onRetry={fetchDashboardStats}
-                        isEmpty={!loading && stats.totalSearches === 0}
-                        emptyMessage="Aucune recherche lancée"
-                        className="border-indigo-200/50"
-                        emptyAction={{
-                            label: "Commencer",
-                            href: "/recherche-prospect"
-                        }}
-                    />
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.2 }}>
+                    <KPIWidget title="Recherches" icon={Search} value={stats.totalSearches}
+                        subtitle={stats.activeSearches > 0 ? `${stats.activeSearches} en cours` : "Toutes terminées"}
+                        loading={loading} error={error || undefined} onRetry={fetchDashboardStats}
+                        isEmpty={!loading && stats.totalSearches === 0} emptyMessage="Aucune recherche" accentColor="indigo"
+                        emptyAction={{ label: "Commencer", href: "/recherche-prospect" }} />
                 </motion.div>
 
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.4, delay: 0.3 }}
-                >
-                    <KPIWidget
-                        title="Campagnes Actives"
-                        icon={Rocket}
-                        value={stats.activeCampaigns}
-                        subtitle="Campagnes en cours"
-                        loading={loading}
-                        error={error || undefined}
-                        onRetry={fetchDashboardStats}
-                        isEmpty={!loading && stats.activeCampaigns === 0}
-                        emptyMessage="Aucune campagne active"
-                        className="border-fuchsia-200/50"
-                        emptyAction={{
-                            label: "Créer une campagne",
-                            href: "/campaigns"
-                        }}
-                    />
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.3 }}>
+                    <KPIWidget title="Campagnes Actives" icon={Rocket} value={stats.activeCampaigns}
+                        subtitle="Campagnes en cours" loading={loading} error={error || undefined}
+                        onRetry={fetchDashboardStats} isEmpty={!loading && stats.activeCampaigns === 0}
+                        emptyMessage="Aucune campagne" accentColor="fuchsia"
+                        emptyAction={{ label: "Créer une campagne", href: "/emails" }} />
                 </motion.div>
 
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.4, delay: 0.4 }}
-                >
-                    <KPIWidget
-                        title="Emails scannés"
-                        icon={ShieldCheck}
-                        value={stats.emailsScanned}
-                        subtitle="Vérifications effectuées"
-                        loading={loading}
-                        error={error || undefined}
-                        onRetry={fetchDashboardStats}
-                        isEmpty={!loading && stats.emailsScanned === 0}
-                        emptyMessage="Aucune vérification"
-                        className="border-blue-200/50"
-                        emptyAction={{
-                            label: "Vérifier des emails",
-                            href: "/email-verifier"
-                        }}
-                    />
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.4 }}>
+                    <KPIWidget title="Emails scannés" icon={ShieldCheck} value={stats.emailsScanned}
+                        subtitle="Vérifications" loading={loading} error={error || undefined}
+                        onRetry={fetchDashboardStats} isEmpty={!loading && stats.emailsScanned === 0}
+                        emptyMessage="Aucune vérification" accentColor="cyan"
+                        emptyAction={{ label: "Vérifier des emails", href: "/email-verifier" }} />
                 </motion.div>
 
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.4, delay: 0.5 }}
-                >
-                    <KPIWidget
-                        title="Emails générés"
-                        icon={Mail}
-                        value={stats.emailsGenerated}
-                        subtitle="Cold emails créés"
-                        loading={loading}
-                        error={error || undefined}
-                        onRetry={fetchDashboardStats}
-                        isEmpty={!loading && stats.emailsGenerated === 0}
-                        emptyMessage="Aucun email généré"
-                        className="border-cyan-200/50"
-                        emptyAction={{
-                            label: "Générer des emails",
-                            href: "/emails"
-                        }}
-                    />
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.5 }}>
+                    <KPIWidget title="Emails générés" icon={Mail} value={stats.emailsGenerated}
+                        subtitle="Cold emails créés" loading={loading} error={error || undefined}
+                        onRetry={fetchDashboardStats} isEmpty={!loading && stats.emailsGenerated === 0}
+                        emptyMessage="Aucun email généré" accentColor="indigo"
+                        emptyAction={{ label: "Générer des emails", href: "/emails" }} />
                 </motion.div>
 
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.4, delay: 0.6 }}
-                >
-                    <KPIWidget
-                        title="Emails Envoyés"
-                        icon={Send}
-                        value={stats.emailsSent}
-                        subtitle="Envoyés aux prospects"
-                        loading={loading}
-                        error={error || undefined}
-                        onRetry={fetchDashboardStats}
-                        isEmpty={!loading && stats.emailsSent === 0}
-                        emptyMessage="Aucun envoi effectué"
-                        className="border-emerald-200/50"
-                        emptyAction={{
-                            label: "Voir les campagnes",
-                            href: "/campaigns"
-                        }}
-                    />
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.6 }}>
+                    <KPIWidget title="Emails Envoyés" icon={Send} value={stats.emailsSent}
+                        subtitle="Envoyés aux prospects" loading={loading} error={error || undefined}
+                        onRetry={fetchDashboardStats} isEmpty={!loading && stats.emailsSent === 0}
+                        emptyMessage="Aucun envoi" accentColor="emerald"
+                        emptyAction={{ label: "Voir les campagnes", href: "/emails" }} />
                 </motion.div>
 
-                {/* New: Emails Scheduled */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.4, delay: 0.7 }}
-                >
-                    <KPIWidget
-                        title="Planification"
-                        icon={Rocket}
-                        value={stats.emailsScheduled}
-                        subtitle="Emails en attente d'envoi"
-                        loading={loading}
-                        error={error || undefined}
-                        onRetry={fetchDashboardStats}
-                        isEmpty={!loading && stats.emailsScheduled === 0}
-                        emptyMessage="Aucune planification"
-                        className="border-amber-200/50"
-                        emptyAction={{
-                            label: "Planifier",
-                            href: "/campaigns"
-                        }}
-                    />
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.7 }}>
+                    <KPIWidget title="Planification" icon={Rocket} value={stats.emailsScheduled}
+                        subtitle="Emails en attente" loading={loading} error={error || undefined}
+                        onRetry={fetchDashboardStats} isEmpty={!loading && stats.emailsScheduled === 0}
+                        emptyMessage="Aucune planification" accentColor="amber"
+                        emptyAction={{ label: "Planifier", href: "/emails" }} />
                 </motion.div>
             </div>
+
 
             {/* Activity Feed & Last Job */}
             <div className="grid gap-6 lg:grid-cols-3">
