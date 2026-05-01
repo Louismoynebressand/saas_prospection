@@ -49,6 +49,9 @@ export function AddProspectsToCampaignModal({
     const [hasActiveSchedule, setHasActiveSchedule] = useState(false)
     const [quotas, setQuotas] = useState<{ used: number; limit: number } | null>(null)
     const [quotaLoading, setQuotaLoading] = useState(false)
+    // Prospect membership flags
+    const [prospectIdsInThisCampaign, setProspectIdsInThisCampaign] = useState<Set<string>>(new Set())
+    const [prospectIdsInOtherCampaign, setProspectIdsInOtherCampaign] = useState<Set<string>>(new Set())
 
     useEffect(() => {
         if (open) {
@@ -61,6 +64,8 @@ export function AddProspectsToCampaignModal({
             setSearchTerm('')
             setHasActiveSchedule(false)
             setQuotas(null)
+            setProspectIdsInThisCampaign(new Set())
+            setProspectIdsInOtherCampaign(new Set())
         }
     }, [open])
 
@@ -100,23 +105,46 @@ export function AddProspectsToCampaignModal({
             const { data: { user } } = await supabase.auth.getUser()
             if (!user) return
 
+            // Fetch all prospects
             const { data, error } = await supabase
                 .from('scrape_prospect')
                 .select('*')
                 .eq('id_user', user.id)
                 .order('created_at', { ascending: false })
-                .limit(100)
+                .limit(200)
 
             if (error) throw error
 
-            const enrichedProspects: ProspectWithFlags[] = (data || []).map((p: ScrapeProspect) => {
-                const hasEmail = !!p.email_adresse_verified
-                const deepSearch = typeof p.deep_search === 'string'
-                    ? JSON.parse(p.deep_search)
-                    : p.deep_search
-                const hasDeepSearch = !!(deepSearch && Object.keys(deepSearch).length > 0)
-                return { ...p, hasEmail, hasDeepSearch }
-            })
+            // Fetch all prospect IDs already linked to ANY campaign
+            const { data: allLinks } = await supabase
+                .from('campaign_prospects')
+                .select('prospect_id, campaign_id')
+
+            const inThisCampaign = new Set<string>()
+            const inOther = new Set<string>()
+
+            for (const link of allLinks || []) {
+                const pid = String(link.prospect_id)
+                if (String(link.campaign_id) === String(campaignId)) {
+                    inThisCampaign.add(pid)
+                } else {
+                    inOther.add(pid)
+                }
+            }
+
+            setProspectIdsInThisCampaign(inThisCampaign)
+            setProspectIdsInOtherCampaign(inOther)
+
+            const enrichedProspects: ProspectWithFlags[] = (data || [])
+                .filter((p: ScrapeProspect) => !inThisCampaign.has(String(p.id_prospect))) // hide already in this campaign
+                .map((p: ScrapeProspect) => {
+                    const hasEmail = !!p.email_adresse_verified
+                    const deepSearch = typeof p.deep_search === 'string'
+                        ? JSON.parse(p.deep_search)
+                        : p.deep_search
+                    const hasDeepSearch = !!(deepSearch && Object.keys(deepSearch).length > 0)
+                    return { ...p, hasEmail, hasDeepSearch }
+                })
 
             setProspects(enrichedProspects)
         } catch (error: any) {
@@ -361,6 +389,9 @@ export function AddProspectsToCampaignModal({
                             <div className="flex items-center justify-between text-xs text-slate-500">
                                 <span>
                                     <span className="font-semibold text-slate-700">{selectedProspectIds.size}</span> sélectionné(s) sur {filteredProspects.length}
+                                    {prospectIdsInThisCampaign.size > 0 && (
+                                        <span className="ml-2 text-slate-400">({prospectIdsInThisCampaign.size} déjà dans cette campagne — masqués)</span>
+                                    )}
                                 </span>
                                 {isQuotaExceeded && (
                                     <span className="flex items-center gap-1 text-red-600 font-semibold">
@@ -390,6 +421,7 @@ export function AddProspectsToCampaignModal({
                                                 ? prospect.email_adresse_verified[0]
                                                 : prospect.email_adresse_verified
                                             const isSelected = selectedProspectIds.has(prospect.id_prospect)
+                                            const isInOther = prospectIdsInOtherCampaign.has(String(prospect.id_prospect))
 
                                             return (
                                                 <div
@@ -423,6 +455,11 @@ export function AddProspectsToCampaignModal({
                                                                     Email ✓
                                                                 </span>
                                                             )}
+                                                            {isInOther && (
+                                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-orange-50 text-orange-700 border border-orange-200 shrink-0" title="Ce prospect est déjà dans une autre campagne">
+                                                                    📧 Autre campagne
+                                                                </span>
+                                                            )}
                                                             {!prospect.hasDeepSearch && (
                                                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-500 border border-slate-200 shrink-0">
                                                                     ⚡ Pas de Deep Search
@@ -442,7 +479,12 @@ export function AddProspectsToCampaignModal({
                                         {filteredProspects.length === 0 && (
                                             <div className="flex flex-col items-center justify-center py-12 text-slate-400">
                                                 <Search className="w-8 h-8 mb-2 opacity-40" />
-                                                <p className="text-sm">Aucun prospect trouvé</p>
+                                                <p className="text-sm">
+                                                    {prospectIdsInThisCampaign.size > 0 && prospects.length === 0
+                                                        ? "Tous vos prospects sont déjà dans cette campagne"
+                                                        : "Aucun prospect trouvé"
+                                                    }
+                                                </p>
                                             </div>
                                         )}
                                     </div>
