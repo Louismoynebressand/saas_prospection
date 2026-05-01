@@ -171,20 +171,35 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
         }
     }
 
-    const handleUpdateStatus = async (prospectId: string, newStatus: EmailStatus) => {
+    const handleUpdateStatus = async (prospectId: string, newStatus: EmailStatus, force = false) => {
         try {
             const response = await fetch(`/api/campaigns/${campaignId}/update-status`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prospectId, newStatus })
+                body: JSON.stringify({ prospectId, newStatus, force })
             })
 
-            if (!response.ok) throw new Error('Erreur mise à jour')
+            const data = await response.json()
+
+            // 409 = retour arrière depuis un statut irréversible → demander confirmation
+            if (response.status === 409 && data.canForce) {
+                const confirmed = window.confirm(data.error)
+                if (confirmed) {
+                    // Relancer avec force=true
+                    await handleUpdateStatus(prospectId, newStatus, true)
+                }
+                return
+            }
+
+            if (!response.ok) {
+                toast.error(data.error || 'Erreur mise à jour du statut')
+                return
+            }
 
             toast.success('Statut mis à jour')
             loadProspects(false)
         } catch (error: any) {
-            toast.error(error.message)
+            toast.error('Erreur réseau lors de la mise à jour')
         }
     }
 
