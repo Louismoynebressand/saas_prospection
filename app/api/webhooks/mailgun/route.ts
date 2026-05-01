@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 
 // Mailgun event → statut email_sends
 const EVENT_STATUS_MAP: Record<string, string> = {
-    accepted: "accepted",
+    accepted: "sent",
     delivered: "delivered",
     failed: "failed",
     opened: "opened",
@@ -15,6 +15,7 @@ const EVENT_STATUS_MAP: Record<string, string> = {
 
 // Mailgun event → timestamp field dans email_sends
 const EVENT_TIMESTAMP_FIELD: Record<string, string> = {
+    accepted: "sent_at",
     delivered: "delivered_at",
     opened: "opened_at",
     clicked: "clicked_at",
@@ -26,7 +27,7 @@ const EVENT_TIMESTAMP_FIELD: Record<string, string> = {
 // Mailgun event → statut campaign_prospects.email_status
 const PROSPECT_STATUS_MAP: Record<string, string> = {
     accepted: "sent",
-    delivered: "sent",
+    delivered: "delivered",
     opened: "opened",
     clicked: "clicked",
     failed: "bounced",

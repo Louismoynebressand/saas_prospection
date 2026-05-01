@@ -208,28 +208,32 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
 
     const getStatusColor = (status: EmailStatus) => {
         switch (status) {
-            case 'sent': return 'bg-green-100 text-green-800'
             case 'sending': return 'bg-amber-100 text-amber-800'
+            case 'sent': return 'bg-blue-100 text-blue-800'
+            case 'delivered': return 'bg-teal-100 text-teal-800'
             case 'opened': return 'bg-cyan-100 text-cyan-800'
             case 'clicked': return 'bg-indigo-100 text-indigo-800'
-            case 'generated': return 'bg-blue-100 text-blue-800'
+            case 'generated': return 'bg-violet-100 text-violet-800'
             case 'bounced': return 'bg-red-100 text-red-800'
             case 'replied': return 'bg-purple-100 text-purple-800'
+            case 'pending': return 'bg-orange-100 text-orange-800'
             default: return 'bg-gray-100 text-gray-800'
         }
     }
 
     const getStatusLabel = (status: EmailStatus) => {
         switch (status) {
-            case 'sent': return 'Envoyé'
-            case 'sending': return 'En cours...'
-            case 'opened': return 'Ouvert'
-            case 'clicked': return 'Cliqué'
-            case 'generated': return 'Généré'
-            case 'bounced': return 'Rebond'
-            case 'replied': return 'Répondu'
+            case 'pending': return '⏳ En attente'
+            case 'sending': return '📤 En cours d\'envoi'
+            case 'sent': return '✉️ Envoyé'
+            case 'delivered': return '✅ Délivré'
+            case 'opened': return '👁 Ouvert'
+            case 'clicked': return '🖱 Cliqué'
+            case 'generated': return '📝 Généré'
+            case 'bounced': return '❌ Rebond'
+            case 'replied': return '💬 Répondu'
             case 'not_generated': return 'Non généré'
-            default: return 'Aucun'
+            default: return 'Inconnu'
         }
     }
 
@@ -435,13 +439,15 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
                                                         </SelectTrigger>
                                                         <SelectContent>
                                                             <SelectItem value="not_generated">Non généré</SelectItem>
-                                                            <SelectItem value="generated">Généré</SelectItem>
-                                                            <SelectItem value="sending">En cours d'envoi</SelectItem>
-                                                            <SelectItem value="sent">Envoyé</SelectItem>
-                                                            <SelectItem value="opened">Ouvert</SelectItem>
-                                                            <SelectItem value="clicked">Cliqué</SelectItem>
-                                                            <SelectItem value="bounced">Rebond</SelectItem>
-                                                            <SelectItem value="replied">Répondu</SelectItem>
+                                                            <SelectItem value="pending">⏳ En attente</SelectItem>
+                                                            <SelectItem value="generated">📝 Généré</SelectItem>
+                                                            <SelectItem value="sending">📤 En cours d'envoi</SelectItem>
+                                                            <SelectItem value="sent">✉️ Envoyé</SelectItem>
+                                                            <SelectItem value="delivered">✅ Délivré</SelectItem>
+                                                            <SelectItem value="opened">👁 Ouvert</SelectItem>
+                                                            <SelectItem value="clicked">🖱 Cliqué</SelectItem>
+                                                            <SelectItem value="bounced">❌ Rebond</SelectItem>
+                                                            <SelectItem value="replied">💬 Répondu</SelectItem>
                                                         </SelectContent>
                                                     </Select>
                                                 </td>

@@ -23,7 +23,7 @@ export async function PATCH(
             return NextResponse.json({ error: 'prospectId and newStatus required' }, { status: 400 })
         }
 
-        const validStatuses: EmailStatus[] = ['not_generated', 'pending', 'generated', 'sending', 'sent', 'opened', 'clicked', 'bounced', 'replied']
+        const validStatuses: EmailStatus[] = ['not_generated', 'pending', 'generated', 'sending', 'sent', 'delivered', 'opened', 'clicked', 'bounced', 'replied']
         if (!validStatuses.includes(newStatus)) {
             return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
         }
