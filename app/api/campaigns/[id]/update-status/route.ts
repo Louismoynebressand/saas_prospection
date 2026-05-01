@@ -23,7 +23,7 @@ export async function PATCH(
             return NextResponse.json({ error: 'prospectId and newStatus required' }, { status: 400 })
         }
 
-        const validStatuses: EmailStatus[] = ['not_generated', 'generated', 'sent', 'bounced', 'replied']
+        const validStatuses: EmailStatus[] = ['not_generated', 'pending', 'generated', 'sending', 'sent', 'opened', 'clicked', 'bounced', 'replied']
         if (!validStatuses.includes(newStatus)) {
             return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
         }
@@ -52,8 +52,11 @@ export async function PATCH(
         }
 
         // Set timestamps based on status
-        if (newStatus === 'sent' && !updateData.email_sent_at) {
+        if (newStatus === 'sent') {
             updateData.email_sent_at = new Date().toISOString()
+        }
+        if (newStatus === 'opened') {
+            updateData.email_opened_at = new Date().toISOString()
         }
 
         const { data: updated, error: updateError } = await supabase
