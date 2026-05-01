@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
         const linksToUpsert = validated.prospectIds.map(prospectId => ({
             campaign_id: validated.campaignId,
             prospect_id: prospectId, // Table campaign_prospects utilise prospect_id
-            email_status: 'not_generated', // Status initial
+            email_status: 'pending', // Status initial pour déclencher le polling UI
             updated_at: new Date().toISOString()
         }))
 

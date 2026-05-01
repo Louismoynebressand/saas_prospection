@@ -70,7 +70,7 @@ export default function RootLayout({
                   <div className="relative z-10">
                     {children}
                   </div>
-                  <Toaster />
+                  <Toaster richColors duration={6000} position="bottom-right" />
                 </main>
               </div>
             </div>

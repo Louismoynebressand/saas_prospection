@@ -6,8 +6,18 @@ import {
     ArrowLeft, Building2, Mail, Phone, MapPin, Globe, User,
     Star, Clock, CheckCircle2, XCircle, AlertCircle, Sparkles, Users, Store,
     Briefcase, Copy, ChevronLeft, ChevronRight, Share2, Trash2, FileDown, Printer,
-    Facebook, Instagram, Linkedin, Twitter, ChevronDown, Info, Zap, Loader2 as LoaderIcon, Bell, BellOff, BellRing, Calendar as CalendarIcon, X
+    Facebook, Instagram, Linkedin, Twitter, ChevronDown, Info, Zap, Loader2 as LoaderIcon, Bell, BellOff, BellRing, Calendar as CalendarIcon, X, AlertTriangle
 } from "lucide-react"
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { motion } from "framer-motion"
 import { differenceInYears, isValid } from "date-fns"
 import { createClient } from "@/lib/supabase/client"
@@ -176,6 +186,9 @@ export default function ProspectPage() {
 
     // --- NEW: Campaign Links State ---
     const [campaignLinks, setCampaignLinks] = useState<any[]>([])
+    const [isConfirmSendOpen, setIsConfirmSendOpen] = useState(false)
+    const [pendingSendLink, setPendingSendLink] = useState<any>(null)
+    const [isSendingEmail, setIsSendingEmail] = useState(false)
 
     // --- DATA FETCHING ---
     const fetchProspectData = async (targetId: string) => {
@@ -343,6 +356,26 @@ export default function ProspectPage() {
     }, [id])
 
     // --- ACTIONS ---
+    const handleSendEmail = async (link: any) => {
+        try {
+            setIsSendingEmail(true)
+            const response = await fetch(`/api/campaigns/${link.campaign_id}/send-email`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prospectIds: [id] })
+            })
+            if (!response.ok) throw new Error('Erreur envoi')
+            const res = await response.json()
+            toast.success("Demande d'envoi transmise à n8n !")
+            fetchCampaignLinks(id)
+        } catch (e) {
+            toast.error("Erreur lors de l'envoi de l'email")
+        } finally {
+            setIsSendingEmail(false)
+            setPendingSendLink(null)
+        }
+    }
+
     const handleCopy = (text: string) => {
         navigator.clipboard.writeText(text)
         toast.success("Copié !")
@@ -1371,28 +1404,32 @@ export default function ProspectPage() {
                                                     )}
 
                                                     {/* SEND Action */}
-                                                    {link.email_status === 'generated' && (
+                                                    {(link.email_status === 'generated' || link.email_status === 'sent' || link.email_status === 'opened' || link.email_status === 'clicked') && (
                                                         <Button
-                                                            variant="default"
+                                                            variant={link.email_status === 'generated' ? "default" : "outline"}
                                                             size="sm"
+                                                            disabled={isSendingEmail || link.email_status === 'sending'}
                                                             onClick={async () => {
-                                                                try {
-                                                                    const response = await fetch(`/api/campaigns/${link.campaign_id}/send-email`, {
-                                                                        method: 'POST',
-                                                                        headers: { 'Content-Type': 'application/json' },
-                                                                        body: JSON.stringify({ prospectIds: [id] })
-                                                                    })
-                                                                    if (!response.ok) throw new Error('Erreur envoi')
-                                                                    const res = await response.json()
-                                                                    toast.success("Email envoyé avec succès !")
-                                                                    fetchCampaignLinks(id)
-                                                                } catch (e) {
-                                                                    toast.error("Erreur lors de l'envoi de l'email")
+                                                                if (link.email_status !== 'generated') {
+                                                                    setPendingSendLink(link)
+                                                                    setIsConfirmSendOpen(true)
+                                                                } else {
+                                                                    handleSendEmail(link)
                                                                 }
                                                             }}
-                                                            className="bg-green-600 hover:bg-green-700 text-white shadow-sm transition-all hover:scale-105"
+                                                            className={link.email_status === 'generated' 
+                                                                ? "bg-green-600 hover:bg-green-700 text-white shadow-sm transition-all hover:scale-105"
+                                                                : "border-amber-200 text-amber-700 hover:bg-amber-50"
+                                                            }
                                                         >
-                                                            <Zap className="w-3 h-3 mr-2 fill-current" /> Envoyer maintenant
+                                                            {isSendingEmail && pendingSendLink?.id === link.id ? (
+                                                                <LoaderIcon className="w-3 h-3 mr-2 animate-spin" />
+                                                            ) : link.email_status === 'generated' ? (
+                                                                <Zap className="w-3 h-3 mr-2 fill-current" />
+                                                            ) : (
+                                                                <AlertTriangle className="w-3 h-3 mr-2" />
+                                                            )}
+                                                            {link.email_status === 'generated' ? "Envoyer maintenant" : "Renvoyer l'email"}
                                                         </Button>
                                                     )}
                                                 </div>
@@ -1460,6 +1497,33 @@ export default function ProspectPage() {
                             }}
                         />
                     )}
+                    
+                    {/* Resend Confirmation Dialog */}
+                    <AlertDialog open={isConfirmSendOpen} onOpenChange={setIsConfirmSendOpen}>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle className="flex items-center gap-2">
+                                    <AlertTriangle className="h-5 w-5 text-amber-500" />
+                                    Confirmer le renvoi
+                                </AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    Cet email a déjà été {pendingSendLink?.email_status === 'sent' ? 'envoyé' : 'ouvert'} à ce prospect. 
+                                    Êtes-vous sûr de vouloir le renvoyer ? Cela pourrait être perçu comme du spam.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Annuler</AlertDialogCancel>
+                                <AlertDialogAction 
+                                    onClick={() => {
+                                        if (pendingSendLink) handleSendEmail(pendingSendLink)
+                                    }}
+                                    className="bg-amber-600 hover:bg-amber-700"
+                                >
+                                    Oui, renvoyer
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
                 </main>
             </div>
         </div>
