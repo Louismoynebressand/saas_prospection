@@ -175,7 +175,17 @@ export function PlanningTab({ schedule, queueStats, onUpdate, onAddProspects }: 
             })
             const data = await res.json()
             if (res.ok) {
-                toast.success("Planification mise à jour")
+                const stats = data.today_stats
+                if (stats && stats.sent_today > 0) {
+                    toast.success("Planification mise à jour", {
+                        description: `${stats.sent_today} email(s) déjà envoyé(s) aujourd'hui. Il reste ${stats.remaining_today} envoi(s) autorisé(s) aujourd'hui sur les ${stats.new_daily_limit} configurés. La limite complète reprendra demain.`,
+                        duration: 9000,
+                    })
+                } else {
+                    toast.success("Planification mise à jour", {
+                        description: `Nouvelle limite : ${editDailyLimit[0]} emails/jour. Les changements prennent effet immédiatement.`,
+                    })
+                }
                 setEditOpen(false)
                 if (onUpdate) onUpdate()
             } else {
@@ -374,6 +384,19 @@ export function PlanningTab({ schedule, queueStats, onUpdate, onAddProspects }: 
                                     <DialogTitle>Modifier la planification</DialogTitle>
                                     <DialogDescription>Ajustez les paramètres en cours de route.</DialogDescription>
                                 </DialogHeader>
+
+                                {/* ALERTE : recalcul du quota du jour */}
+                                <div className="flex items-start gap-3 p-3 rounded-md bg-blue-50 border border-blue-200">
+                                    <AlertTriangle className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
+                                    <div className="text-xs text-blue-700">
+                                        <strong>ℹ️ Modification en cours de journée</strong>
+                                        <p className="mt-1">
+                                            Si des emails ont déjà été envoyés aujourd'hui, ils seront comptabilisés dans la nouvelle limite.
+                                            La limite complète reprendra <strong>dès demain</strong>.
+                                            Exemple : nouvelle limite 10/jour, 3 déjà envoyés → 7 de plus autorisés aujourd'hui.
+                                        </p>
+                                    </div>
+                                </div>
                                 <div className="space-y-4 py-4">
                                     <div className="space-y-4">
                                         <div className="flex justify-between items-center">

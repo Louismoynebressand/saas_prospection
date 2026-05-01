@@ -251,34 +251,41 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
             return NextResponse.json({ success: false, error: "No active schedule found to update" }, { status: 404 })
         }
 
-        // 2. Update Schedule
+        // 2. Count emails already sent TODAY for this campaign
+        const startOfDay = new Date()
+        startOfDay.setHours(0, 0, 0, 0)
+        const { count: sentToday } = await supabase
+            .from('email_queue')
+            .select('*', { count: 'exact', head: true })
+            .eq('campaign_id', campaignId)
+            .eq('status', 'sent')
+            .gte('sent_at', startOfDay.toISOString())
+
+        const sentTodayCount = sentToday || 0
+
+        // 3. Update Schedule
         const updates: any = {}
 
         // Handle warm-up state transitions
         if (enable_warmup && !schedule.enable_warmup) {
-            // Enabling warm-up for the first time
             updates.daily_limit = warmup_start_limit
             updates.warmup_current_day = 0
         } else if (enable_warmup && schedule.enable_warmup) {
-            // Warm-up already enabled, keep current progress unless manually changed
-            if (daily_limit) updates.daily_limit = schedule.daily_limit // Keep current limit
+            if (daily_limit) updates.daily_limit = schedule.daily_limit
         } else if (!enable_warmup && schedule.enable_warmup) {
-            // Disabling warm-up
             if (daily_limit) updates.daily_limit = daily_limit
             updates.warmup_current_day = null
         } else {
-            // Warm-up not enabled, normal update
             if (daily_limit) updates.daily_limit = daily_limit
         }
 
-        if (time_window_start) updates.time_window_start = time_window_start
-        if (time_window_end) updates.time_window_end = time_window_end
-        if (days_of_week) updates.days_of_week = days_of_week
+        if (time_window_start !== undefined) updates.time_window_start = time_window_start
+        if (time_window_end !== undefined) updates.time_window_end = time_window_end
+        if (days_of_week !== undefined) updates.days_of_week = days_of_week
         if (smtp_configuration_id) updates.smtp_configuration_id = smtp_configuration_id
         if (exclude_holidays !== undefined) updates.exclude_holidays = exclude_holidays
-        if (blocked_dates) updates.blocked_dates = blocked_dates
+        if (blocked_dates !== undefined) updates.blocked_dates = blocked_dates
 
-        // Warm-up parameters
         if (enable_warmup !== undefined) updates.enable_warmup = enable_warmup
         if (warmup_start_limit) updates.warmup_start_limit = warmup_start_limit
         if (warmup_increment) updates.warmup_increment = warmup_increment
@@ -294,7 +301,19 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
         if (updateError) throw updateError
 
-        return NextResponse.json({ success: true, message: "Planning mis à jour" })
+        // 4. Compute remaining quota for today with new limit
+        const newDailyLimit = updates.daily_limit || schedule.daily_limit
+        const remainingToday = Math.max(0, newDailyLimit - sentTodayCount)
+
+        return NextResponse.json({
+            success: true,
+            message: "Planning mis à jour",
+            today_stats: {
+                sent_today: sentTodayCount,
+                new_daily_limit: newDailyLimit,
+                remaining_today: remainingToday,
+            }
+        })
 
     } catch (error: any) {
         console.error("Schedule Update Error:", error)
