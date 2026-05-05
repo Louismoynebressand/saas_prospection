@@ -21,7 +21,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             warmup_start_limit,
             warmup_increment,
             warmup_days_per_step,
-            warmup_target_limit
+            warmup_target_limit,
+            auto_generate
         } = body
 
         // Validation: max daily limit is 50
@@ -55,7 +56,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                 warmup_increment: warmup_increment || 1,
                 warmup_days_per_step: warmup_days_per_step || 2,
                 warmup_target_limit: warmup_target_limit || daily_limit,
-                warmup_current_day: enable_warmup ? 0 : null
+                warmup_current_day: enable_warmup ? 0 : null,
+                auto_generate: auto_generate || false
             })
             .select()
             .single()
@@ -231,7 +233,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
             warmup_start_limit,
             warmup_increment,
             warmup_days_per_step,
-            warmup_target_limit
+            warmup_target_limit,
+            auto_generate
         } = body
 
         // Validation: max daily limit is 50
@@ -291,6 +294,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         if (warmup_increment) updates.warmup_increment = warmup_increment
         if (warmup_days_per_step) updates.warmup_days_per_step = warmup_days_per_step
         if (warmup_target_limit) updates.warmup_target_limit = warmup_target_limit
+        if (auto_generate !== undefined) updates.auto_generate = auto_generate
 
         updates.updated_at = new Date().toISOString()
 

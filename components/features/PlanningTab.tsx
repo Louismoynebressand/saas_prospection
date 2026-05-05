@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { CalendarIcon, Clock, Mail, AlertTriangle, XCircle, Loader2, Save, Edit, Send, Plus, X, Calendar as CalendarIconLucide } from "lucide-react"
+import { CalendarIcon, Clock, Mail, AlertTriangle, XCircle, Loader2, Save, Edit, Send, Plus, X, Calendar as CalendarIconLucide, Wand2 } from "lucide-react"
 import { format, addDays, isSameDay, startOfDay, isBefore, getYear } from "date-fns"
 import { fr } from "date-fns/locale"
 import { cn } from "@/lib/utils"
@@ -73,6 +73,9 @@ export function PlanningTab({ schedule, queueStats, onUpdate, onAddProspects }: 
     const [editWarmupIncrement, setEditWarmupIncrement] = useState(1)
     const [editWarmupDaysPerStep, setEditWarmupDaysPerStep] = useState(2)
 
+    // Auto-generate
+    const [editAutoGenerate, setEditAutoGenerate] = useState(false)
+
     const [smtpConfigs, setSmtpConfigs] = useState<any[]>([])
 
     // Timeline State
@@ -90,6 +93,7 @@ export function PlanningTab({ schedule, queueStats, onUpdate, onAddProspects }: 
             setEditWarmupStartLimit([schedule.warmup_start_limit || 2])
             setEditWarmupIncrement(schedule.warmup_increment || 1)
             setEditWarmupDaysPerStep(schedule.warmup_days_per_step || 2)
+            setEditAutoGenerate(schedule.auto_generate || false)
         }
 
         if (schedule?.smtp_configuration_id) {
@@ -170,7 +174,8 @@ export function PlanningTab({ schedule, queueStats, onUpdate, onAddProspects }: 
                     warmup_start_limit: editWarmupStartLimit[0],
                     warmup_increment: editWarmupIncrement,
                     warmup_days_per_step: editWarmupDaysPerStep,
-                    warmup_target_limit: editDailyLimit[0]
+                    warmup_target_limit: editDailyLimit[0],
+                    auto_generate: editAutoGenerate
                 })
             })
             const data = await res.json()
@@ -608,6 +613,28 @@ export function PlanningTab({ schedule, queueStats, onUpdate, onAddProspects }: 
                                     </div>
 
                                 </div>
+
+                                {/* AUTO-GENERATE TOGGLE */}
+                                <div className={cn(
+                                    "flex items-center justify-between gap-4 px-4 py-3 rounded-xl border mt-2",
+                                    editAutoGenerate ? "bg-violet-50 border-violet-200" : "bg-slate-50 border-slate-200"
+                                )}>
+                                    <div className="flex items-center gap-3">
+                                        <Wand2 className={cn("w-5 h-5 shrink-0", editAutoGenerate ? "text-violet-600" : "text-slate-400")} />
+                                        <div>
+                                            <p className="text-sm font-semibold text-slate-800">Génération automatique des emails</p>
+                                            <p className="text-xs text-slate-500 mt-0.5">
+                                                n8n génère les emails manquants avant chaque envoi si le quota n'est pas atteint
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <Switch
+                                        checked={editAutoGenerate}
+                                        onCheckedChange={setEditAutoGenerate}
+                                        className="data-[state=checked]:bg-violet-600 shrink-0"
+                                    />
+                                </div>
+
                                 <DialogFooter>
                                     <Button variant="outline" onClick={() => setEditOpen(false)}>Annuler</Button>
                                     <Button onClick={handleUpdate} disabled={editing} className="gap-2 bg-indigo-600 hover:bg-indigo-700">
@@ -648,6 +675,45 @@ export function PlanningTab({ schedule, queueStats, onUpdate, onAddProspects }: 
                                     Jours fériés inclus
                                 </Badge>
                             )}
+                        </div>
+
+                        {/* AUTO-GENERATE BANNER — toujours visible */}
+                        <div className={cn(
+                            "flex items-center justify-between gap-3 px-4 py-3 rounded-xl border transition-all",
+                            schedule.auto_generate
+                                ? "bg-violet-50 border-violet-200"
+                                : "bg-slate-50 border-slate-200"
+                        )}>
+                            <div className="flex items-center gap-3">
+                                <div className={cn(
+                                    "w-8 h-8 rounded-lg flex items-center justify-center shrink-0",
+                                    schedule.auto_generate ? "bg-violet-100" : "bg-slate-100"
+                                )}>
+                                    <Wand2 className={cn("w-4 h-4", schedule.auto_generate ? "text-violet-600" : "text-slate-400")} />
+                                </div>
+                                <div>
+                                    <p className={cn(
+                                        "text-sm font-semibold",
+                                        schedule.auto_generate ? "text-violet-900" : "text-slate-600"
+                                    )}>
+                                        Génération automatique
+                                    </p>
+                                    <p className="text-xs text-slate-500 mt-0.5">
+                                        {schedule.auto_generate
+                                            ? "n8n génère les emails manquants avant chaque envoi"
+                                            : "Désactivée — emails générés manuellement uniquement"
+                                        }
+                                    </p>
+                                </div>
+                            </div>
+                            <Badge className={cn(
+                                "shrink-0 font-bold text-xs",
+                                schedule.auto_generate
+                                    ? "bg-violet-600 text-white hover:bg-violet-700"
+                                    : "bg-slate-200 text-slate-500"
+                            )}>
+                                {schedule.auto_generate ? "ON" : "OFF"}
+                            </Badge>
                         </div>
 
                         <div className="pt-2 border-t border-slate-100 mt-2">
