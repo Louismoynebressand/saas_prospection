@@ -79,8 +79,14 @@ export async function POST(
                 // 1. Créer l'entrée email_sends AVANT l'envoi pour le tracking
                 //    → On obtient un email_send_id à passer à n8n
                 // ----------------------------------------------------------------
-                const emailContent = cp.generated_email_content || {}
-                const { data: emailSend } = await supabase
+                let htmlContent = ''
+                if (typeof cp.generated_email_content === 'string') {
+                    htmlContent = cp.generated_email_content
+                } else if (cp.generated_email_content) {
+                    htmlContent = cp.generated_email_content.body || cp.generated_email_content.html || ''
+                }
+
+                const { data: emailSend, error: insertError } = await supabase
                     .from('email_sends')
                     .insert({
                         user_id: user.id,
@@ -90,12 +96,17 @@ export async function POST(
                         provider: sendingConfig?.provider === 'mailgun_api' ? 'mailgun' : 'smtp',
                         from_email: (sendingConfig?.from_email as string) || '',
                         to_email: cp.prospect_email || '',
-                        subject: emailContent.subject || '',
-                        html: emailContent.body || emailContent.html || '',
+                        subject: cp.generated_email_subject || '',
+                        html: htmlContent,
                         status: 'prepared',
                     })
                     .select('id')
                     .single()
+
+                if (insertError) {
+                    console.error(`Failed to insert email_sends for prospect ${cp.prospect_id}:`, insertError)
+                    throw new Error(`Failed to create email_sends: ${insertError.message}`)
+                }
 
                 const emailSendId = emailSend?.id || null
 
