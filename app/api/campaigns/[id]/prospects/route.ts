@@ -81,7 +81,7 @@ export async function POST(
         // Get campaign with user check
         const { data: campaign, error: campaignError } = await supabase
             .from('cold_email_campaigns')
-            .select('id, user_id')
+            .select('id, user_id, auto_generate')
             .eq('id', campaignId)
             .single()
 
@@ -170,47 +170,51 @@ export async function POST(
                 if (queueError) {
                     console.error('[Smart Auto] Failed to queue prospects:', queueError)
                 } else {
-                    // 3. Trigger Generation for "not_generated"
-                    const ungeneratedProspects = created
-                        .filter(p => p.email_status === 'not_generated')
-                        .map(p => p.prospect_id)
+                    // 3. Trigger Generation for "not_generated" ONLY if auto_generate is ON
+                    if (campaign.auto_generate) {
+                        const ungeneratedProspects = created
+                            .filter(p => p.email_status === 'not_generated')
+                            .map(p => p.prospect_id)
 
-                    if (ungeneratedProspects.length > 0) {
-                        // Create Job
-                        const { data: job, error: jobError } = await supabase
-                            .from('cold_email_jobs')
-                            .insert({
-                                user_id: user.id,
-                                campaign_id: campaignId,
-                                prospect_ids: ungeneratedProspects,
-                                status: 'pending',
-                                started_at: new Date().toISOString()
-                            })
-                            .select()
-                            .single()
-
-                        if (!jobError && job) {
-                            // Trigger N8N Webhook
-                            const HARDCODED_URL = "https://n8n.srv903375.hstgr.cloud/webhook/neuraflow_scrappeur_generateur_cold_mail"
-                            const webhookUrl = process.env.N8N_WEBHOOK_COLD_EMAIL || process.env.NEXT_PUBLIC_N8N_WEBHOOK_COLD_EMAIL_URL || HARDCODED_URL
-
-                            if (webhookUrl) {
-                                const webhookPayload = {
+                        if (ungeneratedProspects.length > 0) {
+                            // Create Job
+                            const { data: job, error: jobError } = await supabase
+                                .from('cold_email_jobs')
+                                .insert({
                                     user_id: user.id,
-                                    job_id: job.id,
                                     campaign_id: campaignId,
-                                    prospect_ids: ungeneratedProspects
+                                    prospect_ids: ungeneratedProspects,
+                                    status: 'pending',
+                                    started_at: new Date().toISOString()
+                                })
+                                .select()
+                                .single()
+
+                            if (!jobError && job) {
+                                // Trigger N8N Webhook
+                                const HARDCODED_URL = "https://n8n.srv903375.hstgr.cloud/webhook/neuraflow_scrappeur_generateur_cold_mail"
+                                const webhookUrl = process.env.N8N_WEBHOOK_COLD_EMAIL || process.env.NEXT_PUBLIC_N8N_WEBHOOK_COLD_EMAIL_URL || HARDCODED_URL
+
+                                if (webhookUrl) {
+                                    const webhookPayload = {
+                                        user_id: user.id,
+                                        job_id: job.id,
+                                        campaign_id: campaignId,
+                                        prospect_ids: ungeneratedProspects
+                                    }
+
+                                    fetch(webhookUrl, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify(webhookPayload)
+                                    }).catch(err => console.error("[Smart Auto] Generation Webhook Failed:", err))
+
+                                    console.log(`[Smart Auto] Triggered generation for ${ungeneratedProspects.length} prospects.`)
                                 }
-
-                                fetch(webhookUrl, {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify(webhookPayload)
-                                }).catch(err => console.error("[Smart Auto] Generation Webhook Failed:", err))
-
-                                console.log(`[Smart Auto] Triggered generation for ${ungeneratedProspects.length} prospects.`)
                             }
                         }
+                    } else {
+                         console.log(`[Smart Auto] Auto-generate is OFF for campaign ${campaignId}. Skipping generation webhook.`)
                     }
                 }
             }

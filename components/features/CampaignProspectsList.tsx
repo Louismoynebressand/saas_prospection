@@ -559,14 +559,14 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
                 prospect={viewingProspect}
                 campaignLink={viewingProspect?.campaignLink}
                 onGenerateEmail={() => {
-                    if (viewingProspect) {
-                        handleGenerateEmail(viewingProspect.id_prospect)
+                    if (viewingProspect && viewingProspect.campaignLink) {
+                        handleGenerateEmail(viewingProspect.campaignLink.prospect_id)
                         setViewingProspect(null)
                     }
                 }}
                 onSendEmail={() => {
-                    if (viewingProspect) {
-                        handleSendEmail(viewingProspect.id_prospect)
+                    if (viewingProspect && viewingProspect.campaignLink) {
+                        handleSendEmail(viewingProspect.campaignLink.prospect_id)
                         setViewingProspect(null)
                     }
                 }}
@@ -578,14 +578,14 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
                 prospect={detailProspect}
                 campaignLink={detailProspect?.campaignLink}
                 onGenerateEmail={() => {
-                    if (detailProspect) {
-                        handleGenerateEmail(detailProspect.id_prospect)
+                    if (detailProspect && detailProspect.campaignLink) {
+                        handleGenerateEmail(detailProspect.campaignLink.prospect_id)
                         setDetailProspect(null)
                     }
                 }}
                 onSendEmail={() => {
-                    if (detailProspect) {
-                        handleSendEmail(detailProspect.id_prospect)
+                    if (detailProspect && detailProspect.campaignLink) {
+                        handleSendEmail(detailProspect.campaignLink.prospect_id)
                         setDetailProspect(null)
                     }
                 }}

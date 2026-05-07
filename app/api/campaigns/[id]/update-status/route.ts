@@ -100,6 +100,18 @@ export async function PATCH(
             }, { status: 409 })
         }
 
+        // Si on repasse en 'not_generated', il faut confirmer la suppression du mail
+        const hasEmailContent = !!(current?.generated_email_subject || current?.generated_email_content)
+        if (newStatusTyped === 'not_generated' && hasEmailContent && !force) {
+            return NextResponse.json({
+                error: `⚠️ Attention, repasser ce prospect en "Non généré" va supprimer définitivement le contenu de l'email généré. Le quota utilisé ne sera pas recrédité. Confirmez-vous ?`,
+                currentStatus,
+                newStatus,
+                canForce: true,
+                hasEmailContent: true
+            }, { status: 409 })
+        }
+
         // Construire l'update avec les bons timestamps
         const now = new Date().toISOString()
         const updateData: Record<string, unknown> = {
@@ -113,6 +125,19 @@ export async function PATCH(
         if (newStatusTyped === 'opened')    updateData.email_opened_at = now
         if (newStatusTyped === 'clicked')   updateData.email_clicked_at = now
         if (newStatusTyped === 'bounced')   updateData.email_bounced_at = now
+
+        // Si on retourne à not_generated, on nettoie les colonnes
+        if (newStatusTyped === 'not_generated') {
+            updateData.generated_email_subject = null
+            updateData.generated_email_content = null
+            updateData.email_generated_at = null
+            
+            // Delete from cold_email_generations
+            await supabase.from('cold_email_generations')
+                .delete()
+                .eq('campaign_id', campaignId)
+                .eq('prospect_id', prospectId)
+        }
 
         const { data: updated, error: updateError } = await supabase
             .from('campaign_prospects')
