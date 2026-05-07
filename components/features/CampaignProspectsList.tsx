@@ -59,11 +59,24 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
                     table: 'campaign_prospects',
                     filter: `campaign_id=eq.${campaignId}`
                 },
-                () => {
-                    // Reload without spinner when a DB change is detected, then clear generating state
-                    void loadProspects(false).finally(() => {
-                        setGeneratingIds(new Set())
-                    })
+                (payload: any) => {
+                    const newRecord = payload.new
+                    const changedProspectId = newRecord?.prospect_id?.toString()
+                    const newStatus = newRecord?.email_status
+
+                    // Always reload to refresh the list
+                    void loadProspects(false)
+
+                    // Clear the generating spinner only when the prospect has a terminal status
+                    // (generated, sent, bounced, etc.) — keep spinner while still 'pending'
+                    const doneStatuses = ['generated', 'sent', 'delivered', 'opened', 'clicked', 'bounced', 'replied', 'not_generated']
+                    if (changedProspectId && newStatus && doneStatuses.includes(newStatus)) {
+                        setGeneratingIds(prev => {
+                            const next = new Set(prev)
+                            next.delete(changedProspectId)
+                            return next
+                        })
+                    }
                 }
             )
             .subscribe()
@@ -112,7 +125,16 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
             const response = await fetch(`/api/campaigns/${campaignId}/prospects`)
             if (response.ok) {
                 const data = await response.json()
-                setProspects(data.prospects || [])
+                const prospectsList = data.prospects || []
+                setProspects(prospectsList)
+
+                // Auto-mark 'pending' prospects as generating so spinner shows on reload
+                const pendingIds = prospectsList
+                    .filter((p: any) => p.email_status === 'pending')
+                    .map((p: any) => p.prospect_id?.toString())
+                if (pendingIds.length > 0) {
+                    setGeneratingIds(prev => new Set([...prev, ...pendingIds]))
+                }
             }
         } catch (error) {
             console.error('Error loading prospects:', error)
@@ -503,19 +525,25 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
                                                 </td>
                                                 <td className="p-4" onClick={(e) => e.stopPropagation()}>
                                                     <div className="flex justify-end gap-2">
-                                                        {cp.email_status === 'not_generated' ? (
+                                                        {/* Action button: spinner if pending or generating, generate if not_generated, view if generated */}
+                                                        {(cp.email_status === 'pending' || generatingIds.has(cp.prospect_id)) ? (
                                                             <Button
                                                                 size="sm"
                                                                 variant="outline"
-                                                                disabled={generatingIds.has(cp.prospect_id)}
+                                                                disabled
+                                                                className="text-amber-600 border-amber-200 bg-amber-50 cursor-not-allowed"
+                                                            >
+                                                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                                                Génération en cours...
+                                                            </Button>
+                                                        ) : cp.email_status === 'not_generated' ? (
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
                                                                 onClick={() => handleGenerateEmail(cp.prospect_id)}
                                                                 className="hover:border-violet-300 hover:bg-violet-50 text-violet-700 bg-white shadow-sm transition-all"
                                                             >
-                                                                {generatingIds.has(cp.prospect_id) ? (
-                                                                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Génération...</>
-                                                                ) : (
-                                                                    <><Mail className="w-4 h-4 mr-2" />Générer le mail</>
-                                                                )}
+                                                                <Mail className="w-4 h-4 mr-2" />Générer le mail
                                                             </Button>
                                                         ) : (
                                                             <Button

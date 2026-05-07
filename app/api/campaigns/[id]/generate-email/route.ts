@@ -54,23 +54,64 @@ export async function POST(
         const webhookUrl = process.env.N8N_WEBHOOK_COLD_EMAIL || process.env.NEXT_PUBLIC_N8N_WEBHOOK_COLD_EMAIL_URL || HARDCODED_URL
 
         // 0. Safeguard: Filter out prospects who are already SENT or BOUNCED
-        // We don't want to regenerate emails for them or reset their status.
         const { data: existingLinks, error: checkError } = await supabase
             .from('campaign_prospects')
             .select('prospect_id, email_status')
             .eq('campaign_id', campaignId)
             .in('prospect_id', prospectIds)
 
+        let isRegeneration = false
         if (!checkError && existingLinks) {
             const lockedIds = existingLinks
                 .filter(link => ['sent', 'bounced', 'replied'].includes(link.email_status))
                 .map(link => link.prospect_id)
 
             if (lockedIds.length > 0) {
-                // Filter them out
                 const originalCount = prospectIds.length
-                prospectIds = prospectIds.filter(id => !lockedIds.includes(Number(id)) && !lockedIds.includes(String(id))) // Handle string/number mix
+                prospectIds = prospectIds.filter(id => !lockedIds.includes(Number(id)) && !lockedIds.includes(String(id)))
                 console.log(`🔒 Skipped ${originalCount - prospectIds.length} locked prospects (sent/bounced)`)
+            }
+
+            // Check if any of the prospects already have a generated email (= regeneration)
+            const generatedIds = existingLinks
+                .filter(link => ['generated', 'pending'].includes(link.email_status))
+                .map(link => link.prospect_id)
+
+            if (generatedIds.length > 0) {
+                isRegeneration = true
+                console.log(`♻️ Regeneration detected for ${generatedIds.length} prospect(s). Cleaning up old data first...`)
+
+                // STEP 1: Delete old cold_email_generations rows (MUST come before webhook)
+                const { error: deleteGenError } = await supabase
+                    .from('cold_email_generations')
+                    .delete()
+                    .eq('campaign_id', campaignId)
+                    .in('prospect_id', generatedIds)
+
+                if (deleteGenError) {
+                    console.error('❌ Failed to delete old cold_email_generations:', deleteGenError)
+                    return NextResponse.json({ error: 'Failed to clean up old generated emails before regeneration' }, { status: 500 })
+                }
+                console.log(`✅ Deleted old cold_email_generations for ${generatedIds.length} prospect(s)`)
+
+                // STEP 2: Reset campaign_prospects to 'pending' so UI shows loading state
+                const { error: resetError } = await supabase
+                    .from('campaign_prospects')
+                    .update({
+                        email_status: 'pending',
+                        generated_email_subject: null,
+                        generated_email_content: null,
+                        email_generated_at: null,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('campaign_id', campaignId)
+                    .in('prospect_id', generatedIds)
+
+                if (resetError) {
+                    console.error('❌ Failed to reset campaign_prospects status:', resetError)
+                } else {
+                    console.log(`✅ Reset ${generatedIds.length} prospect(s) to pending status`)
+                }
             }
         }
 
@@ -101,23 +142,29 @@ export async function POST(
             return NextResponse.json({ error: 'Failed to create tracking job' }, { status: 500 })
         }
 
-        // 2. Initialisation des liens Prospect-Campagne (campaign_prospects)
-        const linksToUpsert = prospectIds.map(prospectId => ({
-            campaign_id: campaignId,
-            prospect_id: prospectId,
-            email_status: 'not_generated',
-            updated_at: new Date().toISOString()
-        }))
+        // 2. Init campaign_prospects for NEW prospects only (already-existing ones were handled above)
+        const newProspectIds = (existingLinks || []).length === 0
+            ? prospectIds
+            : prospectIds.filter(id => !(existingLinks || []).some(l => l.prospect_id == id))
 
-        const { error: linksError } = await supabase
-            .from('campaign_prospects')
-            .upsert(linksToUpsert, {
-                onConflict: 'campaign_id,prospect_id',
-                ignoreDuplicates: false
-            })
+        if (newProspectIds.length > 0) {
+            const linksToInsert = newProspectIds.map(prospectId => ({
+                campaign_id: campaignId,
+                prospect_id: prospectId,
+                email_status: 'pending',
+                updated_at: new Date().toISOString()
+            }))
 
-        if (linksError) {
-            console.error('⚠️ Warning: Failed to upsert campaign links:', linksError)
+            const { error: linksError } = await supabase
+                .from('campaign_prospects')
+                .upsert(linksToInsert, {
+                    onConflict: 'campaign_id,prospect_id',
+                    ignoreDuplicates: false
+                })
+
+            if (linksError) {
+                console.error('⚠️ Warning: Failed to upsert campaign links:', linksError)
+            }
         }
 
         // Quota is now managed by the database trigger on cold_email_generations
