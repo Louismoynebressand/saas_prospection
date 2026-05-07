@@ -81,7 +81,7 @@ export async function POST(
         // Get campaign with user check
         const { data: campaign, error: campaignError } = await supabase
             .from('cold_email_campaigns')
-            .select('id, user_id, auto_generate')
+            .select('id, user_id')
             .eq('id', campaignId)
             .single()
 
@@ -93,6 +93,19 @@ export async function POST(
         const { data: { user } } = await supabase.auth.getUser()
         if (!user || user.id !== campaign.user_id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+        }
+
+        // Fetch auto_generate separately (column may not exist on all envs)
+        let autoGenerate = false
+        try {
+            const { data: campSettings } = await supabase
+                .from('cold_email_campaigns')
+                .select('auto_generate')
+                .eq('id', campaignId)
+                .single()
+            autoGenerate = campSettings?.auto_generate ?? false
+        } catch {
+            autoGenerate = false
         }
 
         let finalProspectIds: string[] = []
@@ -171,7 +184,7 @@ export async function POST(
                     console.error('[Smart Auto] Failed to queue prospects:', queueError)
                 } else {
                     // 3. Trigger Generation for "not_generated" ONLY if auto_generate is ON
-                    if (campaign.auto_generate) {
+                    if (autoGenerate) {
                         const ungeneratedProspects = created
                             .filter(p => p.email_status === 'not_generated')
                             .map(p => p.prospect_id)
