@@ -632,11 +632,16 @@ export default function ProspectPage() {
         setIsEditing(!isEditing)
     }
 
+
     const handleSaveEdit = async () => {
         setIsSavingEdit(true)
         try {
             const supabase = createClient()
-            
+
+            // Detect if email changed
+            const originalEmail = rawDisplayEmail
+            const emailChanged = !!editForm.email && editForm.email.trim() !== (originalEmail || '').trim()
+
             // Construct updated scrapped data (everything stored in data_scrapping JSON)
             const updatedScrapped = { ...scrapped }
             updatedScrapped.Titre = editForm.titre
@@ -651,8 +656,13 @@ export default function ProspectPage() {
                 data_scrapping: updatedScrapped,
             }
             if (editForm.email) {
-                // Send as plain string — Supabase stores it as text
                 updatePayload.email_adresse_verified = editForm.email
+            }
+
+            // If email changed → reset SMTP validation flags so it's treated as unverified
+            if (emailChanged) {
+                updatePayload.succed_validation_smtp_email = null
+                updatePayload.check_email = false
             }
 
             const { error } = await supabase
@@ -669,9 +679,28 @@ export default function ProspectPage() {
             toast.success("✅ Prospect mis à jour !")
             setScrapped(updatedScrapped)
             if (prospect && editForm.email) {
-                setProspect({ ...prospect, email_adresse_verified: [editForm.email] } as any)
+                setProspect({ ...prospect, email_adresse_verified: [editForm.email], succed_validation_smtp_email: null, check_email: false } as any)
             }
             setIsEditing(false)
+
+            // Auto-trigger email verification if email changed
+            if (emailChanged && editForm.email) {
+                toast.info("🔍 Vérification de l'email en cours...", { duration: 4000 })
+                fetch('/api/email-verifier/check', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ emails: [editForm.email.trim()] })
+                }).then(async (res) => {
+                    if (res.ok) {
+                        toast.success("📧 Vérification email lancée — résultat disponible dans l'historique", { duration: 5000 })
+                    } else {
+                        const err = await res.json().catch(() => ({}))
+                        toast.warning(`Vérification email non lancée : ${err.error || 'Erreur'}`, { duration: 5000 })
+                    }
+                }).catch(() => {
+                    toast.warning("Vérification email non lancée (erreur réseau)", { duration: 4000 })
+                })
+            }
         } catch (error: any) {
             console.error("Save edit error:", error)
             toast.error(`Erreur : ${error?.message || 'Erreur inconnue'}`)

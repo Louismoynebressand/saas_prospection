@@ -95,6 +95,20 @@ export async function GET(req: NextRequest) {
             for (const item of queueItems) {
                 const prospect = item.prospect as any
 
+                // ⚠️ Email validity guard: if prospect has no email, revert to 'generated' + error
+                const prospectEmail = prospect?.email
+                if (!prospectEmail || prospectEmail.trim() === '') {
+                    console.warn(`[Queue] Prospect ${prospect?.id_prospect} has no email — reverting to 'generated'`)
+                    await supabase.from('email_queue')
+                        .update({ status: 'failed', error_message: 'Email du prospect manquant ou invalide' })
+                        .eq('id', item.id)
+                    await supabase.from('campaign_prospects')
+                        .update({ email_status: 'generated' })
+                        .eq('campaign_id', schedule.campaign_id)
+                        .eq('prospect_id', prospect?.id_prospect)
+                    continue
+                }
+
                 // Re-fetch campaign details (including user_id for SMTP)
                 const { data: campaignData } = await supabase
                     .from('cold_email_campaigns')
