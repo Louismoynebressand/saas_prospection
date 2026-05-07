@@ -42,19 +42,36 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
     const [pendingSendIds, setPendingSendIds] = useState<string[]>([])
     const [loadingSmtp, setLoadingSmtp] = useState(false)
 
-    // Polling only when not doing actions
+    // Per-row loading state for generate action
+    const [generatingIds, setGeneratingIds] = useState<Set<string>>(new Set())
+
+    // Supabase Realtime: subscribe to campaign_prospects changes
     useEffect(() => {
-        let intervalId: NodeJS.Timeout
+        const supabase = createClient()
 
-        const poll = () => {
-            if (!batchActionLoading) {
-                loadProspects(false)
-            }
+        const channel = supabase
+            .channel(`campaign-prospects-${campaignId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'campaign_prospects',
+                    filter: `campaign_id=eq.${campaignId}`
+                },
+                () => {
+                    // Reload without spinner when a DB change is detected, then clear generating state
+                    void loadProspects(false).finally(() => {
+                        setGeneratingIds(new Set())
+                    })
+                }
+            )
+            .subscribe()
+
+        return () => {
+            supabase.removeChannel(channel)
         }
-
-        intervalId = setInterval(poll, 5000)
-        return () => clearInterval(intervalId)
-    }, [campaignId, batchActionLoading])
+    }, [campaignId])
 
     useEffect(() => {
         loadProspects()
@@ -106,9 +123,14 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
     }
 
     const handleGenerateEmail = async (prospectIds: string | string[]) => {
+        const ids = Array.isArray(prospectIds) ? prospectIds : [prospectIds]
+
+        // Mark rows as generating
+        setGeneratingIds(prev => new Set([...prev, ...ids]))
+        toast.info(`Génération en cours pour ${ids.length} prospect(s)... ⚡`, { duration: 4000 })
+
         try {
             setBatchActionLoading(true)
-            const ids = Array.isArray(prospectIds) ? prospectIds : [prospectIds]
 
             const response = await fetch(`/api/campaigns/${campaignId}/generate-email`, {
                 method: 'POST',
@@ -118,14 +140,20 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
 
             if (!response.ok) throw new Error('Erreur génération')
 
-            const result = await response.json()
-            toast.success(`${result.generated} email(s) généré(s)`)
-            loadProspects()
+            // Webhook triggered — N8N will update the DB, Realtime will pick it up
+            toast.success(`Demande de génération envoyée ✅ — Le mail apparaîtra automatiquement dès qu'il est prêt.`, { duration: 6000 })
             setSelectedProspects(new Set())
         } catch (error: any) {
             toast.error(error.message)
+            // Remove from generating on error
+            setGeneratingIds(prev => {
+                const next = new Set(prev)
+                ids.forEach(id => next.delete(id))
+                return next
+            })
         } finally {
             setBatchActionLoading(false)
+            // Keep generatingIds — they'll be cleared when Realtime updates the status
         }
     }
 
@@ -479,11 +507,15 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
                                                             <Button
                                                                 size="sm"
                                                                 variant="outline"
+                                                                disabled={generatingIds.has(cp.prospect_id)}
                                                                 onClick={() => handleGenerateEmail(cp.prospect_id)}
                                                                 className="hover:border-violet-300 hover:bg-violet-50 text-violet-700 bg-white shadow-sm transition-all"
                                                             >
-                                                                <Mail className="w-4 h-4 mr-2" />
-                                                                Générer le mail
+                                                                {generatingIds.has(cp.prospect_id) ? (
+                                                                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Génération...</>
+                                                                ) : (
+                                                                    <><Mail className="w-4 h-4 mr-2" />Générer le mail</>
+                                                                )}
                                                             </Button>
                                                         ) : (
                                                             <Button
