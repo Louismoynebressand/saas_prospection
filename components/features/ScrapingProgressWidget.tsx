@@ -75,27 +75,39 @@ export function ScrapingProgressWidget({ jobId, maxResults, enrichmentEnabled = 
                 .not('deep_search', 'is', null)
 
             if (mountedRef.current) {
-                const currentProspects = prospectsCount || 0
-                setStats({
-                    prospects: currentProspects,
-                    emails: emailsCount || 0,
-                    enriched: enrichedCount || 0
-                })
+                    const currentProspects = prospectsCount || 0
+                    const currentEnriched = enrichedCount || 0
+                    setStats({
+                        prospects: currentProspects,
+                        emails: emailsCount || 0,
+                        enriched: currentEnriched
+                    })
 
-                // Real data progress (based on actual prospects found)
-                const realProgress = maxResults > 0
-                    ? Math.round((currentProspects / maxResults) * 100)
-                    : 0
+                    // Real data progress:
+                    // If enrichment enabled → 50% weight for scraping + 50% weight for enrichment
+                    // If no enrichment      → 100% weight for scraping alone
+                    let realProgress = 0
+                    if (maxResults > 0) {
+                        const scrapingRatio = Math.min(currentProspects / maxResults, 1)
+                        if (enrichmentEnabled) {
+                            // Enrichment denominator = prospects found (can't enrich more than scraped)
+                            const enrichTarget = Math.max(currentProspects, 1)
+                            const enrichRatio = Math.min(currentEnriched / enrichTarget, 1)
+                            realProgress = Math.round((scrapingRatio * 50) + (enrichRatio * 50))
+                        } else {
+                            realProgress = Math.round(scrapingRatio * 100)
+                        }
+                    }
 
-                // Use whichever is higher: simulated or real data
-                // Never go above 98% until actually complete
-                if (status !== 'completed' && status !== 'done' && status !== 'ALLfinish') {
-                    const combined = Math.max(simulatedProgressRef.current, realProgress)
-                    setProgress(Math.min(combined, 98))
-                } else {
-                    setProgress(100)
+                    // Use whichever is higher: simulated or real data
+                    // Never go above 98% until job status is actually complete
+                    if (status !== 'completed' && status !== 'done' && status !== 'ALLfinish') {
+                        const combined = Math.max(simulatedProgressRef.current, realProgress)
+                        setProgress(Math.min(combined, 98))
+                    } else {
+                        setProgress(100)
+                    }
                 }
-            }
         } catch (err) {
             console.error('[Widget] fetchStats error:', err)
         }
@@ -277,8 +289,13 @@ export function ScrapingProgressWidget({ jobId, maxResults, enrichmentEnabled = 
                             />
                         </div>
                         <div className="flex justify-between text-xs text-muted-foreground font-medium">
-                            <span>{stats.prospects} / {maxResults} prospects</span>
-                            <span className="text-indigo-600 font-bold">{progress}%</span>
+                            <span className="flex flex-col gap-0.5">
+                                <span>🔍 {stats.prospects} / {maxResults} scrapés</span>
+                                {enrichmentEnabled && (
+                                    <span>✨ {stats.enriched} / {stats.prospects || maxResults} enrichis</span>
+                                )}
+                            </span>
+                            <span className="text-indigo-600 font-bold text-sm self-center">{progress}%</span>
                         </div>
                     </div>
 
