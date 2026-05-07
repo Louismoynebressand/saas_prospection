@@ -685,17 +685,31 @@ export default function ProspectPage() {
 
             // Auto-trigger email verification if email changed
             if (emailChanged && editForm.email) {
-                toast.info("🔍 Vérification de l'email en cours...", { duration: 4000 })
+                toast.info("🔍 Vérification SMTP de l'email en cours...", { duration: 6000 })
                 fetch('/api/email-verifier/check', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ emails: [editForm.email.trim()] })
                 }).then(async (res) => {
                     if (res.ok) {
-                        toast.success("📧 Vérification email lancée — résultat disponible dans l'historique", { duration: 5000 })
+                        toast.success("📧 Vérification lancée — mise à jour dans quelques secondes", { duration: 5000 })
+                        // Poll after 15s and 30s to refresh the prospect status
+                        const supabase = createClient()
+                        const refreshProspect = async () => {
+                            const { data: fresh } = await supabase
+                                .from('scrape_prospect')
+                                .select('succed_validation_smtp_email, check_email, email_adresse_verified')
+                                .eq('id_prospect', id)
+                                .single()
+                            if (fresh && prospect) {
+                                setProspect({ ...prospect, ...fresh } as any)
+                            }
+                        }
+                        setTimeout(refreshProspect, 15000)
+                        setTimeout(refreshProspect, 30000)
                     } else {
                         const err = await res.json().catch(() => ({}))
-                        toast.warning(`Vérification email non lancée : ${err.error || 'Erreur'}`, { duration: 5000 })
+                        toast.warning(`Vérification non lancée : ${err.error || 'Erreur'}`, { duration: 5000 })
                     }
                 }).catch(() => {
                     toast.warning("Vérification email non lancée (erreur réseau)", { duration: 4000 })
