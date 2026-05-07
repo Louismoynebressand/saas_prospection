@@ -240,7 +240,10 @@ export function AddProspectsToCampaignModal({
                 body: JSON.stringify(body)
             })
 
-            if (!response.ok) throw new Error("Erreur lors de l'ajout des prospects")
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}))
+                throw new Error(errData.error || "Erreur lors de l'ajout des prospects")
+            }
 
             const result = await response.json()
             toast.success(`${result.added} prospect(s) ajouté(s) à la campagne`)
