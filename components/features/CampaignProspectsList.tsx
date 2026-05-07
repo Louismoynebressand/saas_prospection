@@ -145,7 +145,8 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
     }
 
     const handleGenerateEmail = async (prospectIds: string | string[]) => {
-        const ids = Array.isArray(prospectIds) ? prospectIds : [prospectIds]
+        // Normalize all ids to strings (prospect_id can be number or string depending on context)
+        const ids = (Array.isArray(prospectIds) ? prospectIds : [prospectIds]).map(id => String(id))
 
         // Mark rows as generating
         setGeneratingIds(prev => new Set([...prev, ...ids]))
@@ -170,7 +171,7 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
             // Remove from generating on error
             setGeneratingIds(prev => {
                 const next = new Set(prev)
-                ids.forEach(id => next.delete(id))
+                ids.forEach(id => next.delete(String(id)))
                 return next
             })
         } finally {
@@ -526,7 +527,7 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
                                                 <td className="p-4" onClick={(e) => e.stopPropagation()}>
                                                     <div className="flex justify-end gap-2">
                                                         {/* Action button: spinner if pending or generating, generate if not_generated, view if generated */}
-                                                        {(cp.email_status === 'pending' || generatingIds.has(cp.prospect_id)) ? (
+                                                        {(cp.email_status === 'pending' || generatingIds.has(String(cp.prospect_id))) ? (
                                                             <Button
                                                                 size="sm"
                                                                 variant="outline"
