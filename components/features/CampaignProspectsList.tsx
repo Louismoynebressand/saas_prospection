@@ -159,7 +159,14 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
             if (!response.ok) throw new Error('Erreur envoi')
 
             const result = await response.json()
-            toast.success(`${result.sent} email(s) en cours d'envoi ⏳`)
+            
+            if (result.sent === 0 && result.results && result.results.length > 0) {
+                const errorMsg = result.results[0].error || 'Erreur inconnue'
+                toast.error(`Échec de l'envoi : ${errorMsg}`)
+            } else {
+                toast.success(`${result.sent} email(s) en cours d'envoi ⏳`)
+            }
+            
             loadProspects()
             setSelectedProspects(new Set())
             setShowSendDialog(false)
