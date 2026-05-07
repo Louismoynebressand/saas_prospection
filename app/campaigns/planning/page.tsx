@@ -45,7 +45,7 @@ export default async function GlobalPlanningPage() {
                 .from('email_queue')
                 .select('*', { count: 'exact', head: true })
                 .eq('campaign_id', schedule.campaign_id)
-                .eq('status', 'sent')
+                .in('status', ['sent', 'delivered', 'opened', 'clicked', 'replied'])
 
             return {
                 ...schedule,

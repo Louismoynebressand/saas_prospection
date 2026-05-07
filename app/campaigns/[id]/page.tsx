@@ -67,8 +67,9 @@ export default function CampaignDetailPage() {
                 setSchedule(sched)
                 // Fetch Queue Stats
                 const { count: pending } = await supabase.from('email_queue').select('*', { count: 'exact', head: true }).eq('campaign_id', campaignId).eq('status', 'pending')
-                const { count: sent } = await supabase.from('email_queue').select('*', { count: 'exact', head: true }).eq('campaign_id', campaignId).eq('status', 'sent')
-                const { count: failed } = await supabase.from('email_queue').select('*', { count: 'exact', head: true }).eq('campaign_id', campaignId).eq('status', 'failed')
+                // Count all "sent" terminal states (email moves from sent → delivered → opened etc.)
+                const { count: sent } = await supabase.from('email_queue').select('*', { count: 'exact', head: true }).eq('campaign_id', campaignId).in('status', ['sent', 'delivered', 'opened', 'clicked', 'replied'])
+                const { count: failed } = await supabase.from('email_queue').select('*', { count: 'exact', head: true }).eq('campaign_id', campaignId).in('status', ['failed', 'skipped', 'cancelled'])
 
                 setQueueStats({
                     pending: pending || 0,
