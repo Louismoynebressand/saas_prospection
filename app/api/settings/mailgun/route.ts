@@ -2,12 +2,11 @@ import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import { z } from "zod"
 
-const mailgunSchema = z.object({
+const mailgunBaseSchema = z.object({
     name: z.string().min(1, "Nom requis"),
     provider: z.literal("mailgun_api"),
     mailgun_domain: z.string().min(1, "Domaine Mailgun requis"),
     mailgun_region: z.enum(["US", "EU"]),
-    mailgun_api_key: z.string().min(1, "Clé API requise"),
     from_email: z.string().email("Email d'envoi invalide"),
     from_name: z.string().optional(),
     reply_to: z.string().email().optional().or(z.literal("")),
@@ -18,7 +17,17 @@ const mailgunSchema = z.object({
     mailgun_webhook_signing_key: z.string().optional(),
 })
 
-// Colonnes à exclure du SELECT (jamais exposées au frontend)
+// Create: mailgun_api_key required
+const mailgunCreateSchema = mailgunBaseSchema.extend({
+    mailgun_api_key: z.string().min(1, "Clé API requise"),
+})
+
+// Update: mailgun_api_key optional (not re-sent if not changed)
+const mailgunUpdateSchema = mailgunBaseSchema.extend({
+    mailgun_api_key: z.string().optional(),
+})
+
+// Colonnes à retourner au frontend (jamais les secrets)
 const SAFE_SELECT_COLUMNS = [
     "id",
     "name",
@@ -32,6 +41,7 @@ const SAFE_SELECT_COLUMNS = [
     "tracking_opens",
     "tracking_clicks",
     "is_active",
+    "is_default",
     "created_at",
     "updated_at",
     // mailgun_api_key et mailgun_webhook_signing_key JAMAIS renvoyées
@@ -75,7 +85,9 @@ export async function POST(req: Request) {
         const body = await req.json()
         const { id, ...configData } = body
 
-        const validation = mailgunSchema.safeParse(configData)
+        // Use the appropriate schema depending on create vs update
+        const schema = id ? mailgunUpdateSchema : mailgunCreateSchema
+        const validation = schema.safeParse(configData)
         if (!validation.success) {
             return NextResponse.json(
                 { error: "Validation échouée", details: validation.error.format() },
@@ -83,13 +95,12 @@ export async function POST(req: Request) {
             )
         }
 
-        const payload = {
+        const payload: Record<string, unknown> = {
             user_id: user.id,
             name: validation.data.name,
             provider: "mailgun_api",
             mailgun_domain: validation.data.mailgun_domain,
             mailgun_region: validation.data.mailgun_region,
-            mailgun_api_key: validation.data.mailgun_api_key,
             from_email: validation.data.from_email,
             from_name: validation.data.from_name || null,
             reply_to: validation.data.reply_to || null,
@@ -99,7 +110,11 @@ export async function POST(req: Request) {
             is_active: validation.data.is_active,
             mailgun_webhook_signing_key: validation.data.mailgun_webhook_signing_key || null,
             updated_at: new Date().toISOString(),
-            // smtp_host, smtp_port, smtp_user, smtp_password : omis (nullable, non utilisés pour Mailgun)
+        }
+
+        // Only update secrets if explicitly provided (not re-sent on simple edits)
+        if (validation.data.mailgun_api_key) {
+            payload.mailgun_api_key = validation.data.mailgun_api_key
         }
 
 
