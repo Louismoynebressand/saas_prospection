@@ -46,7 +46,7 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
     const [generatingIds, setGeneratingIds] = useState<Set<string>>(new Set())
 
     // Batch generation guard
-    const [activeJob, setActiveJob] = useState<{ id: string; status: string; count: number } | null>(null)
+    const [inProgressCount, setInProgressCount] = useState(0)
     const [checkingJob, setCheckingJob] = useState(false)
     const [showCap50Dialog, setShowCap50Dialog] = useState(false)
     const [pendingGenerateIds, setPendingGenerateIds] = useState<string[]>([])
@@ -92,35 +92,30 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
         }
     }, [campaignId])
 
-    // Check if there's an active (pending/running) job for this campaign
-    const checkActiveJob = useCallback(async (): Promise<boolean> => {
+    // Count total prospects currently in pending/running jobs for this campaign
+    const checkInProgressCount = useCallback(async (): Promise<number> => {
         setCheckingJob(true)
         try {
             const supabase = createClient()
             const { data } = await supabase
                 .from('cold_email_jobs')
-                .select('id, status, prospect_ids')
+                .select('prospect_ids')
                 .eq('campaign_id', campaignId)
                 .in('status', ['pending', 'running'])
-                .order('created_at', { ascending: false })
-                .limit(1)
-                .maybeSingle()
 
-            if (data) {
-                const count = Array.isArray(data.prospect_ids) ? data.prospect_ids.length : 0
-                setActiveJob({ id: data.id, status: data.status, count })
-                return true
-            }
-            setActiveJob(null)
-            return false
+            const total = (data || []).reduce((sum, job) => {
+                return sum + (Array.isArray(job.prospect_ids) ? job.prospect_ids.length : 0)
+            }, 0)
+            setInProgressCount(total)
+            return total
         } catch {
-            return false
+            return 0
         } finally {
             setCheckingJob(false)
         }
     }, [campaignId])
 
-    useEffect(() => { checkActiveJob() }, [checkActiveJob])
+    useEffect(() => { checkInProgressCount() }, [checkInProgressCount])
 
     useEffect(() => {
         loadProspects()
@@ -202,22 +197,23 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
     }
 
     const handleGenerateEmail = async (prospectIds: string | string[]) => {
-        // Normalize all ids to strings (prospect_id can be number or string depending on context)
         const rawIds = (Array.isArray(prospectIds) ? prospectIds : [prospectIds]).map(id => String(id))
 
-        // 1. Check for already active job
-        const hasActive = await checkActiveJob()
-        if (hasActive) {
-            toast.error("Une génération est déjà en cours", {
-                description: `Attendez que les ${activeJob?.count || ''} email(s) en cours soient générés avant de relancer.`,
+        // Count currently in-progress prospects
+        const currentInProgress = await checkInProgressCount()
+        const remaining = 50 - currentInProgress
+
+        if (remaining <= 0) {
+            toast.error(`Limite atteinte — ${currentInProgress} génération(s) en cours`, {
+                description: "Attendez que les emails en cours soient terminés avant d'en lancer d'autres.",
                 duration: 6000
             })
             return
         }
 
-        // 2. If > 50 selected, show cap dialog
-        if (rawIds.length > 50) {
-            setPendingGenerateIds(rawIds)
+        // If selection + in-progress > 50, cap to remaining slots
+        if (rawIds.length > remaining) {
+            setPendingGenerateIds(rawIds.slice(0, remaining))
             setShowCap50Dialog(true)
             return
         }
@@ -248,7 +244,7 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
             setSelectedProspects(new Set())
             setShowCap50Dialog(false)
             setPendingGenerateIds([])
-            checkActiveJob() // refresh job status
+            checkInProgressCount()
         } catch (error: any) {
             toast.error(error.message)
             // Remove from generating on error
@@ -882,9 +878,10 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
                             Limite de 50 prospects par lot
                         </DialogTitle>
                         <DialogDescription className="text-sm leading-relaxed">
-                            Vous avez sélectionné <strong>{pendingGenerateIds.length} prospects</strong>. Pour éviter de surcharger le webhook, la génération est limitée à <strong>50 prospects par lot</strong>.
+                            Vous avez sélectionné <strong>{pendingGenerateIds.length + inProgressCount} prospects</strong> au total ({inProgressCount} déjà en cours).
+                            La limite est de <strong>50 par lot</strong>. Les <strong>{pendingGenerateIds.length} prochains</strong> seront envoyés dans les emplacements restants.
                             <br /><br />
-                            Les <strong>50 premiers</strong> seront traités maintenant. Une fois terminés, vous pourrez relancer pour les suivants.
+                            Une fois terminés, vous pourrez relancer pour les suivants.
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter className="gap-2">

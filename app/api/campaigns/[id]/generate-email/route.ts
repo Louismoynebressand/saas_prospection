@@ -49,22 +49,30 @@ export async function POST(
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        // Guard: reject if a job is already pending/running for this campaign
-        const { data: existingJob } = await supabase
+        // Guard: count total prospects in pending/running jobs for this campaign
+        const { data: activeJobs } = await supabase
             .from('cold_email_jobs')
-            .select('id, status, prospect_ids')
+            .select('prospect_ids')
             .eq('campaign_id', campaignId)
             .in('status', ['pending', 'running'])
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle()
 
-        if (existingJob) {
-            const count = Array.isArray(existingJob.prospect_ids) ? existingJob.prospect_ids.length : '?'
+        const totalInProgress = (activeJobs || []).reduce((sum: number, job: any) => {
+            return sum + (Array.isArray(job.prospect_ids) ? job.prospect_ids.length : 0)
+        }, 0)
+
+        const remainingSlots = 50 - totalInProgress
+
+        if (remainingSlots <= 0) {
             return NextResponse.json({
-                error: `Une génération est déjà en cours (${count} prospect(s) — statut: ${existingJob.status}). Attendez qu'elle se termine avant de relancer.`,
-                activeJobId: existingJob.id
-            }, { status: 409 })
+                error: `Limite atteinte — ${totalInProgress} génération(s) déjà en cours. Attendez la fin avant de relancer.`,
+                totalInProgress
+            }, { status: 429 })
+        }
+
+        // Cap prospect list to remaining slots
+        if (prospectIds.length > remainingSlots) {
+            console.log(`[Guard] Capping ${prospectIds.length} prospects to ${remainingSlots} remaining slots (${totalInProgress} in progress)`)
+            prospectIds = prospectIds.slice(0, remainingSlots)
         }
 
         const HARDCODED_URL = "https://n8n.srv903375.hstgr.cloud/webhook/neuraflow_scrappeur_generateur_cold_mail"
