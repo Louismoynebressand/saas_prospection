@@ -24,6 +24,7 @@ interface SearchJob {
     statut: string
     created_at: string
     prospectCount?: number
+    emailCount?: number
 }
 
 interface AddProspectsToCampaignModalProps {
@@ -208,12 +209,24 @@ export function AddProspectsToCampaignModal({
 
             const searchesWithCounts = await Promise.all(
                 (searchData || []).map(async (search: SearchJob) => {
-                    const { count } = await supabase
+                    // Total prospects for this job
+                    const { count: total } = await supabase
                         .from('scrape_prospect')
                         .select('*', { count: 'exact', head: true })
                         .eq('id_jobs', search.id_jobs)
                         .eq('id_user', user.id)
-                    return { ...search, prospectCount: count || 0 }
+
+                    // Prospects with a valid email
+                    const { count: withEmail } = await supabase
+                        .from('scrape_prospect')
+                        .select('*', { count: 'exact', head: true })
+                        .eq('id_jobs', search.id_jobs)
+                        .eq('id_user', user.id)
+                        .not('email_adresse_verified', 'is', null)
+                        .neq('email_adresse_verified', '')
+                        .neq('email_adresse_verified', '[]')
+
+                    return { ...search, prospectCount: total || 0, emailCount: withEmail || 0 }
                 })
             )
 
@@ -614,9 +627,15 @@ export function AddProspectsToCampaignModal({
                                                             {search.request_search}
                                                         </p>
                                                         <div className="flex flex-wrap items-center gap-1.5">
-                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-indigo-100 text-indigo-700 border border-indigo-200">
+                                                            {/* Prospects with email — what actually gets added */}
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                                                                <Mail className="w-3 h-3" />
+                                                                {search.emailCount ?? 0} avec email
+                                                            </span>
+                                                            {/* Total prospects */}
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-500 border border-slate-200">
                                                                 <Users className="w-3 h-3" />
-                                                                {search.prospectCount} prospects
+                                                                {search.prospectCount ?? 0} total
                                                             </span>
                                                             <span className={cn(
                                                                 "inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border",
