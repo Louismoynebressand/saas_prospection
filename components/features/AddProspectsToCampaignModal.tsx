@@ -166,18 +166,19 @@ export function AddProspectsToCampaignModal({
                 .filter((p: ScrapeProspect) => !inThisCampaign.has(String(p.id_prospect))) // hide already in this campaign
                 .map((p: ScrapeProspect) => {
                     // Normalize email — handle array-string artifacts like ["email@domain.com"]
-                    let emailRaw = p.email_adresse_verified
-                    if (typeof emailRaw === 'string' && emailRaw.startsWith('[')) {
-                        try { emailRaw = JSON.parse(emailRaw)?.[0] || null } catch { emailRaw = null }
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    let emailNormalized: any = p.email_adresse_verified
+                    if (typeof emailNormalized === 'string' && emailNormalized.startsWith('[')) {
+                        try { emailNormalized = JSON.parse(emailNormalized)?.[0] || undefined } catch { emailNormalized = undefined }
                     }
-                    if (Array.isArray(emailRaw)) emailRaw = emailRaw[0] || null
-                    const hasEmail = !!emailRaw
+                    if (Array.isArray(emailNormalized)) emailNormalized = emailNormalized[0] || undefined
+                    const hasEmail = !!emailNormalized
 
                     const deepSearch = typeof p.deep_search === 'string'
                         ? (() => { try { return JSON.parse(p.deep_search as string) } catch { return null } })()
                         : p.deep_search
                     const hasDeepSearch = !!(deepSearch && Object.keys(deepSearch).length > 0)
-                    return { ...p, email_adresse_verified: emailRaw, hasEmail, hasDeepSearch }
+                    return { ...p, email_adresse_verified: emailNormalized, hasEmail, hasDeepSearch }
                 })
 
             setProspects(enrichedProspects)
