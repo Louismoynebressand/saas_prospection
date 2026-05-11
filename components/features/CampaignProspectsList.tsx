@@ -7,7 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
-import { Loader2, UserPlus, Mail, Send, Eye, Zap, Server, Star, Settings } from "lucide-react"
+import { Loader2, UserPlus, Mail, Send, Eye, Zap, Server, Star, Settings, Trash2 } from "lucide-react"
 import { AddProspectsToCampaignModal } from "./AddProspectsToCampaignModal"
 import { ProspectViewModal } from "./ProspectViewModal"
 import { ProspectDetailModal } from "./ProspectDetailModal"
@@ -141,6 +141,27 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
             if (showLoading) toast.error('Erreur lors du chargement des prospects')
         } finally {
             if (showLoading) setLoading(false)
+        }
+    }
+
+    const handleRemoveProspects = async (prospectIds: string | string[]) => {
+        const ids = Array.isArray(prospectIds) ? prospectIds : [prospectIds]
+        if (!window.confirm(`Retirer ${ids.length} prospect(s) de cette campagne ?`)) return
+        try {
+            setBatchActionLoading(true)
+            const response = await fetch(`/api/campaigns/${campaignId}/prospects`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prospectIds: ids })
+            })
+            if (!response.ok) throw new Error('Erreur lors de la suppression')
+            toast.success(`${ids.length} prospect(s) retiré(s) de la campagne`)
+            setSelectedProspects(new Set())
+            loadProspects(false)
+        } catch (error: any) {
+            toast.error(error.message)
+        } finally {
+            setBatchActionLoading(false)
         }
     }
 
@@ -396,6 +417,16 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
                                     </Button>
                                 )}
                                 <Button
+                                    onClick={() => handleRemoveProspects(Array.from(selectedProspects))}
+                                    disabled={batchActionLoading}
+                                    variant="outline"
+                                    size="sm"
+                                    className="border-red-200 text-red-600 hover:bg-red-50 hover:border-red-400"
+                                >
+                                    <Trash2 className="w-4 h-4 mr-2" />
+                                    Retirer
+                                </Button>
+                                <Button
                                     onClick={() => setSelectedProspects(new Set())}
                                     variant="ghost"
                                     size="sm"
@@ -583,6 +614,15 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
                                                             className="text-slate-500 hover:text-slate-800 hover:bg-slate-100"
                                                         >
                                                             Profil
+                                                        </Button>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            onClick={() => handleRemoveProspects(cp.prospect_id)}
+                                                            className="text-red-400 hover:text-red-600 hover:bg-red-50 px-2"
+                                                            title="Retirer de la campagne"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
                                                         </Button>
                                                     </div>
                                                 </td>

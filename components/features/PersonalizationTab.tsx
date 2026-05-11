@@ -1,16 +1,15 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Campaign, ScrapeProspect } from "@/types"
-import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
-import { Loader2, Sparkles, Wand2, Save, Mail, CheckCircle2, Zap } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
+import { Loader2, Sparkles, Wand2, Mail, CheckCircle2, Zap, Cloud, CloudOff } from "lucide-react"
 
 interface PersonalizationTabProps {
     campaign: Campaign
@@ -18,19 +17,20 @@ interface PersonalizationTabProps {
 }
 
 type EmailMode = "BALANCED" | "SHORT_DIRECT"
+type SaveStatus = "idle" | "saving" | "saved" | "error"
 
-const EMAIL_MODES: { value: EmailMode; label: string; icon: string; desc: string; tags: string[]; color: string; border: string; bg: string; tagBg: string; tagText: string }[] = [
+const EMAIL_MODES: {
+    value: EmailMode; label: string; icon: string; desc: string
+    tags: string[]; color: string; border: string; bg: string; tagBg: string; tagText: string
+}[] = [
     {
         value: "BALANCED",
         label: "Mode 1 — Équilibré / Professionnel",
         icon: "⚖️",
         desc: "Email complet, structuré, plusieurs paragraphes. Présente votre société, identifie un problème, propose une solution avec preuve sociale. Idéal pour des prospects qualifiés.",
         tags: ["Multi-paragraphes", "Preuve sociale", "CTA clair"],
-        color: "text-indigo-600",
-        border: "border-indigo-500",
-        bg: "bg-indigo-50",
-        tagBg: "bg-indigo-100",
-        tagText: "text-indigo-700",
+        color: "text-indigo-600", border: "border-indigo-500", bg: "bg-indigo-50",
+        tagBg: "bg-indigo-100", tagText: "text-indigo-700",
     },
     {
         value: "SHORT_DIRECT",
@@ -38,18 +38,15 @@ const EMAIL_MODES: { value: EmailMode; label: string; icon: string; desc: string
         icon: "⚡",
         desc: "Email ultra-court (3-5 lignes max). Une seule question directe et percutante. Parfait pour une 1ère approche ou une relance après silence.",
         tags: ["3-5 lignes", "Question directe", "1ère approche"],
-        color: "text-emerald-600",
-        border: "border-emerald-500",
-        bg: "bg-emerald-50",
-        tagBg: "bg-emerald-100",
-        tagText: "text-emerald-700",
+        color: "text-emerald-600", border: "border-emerald-500", bg: "bg-emerald-50",
+        tagBg: "bg-emerald-100", tagText: "text-emerald-700",
     },
 ]
 
 export function PersonalizationTab({ campaign, onUpdate }: PersonalizationTabProps) {
     const [instructions, setInstructions] = useState(campaign.agent_instructions || "")
-    const [saving, setSaving] = useState(false)
     const [emailMode, setEmailMode] = useState<EmailMode>(((campaign as any).email_mode as EmailMode) || "BALANCED")
+    const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle")
     const [savingMode, setSavingMode] = useState(false)
 
     // Playground State
@@ -58,7 +55,53 @@ export function PersonalizationTab({ campaign, onUpdate }: PersonalizationTabPro
     const [generating, setGenerating] = useState(false)
     const [generatedEmail, setGeneratedEmail] = useState<{ subject: string, body: string } | null>(null)
 
-    // Load prospects for dropdown
+    // Debounce ref
+    const debounceRef = useRef<NodeJS.Timeout | null>(null)
+    const savedTimerRef = useRef<NodeJS.Timeout | null>(null)
+
+    // Auto-save instructions with 1.2s debounce
+    const triggerAutoSave = useCallback((newInstructions: string) => {
+        if (debounceRef.current) clearTimeout(debounceRef.current)
+        if (savedTimerRef.current) clearTimeout(savedTimerRef.current)
+        setSaveStatus("saving")
+
+        debounceRef.current = setTimeout(async () => {
+            try {
+                const supabase = createClient()
+                const { error } = await supabase
+                    .from('cold_email_campaigns')
+                    .update({ agent_instructions: newInstructions })
+                    .eq('id', campaign.id)
+
+                if (error) throw error
+
+                onUpdate({ ...campaign, agent_instructions: newInstructions })
+                setSaveStatus("saved")
+
+                // Fade back to idle after 3s
+                savedTimerRef.current = setTimeout(() => setSaveStatus("idle"), 3000)
+            } catch (err) {
+                console.error(err)
+                setSaveStatus("error")
+                toast.error("Erreur lors de la sauvegarde automatique")
+            }
+        }, 1200)
+    }, [campaign, onUpdate])
+
+    const handleInstructionsChange = (val: string) => {
+        setInstructions(val)
+        triggerAutoSave(val)
+    }
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            if (debounceRef.current) clearTimeout(debounceRef.current)
+            if (savedTimerRef.current) clearTimeout(savedTimerRef.current)
+        }
+    }, [])
+
+    // Load prospects for playground
     useEffect(() => {
         const fetchProspects = async () => {
             const supabase = createClient()
@@ -82,14 +125,10 @@ export function PersonalizationTab({ campaign, onUpdate }: PersonalizationTabPro
                         : item.prospect.data_scrapping
                 }))
                 setProspects(mapped.map((p: any) => {
-                    const data = p.data || {}
-                    const name = data.title || data.nom_complet || data.name || data.Titre || (data.nom ? `${data.prenom || ''} ${data.nom}`.trim() : null) || "Prospect sans nom"
-                    const company = data.company || data.companyName || data.societe || "Entreprise inconnue"
-                    return {
-                        id_prospect: p.id_prospect,
-                        resume: name,
-                        ville: company
-                    }
+                    const d = p.data || {}
+                    const name = d.title || d.nom_complet || d.name || d.Titre || (d.nom ? `${d.prenom || ''} ${d.nom}`.trim() : null) || "Prospect sans nom"
+                    const company = d.company || d.companyName || d.societe || "Entreprise inconnue"
+                    return { id_prospect: p.id_prospect, resume: name, ville: company }
                 }))
             }
         }
@@ -104,9 +143,7 @@ export function PersonalizationTab({ campaign, onUpdate }: PersonalizationTabPro
                 .from('cold_email_campaigns')
                 .update({ email_mode: mode })
                 .eq('id', campaign.id)
-
             if (error) throw error
-
             setEmailMode(mode)
             onUpdate({ ...campaign, email_mode: mode } as any)
             toast.success(`Mode "${mode === 'BALANCED' ? 'Équilibré' : 'Court & Direct'}" activé`)
@@ -118,33 +155,11 @@ export function PersonalizationTab({ campaign, onUpdate }: PersonalizationTabPro
         }
     }
 
-    const handleSaveInstructions = async () => {
-        setSaving(true)
-        try {
-            const supabase = createClient()
-            const { error } = await supabase
-                .from('cold_email_campaigns')
-                .update({ agent_instructions: instructions })
-                .eq('id', campaign.id)
-
-            if (error) throw error
-
-            toast.success("Instructions sauvegardées")
-            onUpdate({ ...campaign, agent_instructions: instructions })
-        } catch (error) {
-            console.error(error)
-            toast.error("Erreur lors de la sauvegarde")
-        } finally {
-            setSaving(false)
-        }
-    }
-
     const handleGenerateTest = async () => {
         if (!selectedProspectId) {
             toast.error("Veuillez sélectionner un prospect pour tester")
             return
         }
-
         setGenerating(true)
         setGeneratedEmail(null)
         try {
@@ -157,13 +172,10 @@ export function PersonalizationTab({ campaign, onUpdate }: PersonalizationTabPro
                     agent_instructions: instructions
                 })
             })
-
             const data = await response.json()
             if (!response.ok) throw new Error(data.error || "Erreur de génération")
-
             toast.success("Génération lancée !")
             pollForResult(data.jobId, selectedProspectId)
-
         } catch (error: any) {
             toast.error("Erreur: " + error.message)
             setGenerating(false)
@@ -174,17 +186,14 @@ export function PersonalizationTab({ campaign, onUpdate }: PersonalizationTabPro
         const supabase = createClient()
         let attempts = 0
         const maxAttempts = 20
-
         const interval = setInterval(async () => {
             attempts++
-
             const { data } = await supabase
                 .from('campaign_prospects')
                 .select('email_status, generated_email_subject, generated_email_content')
                 .eq('campaign_id', campaign.id)
                 .eq('prospect_id', prospectId)
                 .single()
-
             if (data && (data.email_status === 'generated' || data.generated_email_content)) {
                 clearInterval(interval)
                 setGeneratedEmail({
@@ -201,8 +210,47 @@ export function PersonalizationTab({ campaign, onUpdate }: PersonalizationTabPro
         }, 2000)
     }
 
+    // Save status indicator
+    const SaveIndicator = () => {
+        if (saveStatus === "idle") return null
+        return (
+            <div className={`flex items-center gap-1.5 text-xs font-medium transition-all duration-300 ${
+                saveStatus === "saving" ? "text-amber-600" :
+                saveStatus === "saved"  ? "text-emerald-600" : "text-red-500"
+            }`}>
+                {saveStatus === "saving" && (
+                    <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Enregistrement...</>
+                )}
+                {saveStatus === "saved" && (
+                    <><CheckCircle2 className="w-3.5 h-3.5" /> Enregistré</>
+                )}
+                {saveStatus === "error" && (
+                    <><CloudOff className="w-3.5 h-3.5" /> Erreur de sauvegarde</>
+                )}
+            </div>
+        )
+    }
+
     return (
         <div className="space-y-6">
+            {/* Global auto-save status bar */}
+            {saveStatus !== "idle" && (
+                <div className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-500 ${
+                    saveStatus === "saving" ? "bg-amber-50 border border-amber-200 text-amber-700" :
+                    saveStatus === "saved"  ? "bg-emerald-50 border border-emerald-200 text-emerald-700" :
+                    "bg-red-50 border border-red-200 text-red-600"
+                }`}>
+                    {saveStatus === "saving" && <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />}
+                    {saveStatus === "saved"  && <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />}
+                    {saveStatus === "error"  && <CloudOff className="w-3.5 h-3.5 shrink-0" />}
+                    <span>
+                        {saveStatus === "saving" && "Enregistrement en cours..."}
+                        {saveStatus === "saved"  && "Modifications enregistrées automatiquement"}
+                        {saveStatus === "error"  && "Erreur de sauvegarde — réessayez"}
+                    </span>
+                </div>
+            )}
+
             {/* EMAIL MODE SELECTOR */}
             <Card className="border-slate-200">
                 <CardHeader className="pb-3">
@@ -259,12 +307,16 @@ export function PersonalizationTab({ campaign, onUpdate }: PersonalizationTabPro
                 {/* Left: Editor */}
                 <Card className="flex flex-col">
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-indigo-700">
-                            <Sparkles className="w-5 h-5" />
-                            Instructions personnalisées
-                        </CardTitle>
+                        <div className="flex items-center justify-between">
+                            <CardTitle className="flex items-center gap-2 text-indigo-700">
+                                <Sparkles className="w-5 h-5" />
+                                Instructions personnalisées
+                            </CardTitle>
+                            <SaveIndicator />
+                        </div>
                         <CardDescription>
                             Donnez des directives spécifiques à l'IA en plus du mode sélectionné ci-dessus.
+                            <span className="ml-1 text-indigo-500 font-medium">Les modifications sont sauvegardées automatiquement.</span>
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="flex-1 flex flex-col gap-4">
@@ -282,17 +334,16 @@ export function PersonalizationTab({ campaign, onUpdate }: PersonalizationTabPro
                             <Textarea
                                 placeholder="Ex: Analyse le site web du prospect pour trouver son point de douleur principal. Commence l'email par une question rhétorique sur ce problème..."
                                 value={instructions}
-                                onChange={(e) => setInstructions(e.target.value)}
+                                onChange={(e) => handleInstructionsChange(e.target.value)}
                                 className="h-full min-h-[250px] resize-none font-mono text-sm leading-relaxed p-4 bg-white"
                             />
                         </div>
 
-                        <div className="flex justify-end pt-2">
-                            <Button onClick={handleSaveInstructions} disabled={saving} className="bg-indigo-600 hover:bg-indigo-700">
-                                {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-                                Enregistrer les instructions
-                            </Button>
-                        </div>
+                        {/* No more save button — auto-save active */}
+                        <p className="text-[11px] text-center text-muted-foreground flex items-center justify-center gap-1">
+                            <Cloud className="w-3 h-3" />
+                            Sauvegarde automatique après chaque modification
+                        </p>
                     </CardContent>
                 </Card>
 
@@ -341,7 +392,6 @@ export function PersonalizationTab({ campaign, onUpdate }: PersonalizationTabPro
                                     <p>L'aperçu de l'email généré s'affichera ici.</p>
                                 </div>
                             )}
-
                             {generating && (
                                 <div className="h-full flex flex-col items-center justify-center">
                                     <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mb-4" />
@@ -349,7 +399,6 @@ export function PersonalizationTab({ campaign, onUpdate }: PersonalizationTabPro
                                     <p className="text-xs text-muted-foreground mt-2">Cela peut prendre jusqu'à 20 secondes.</p>
                                 </div>
                             )}
-
                             {generatedEmail && (
                                 <div className="space-y-4 animate-in fade-in duration-500">
                                     <div className="border-b pb-4">
@@ -361,7 +410,7 @@ export function PersonalizationTab({ campaign, onUpdate }: PersonalizationTabPro
                                         <div
                                             className="prose prose-sm max-w-none text-slate-800 whitespace-pre-wrap"
                                             dangerouslySetInnerHTML={{ __html: generatedEmail.body.replace(/\n/g, '<br/>') }}
-                                        ></div>
+                                        />
                                     </div>
                                 </div>
                             )}
