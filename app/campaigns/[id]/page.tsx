@@ -215,6 +215,7 @@ export default function CampaignDetailPage() {
                         </div>
                         <PlanningTab
                             schedule={schedule}
+                            campaign={campaign}
                             queueStats={queueStats}
                             onAddProspects={() => setShowAddProspectModal(true)}
                         />

@@ -137,6 +137,7 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
         email_length: "STANDARD" as "CONCISE" | "STANDARD" | "DETAILED",
         language: "fr" as "fr" | "en",
         agent_instructions: "",
+        email_mode: "BALANCED" as "BALANCED" | "SHORT_DIRECT",
     })
 
     // FIX: Use callback to update form data properly
@@ -343,6 +344,7 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
             formal: formData.formal,
             email_length: formData.email_length,
             language: formData.language,
+            email_mode: formData.email_mode,
             status: 'DRAFT',
             is_active: true,
         }
@@ -481,6 +483,7 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
                 email_length: "STANDARD",
                 language: "fr",
                 agent_instructions: "",
+                email_mode: "BALANCED",
             })
 
         } catch (error: any) {
@@ -739,31 +742,98 @@ export function CreateCampaignWizard({ open, onOpenChange, onSuccess }: CreateCa
     )
 
     const renderPersonalizationStep = () => (
-        <div className="space-y-5 py-6">
-            <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 mb-6">
-                <div className="flex gap-3">
-                    <Sparkles className="w-5 h-5 text-blue-600 mt-0.5" />
-                    <div>
-                        <h4 className="font-semibold text-blue-900 text-sm">Instructions personnalisées pour l'IA</h4>
-                        <p className="text-sm text-blue-700 mt-1">
-                            Donnez des directives spécifiques à l'IA pour la rédaction des emails. Vous pouvez définir le ton, une méthodologie de vente particulière (AIDA, PAS...), ou des règles à respecter.
+        <div className="space-y-6 py-6">
+            {/* EMAIL MODE SELECTOR */}
+            <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-indigo-600" />
+                    <h4 className="font-semibold text-sm">Mode d'email</h4>
+                </div>
+                <p className="text-xs text-muted-foreground">Choisissez le style global de vos cold emails. Ce réglage influence radicalement la structure et la longueur générées par l'IA.</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {/* MODE 1: BALANCED */}
+                    <button
+                        type="button"
+                        onClick={() => updateFormData('email_mode', 'BALANCED')}
+                        className={`text-left p-4 rounded-xl border-2 transition-all ${
+                            formData.email_mode === 'BALANCED'
+                                ? 'border-indigo-500 bg-indigo-50 shadow-md'
+                                : 'border-slate-200 bg-white hover:border-indigo-200 hover:bg-indigo-50/30'
+                        }`}
+                    >
+                        <div className="flex items-center gap-2 mb-2">
+                            <span className="text-lg">⚖️</span>
+                            <span className="font-bold text-sm text-slate-800">Mode 1 — Équilibré / Professionnel</span>
+                            {formData.email_mode === 'BALANCED' && (
+                                <CheckCircle2 className="w-4 h-4 text-indigo-600 ml-auto shrink-0" />
+                            )}
+                        </div>
+                        <p className="text-xs text-slate-500 leading-relaxed">
+                            Email complet, structuré, plusieurs paragraphes. Présente votre société, identifie un problème, propose une solution avec preuve sociale. Idéal pour des prospects qualifiés.
                         </p>
-                    </div>
+                        <div className="mt-2 flex flex-wrap gap-1">
+                            {['Multi-paragraphes', 'Preuve sociale', 'CTA clair'].map(tag => (
+                                <span key={tag} className="text-[10px] px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full font-medium">{tag}</span>
+                            ))}
+                        </div>
+                    </button>
+
+                    {/* MODE 2: SHORT DIRECT */}
+                    <button
+                        type="button"
+                        onClick={() => updateFormData('email_mode', 'SHORT_DIRECT')}
+                        className={`text-left p-4 rounded-xl border-2 transition-all ${
+                            formData.email_mode === 'SHORT_DIRECT'
+                                ? 'border-emerald-500 bg-emerald-50 shadow-md'
+                                : 'border-slate-200 bg-white hover:border-emerald-200 hover:bg-emerald-50/30'
+                        }`}
+                    >
+                        <div className="flex items-center gap-2 mb-2">
+                            <span className="text-lg">⚡</span>
+                            <span className="font-bold text-sm text-slate-800">Mode 2 — Court & Direct</span>
+                            {formData.email_mode === 'SHORT_DIRECT' && (
+                                <CheckCircle2 className="w-4 h-4 text-emerald-600 ml-auto shrink-0" />
+                            )}
+                        </div>
+                        <p className="text-xs text-slate-500 leading-relaxed">
+                            Email ultra-court (3-5 lignes max). Une seule question directe et percutante. Parfait pour une 1ère approche ou une relance après silence.
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-1">
+                            {['3-5 lignes', 'Question directe', '1ère approche'].map(tag => (
+                                <span key={tag} className="text-[10px] px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full font-medium">{tag}</span>
+                            ))}
+                        </div>
+                    </button>
                 </div>
             </div>
 
-            <FieldWithTooltip
-                label="Instructions & Contexte (Optionnel)"
-                tooltip="Ex: 'Adopte un ton direct mais empathique', 'Utilise la méthodologie AIDA', 'Ne jamais utiliser de jargon technique'..."
-            >
-                <Textarea
-                    placeholder="Ex: Utilise un ton très direct. La structure du mail doit être : Problème -> Solution -> Preuve sociale. Ne dépasse jamais 150 mots. Utilise le vouvoiement."
-                    value={formData.agent_instructions || ""}
-                    onChange={(e) => updateFormData('agent_instructions', e.target.value)}
-                    rows={8}
-                    className="border-2 focus:border-primary transition-all resize-none font-mono text-sm leading-relaxed"
-                />
-            </FieldWithTooltip>
+            {/* CUSTOM INSTRUCTIONS */}
+            <div className="space-y-3 pt-4 border-t">
+                <div className="bg-blue-50 border border-blue-100 rounded-lg p-4">
+                    <div className="flex gap-3">
+                        <Sparkles className="w-5 h-5 text-blue-600 mt-0.5" />
+                        <div>
+                            <h4 className="font-semibold text-blue-900 text-sm">Instructions personnalisées pour l'IA</h4>
+                            <p className="text-sm text-blue-700 mt-1">
+                                Donnez des directives spécifiques à l'IA pour la rédaction des emails. Vous pouvez définir le ton, une méthodologie de vente particulière (AIDA, PAS...), ou des règles à respecter.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <FieldWithTooltip
+                    label="Instructions & Contexte (Optionnel)"
+                    tooltip="Ex: 'Adopte un ton direct mais empathique', 'Utilise la méthodologie AIDA', 'Ne jamais utiliser de jargon technique'..."
+                >
+                    <Textarea
+                        placeholder="Ex: Utilise un ton très direct. La structure du mail doit être : Problème -> Solution -> Preuve sociale. Ne dépasse jamais 150 mots. Utilise le vouvoiement."
+                        value={formData.agent_instructions || ""}
+                        onChange={(e) => updateFormData('agent_instructions', e.target.value)}
+                        rows={6}
+                        className="border-2 focus:border-primary transition-all resize-none font-mono text-sm leading-relaxed"
+                    />
+                </FieldWithTooltip>
+            </div>
         </div>
     )
 

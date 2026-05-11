@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { CalendarIcon, Clock, Mail, AlertTriangle, XCircle, Loader2, Save, Edit, Send, Plus, X, Calendar as CalendarIconLucide, Wand2 } from "lucide-react"
+import { CalendarIcon, Clock, Mail, AlertTriangle, XCircle, Loader2, Save, Edit, Send, Plus, X, Calendar as CalendarIconLucide, Wand2, Zap, CheckCircle2 } from "lucide-react"
 import { format, addDays, isSameDay, startOfDay, isBefore, getYear } from "date-fns"
 import { fr } from "date-fns/locale"
 import { cn } from "@/lib/utils"
@@ -39,6 +39,7 @@ import { getHolidaysForRange } from "@/lib/date-utils"
 
 interface PlanningTabProps {
     schedule: any
+    campaign?: any  // Campaign object to show/switch email_mode
     queueStats: {
         pending: number
         sent: number
@@ -49,10 +50,14 @@ interface PlanningTabProps {
     onAddProspects?: () => void
 }
 
-export function PlanningTab({ schedule, queueStats, onUpdate, onAddProspects }: PlanningTabProps) {
+export function PlanningTab({ schedule, campaign, queueStats, onUpdate, onAddProspects }: PlanningTabProps) {
     const supabase = createClient()
     const [smtpName, setSmtpName] = useState<string>("Chargement...")
     const [canceling, setCanceling] = useState(false)
+
+    // Email mode state (for inline switch)
+    const [emailMode, setEmailMode] = useState<string>((campaign as any)?.email_mode || "BALANCED")
+    const [switchingMode, setSwitchingMode] = useState(false)
 
     // Edit State
     const [editOpen, setEditOpen] = useState(false)
@@ -209,6 +214,26 @@ export function PlanningTab({ schedule, queueStats, onUpdate, onAddProspects }: 
                 ? prev.filter(d => d !== day)
                 : [...prev, day].sort()
         )
+    }
+
+    const handleSwitchMode = async () => {
+        if (!campaign?.id) return
+        const newMode = emailMode === 'BALANCED' ? 'SHORT_DIRECT' : 'BALANCED'
+        setSwitchingMode(true)
+        try {
+            const { error } = await supabase
+                .from('cold_email_campaigns')
+                .update({ email_mode: newMode })
+                .eq('id', campaign.id)
+            if (!error) {
+                setEmailMode(newMode)
+                toast.success(`Mode "${newMode === 'BALANCED' ? 'Équilibré' : 'Court & Direct'}" activé`)
+            } else {
+                toast.error('Erreur lors du changement de mode')
+            }
+        } finally {
+            setSwitchingMode(false)
+        }
     }
 
     const addCustomDate = () => {
@@ -715,6 +740,52 @@ export function PlanningTab({ schedule, queueStats, onUpdate, onAddProspects }: 
                                 {schedule.auto_generate ? "ON" : "OFF"}
                             </Badge>
                         </div>
+
+                        {/* EMAIL MODE BANNER */}
+                        {campaign && (
+                            <div className={cn(
+                                "flex items-center justify-between gap-3 px-4 py-3 rounded-xl border transition-all",
+                                emailMode === 'BALANCED'
+                                    ? "bg-indigo-50 border-indigo-200"
+                                    : "bg-emerald-50 border-emerald-200"
+                            )}>
+                                <div className="flex items-center gap-3">
+                                    <div className={cn(
+                                        "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-base",
+                                        emailMode === 'BALANCED' ? "bg-indigo-100" : "bg-emerald-100"
+                                    )}>
+                                        {emailMode === 'BALANCED' ? '⚖️' : '⚡'}
+                                    </div>
+                                    <div>
+                                        <p className={cn(
+                                            "text-sm font-semibold",
+                                            emailMode === 'BALANCED' ? "text-indigo-900" : "text-emerald-900"
+                                        )}>
+                                            Mode email actif
+                                        </p>
+                                        <p className="text-xs text-slate-500 mt-0.5">
+                                            {emailMode === 'BALANCED'
+                                                ? "Équilibré / Professionnel — email complet structuré"
+                                                : "Court & Direct — question directe 3-5 lignes"
+                                            }
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={handleSwitchMode}
+                                    disabled={switchingMode}
+                                    className={cn(
+                                        "shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all",
+                                        emailMode === 'BALANCED'
+                                            ? "border-indigo-300 text-indigo-700 bg-indigo-100 hover:bg-indigo-200"
+                                            : "border-emerald-300 text-emerald-700 bg-emerald-100 hover:bg-emerald-200",
+                                        "disabled:opacity-50"
+                                    )}
+                                >
+                                    {switchingMode ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Changer'}
+                                </button>
+                            </div>
+                        )}
 
                         <div className="pt-2 border-t border-slate-100 mt-2">
                             {onAddProspects && (
