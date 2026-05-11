@@ -495,15 +495,15 @@ export function LaunchSearchForm() {
                             >
                                 <label className="text-sm font-semibold flex items-center justify-between">
                                     <span>Nombre de résultats max</span>
-                                    <span className="text-xs font-normal text-muted-foreground">Limite : 50 prospects</span>
+                                    <span className="text-xs font-normal text-muted-foreground">Limite : 200 prospects</span>
                                 </label>
                                 <Input
                                     type="number"
                                     min={1}
-                                    max={50}
+                                    max={200}
                                     className="h-12 border-2 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all"
                                     value={formData.maxResults}
-                                    onChange={(e) => setFormData({ ...formData, maxResults: Math.min(50, Math.max(1, parseInt(e.target.value) || 1)) })}
+                                    onChange={(e) => setFormData({ ...formData, maxResults: Math.min(200, Math.max(1, parseInt(e.target.value) || 1)) })}
                                     onFocus={() => setIsCardFocused(true)}
                                     onBlur={() => setIsCardFocused(false)}
                                     disabled={loading}
