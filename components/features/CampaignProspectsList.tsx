@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -14,7 +14,7 @@ import { ProspectDetailModal } from "./ProspectDetailModal"
 import { EmailViewerModal } from "./EmailViewerModal"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { AlertCircle } from "lucide-react"
+import { AlertCircle, AlertTriangle } from "lucide-react"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
 import type { CampaignProspectLink, EmailStatus, Campaign } from "@/types"
@@ -44,6 +44,12 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
 
     // Per-row loading state for generate action
     const [generatingIds, setGeneratingIds] = useState<Set<string>>(new Set())
+
+    // Batch generation guard
+    const [activeJob, setActiveJob] = useState<{ id: string; status: string; count: number } | null>(null)
+    const [checkingJob, setCheckingJob] = useState(false)
+    const [showCap50Dialog, setShowCap50Dialog] = useState(false)
+    const [pendingGenerateIds, setPendingGenerateIds] = useState<string[]>([])
 
     // Supabase Realtime: subscribe to campaign_prospects changes
     useEffect(() => {
@@ -85,6 +91,36 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
             supabase.removeChannel(channel)
         }
     }, [campaignId])
+
+    // Check if there's an active (pending/running) job for this campaign
+    const checkActiveJob = useCallback(async (): Promise<boolean> => {
+        setCheckingJob(true)
+        try {
+            const supabase = createClient()
+            const { data } = await supabase
+                .from('cold_email_jobs')
+                .select('id, status, prospect_ids')
+                .eq('campaign_id', campaignId)
+                .in('status', ['pending', 'running'])
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle()
+
+            if (data) {
+                const count = Array.isArray(data.prospect_ids) ? data.prospect_ids.length : 0
+                setActiveJob({ id: data.id, status: data.status, count })
+                return true
+            }
+            setActiveJob(null)
+            return false
+        } catch {
+            return false
+        } finally {
+            setCheckingJob(false)
+        }
+    }, [campaignId])
+
+    useEffect(() => { checkActiveJob() }, [checkActiveJob])
 
     useEffect(() => {
         loadProspects()
@@ -167,11 +203,34 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
 
     const handleGenerateEmail = async (prospectIds: string | string[]) => {
         // Normalize all ids to strings (prospect_id can be number or string depending on context)
-        const ids = (Array.isArray(prospectIds) ? prospectIds : [prospectIds]).map(id => String(id))
+        const rawIds = (Array.isArray(prospectIds) ? prospectIds : [prospectIds]).map(id => String(id))
+
+        // 1. Check for already active job
+        const hasActive = await checkActiveJob()
+        if (hasActive) {
+            toast.error("Une génération est déjà en cours", {
+                description: `Attendez que les ${activeJob?.count || ''} email(s) en cours soient générés avant de relancer.`,
+                duration: 6000
+            })
+            return
+        }
+
+        // 2. If > 50 selected, show cap dialog
+        if (rawIds.length > 50) {
+            setPendingGenerateIds(rawIds)
+            setShowCap50Dialog(true)
+            return
+        }
+
+        await _doGenerate(rawIds)
+    }
+
+    const _doGenerate = async (ids: string[]) => {
+        const capped = ids.slice(0, 50)
 
         // Mark rows as generating
-        setGeneratingIds(prev => new Set([...prev, ...ids]))
-        toast.info(`Génération en cours pour ${ids.length} prospect(s)... ⚡`, { duration: 4000 })
+        setGeneratingIds(prev => new Set([...prev, ...capped]))
+        toast.info(`Génération en cours pour ${capped.length} prospect(s)... ⚡`, { duration: 4000 })
 
         try {
             setBatchActionLoading(true)
@@ -179,7 +238,7 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
             const response = await fetch(`/api/campaigns/${campaignId}/generate-email`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prospectIds: ids })
+                body: JSON.stringify({ prospectIds: capped })
             })
 
             if (!response.ok) throw new Error('Erreur génération')
@@ -187,12 +246,15 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
             // Webhook triggered — N8N will update the DB, Realtime will pick it up
             toast.success(`Demande de génération envoyée ✅ — Le mail apparaîtra automatiquement dès qu'il est prêt.`, { duration: 6000 })
             setSelectedProspects(new Set())
+            setShowCap50Dialog(false)
+            setPendingGenerateIds([])
+            checkActiveJob() // refresh job status
         } catch (error: any) {
             toast.error(error.message)
             // Remove from generating on error
             setGeneratingIds(prev => {
                 const next = new Set(prev)
-                ids.forEach(id => next.delete(String(id)))
+                capped.forEach(id => next.delete(String(id)))
                 return next
             })
         } finally {
@@ -806,6 +868,36 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
                                 <Send className="w-4 h-4 mr-2" />
                             )}
                             Envoyer maintenant
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Cap-50 confirmation dialog */}
+            <Dialog open={showCap50Dialog} onOpenChange={setShowCap50Dialog}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <AlertTriangle className="w-5 h-5 text-amber-500" />
+                            Limite de 50 prospects par lot
+                        </DialogTitle>
+                        <DialogDescription className="text-sm leading-relaxed">
+                            Vous avez sélectionné <strong>{pendingGenerateIds.length} prospects</strong>. Pour éviter de surcharger le webhook, la génération est limitée à <strong>50 prospects par lot</strong>.
+                            <br /><br />
+                            Les <strong>50 premiers</strong> seront traités maintenant. Une fois terminés, vous pourrez relancer pour les suivants.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="gap-2">
+                        <Button variant="outline" onClick={() => { setShowCap50Dialog(false); setPendingGenerateIds([]) }}>
+                            Annuler
+                        </Button>
+                        <Button
+                            onClick={() => _doGenerate(pendingGenerateIds)}
+                            disabled={batchActionLoading}
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                        >
+                            {batchActionLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Mail className="w-4 h-4 mr-2" />}
+                            Générer les 50 premiers
                         </Button>
                     </DialogFooter>
                 </DialogContent>

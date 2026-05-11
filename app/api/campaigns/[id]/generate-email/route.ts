@@ -49,7 +49,24 @@ export async function POST(
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        // Webhook URL (Nouveau)
+        // Guard: reject if a job is already pending/running for this campaign
+        const { data: existingJob } = await supabase
+            .from('cold_email_jobs')
+            .select('id, status, prospect_ids')
+            .eq('campaign_id', campaignId)
+            .in('status', ['pending', 'running'])
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+
+        if (existingJob) {
+            const count = Array.isArray(existingJob.prospect_ids) ? existingJob.prospect_ids.length : '?'
+            return NextResponse.json({
+                error: `Une génération est déjà en cours (${count} prospect(s) — statut: ${existingJob.status}). Attendez qu'elle se termine avant de relancer.`,
+                activeJobId: existingJob.id
+            }, { status: 409 })
+        }
+
         const HARDCODED_URL = "https://n8n.srv903375.hstgr.cloud/webhook/neuraflow_scrappeur_generateur_cold_mail"
         const webhookUrl = process.env.N8N_WEBHOOK_COLD_EMAIL || process.env.NEXT_PUBLIC_N8N_WEBHOOK_COLD_EMAIL_URL || HARDCODED_URL
 
