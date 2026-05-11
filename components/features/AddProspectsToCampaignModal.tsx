@@ -105,17 +105,44 @@ export function AddProspectsToCampaignModal({
             const { data: { user } } = await supabase.auth.getUser()
             if (!user) return
 
-            // Fetch all prospects
-            const { data, error } = await supabase
+            // Fetch all prospects — explicit columns like the working /prospects page
+            // Try with rappel columns first, fallback without if schema missing
+            let data: any[] | null = null
+            let error: any = null
+
+            const res1 = await supabase
                 .from('scrape_prospect')
-                .select('*')
+                .select(`
+                    id_prospect, id_jobs, id_user, created_at,
+                    data_scrapping, deep_search, email_adresse_verified,
+                    ville, secteur, rappel_date, rappel_notes, crm_status
+                `)
                 .eq('id_user', user.id)
                 .order('created_at', { ascending: false })
-                .limit(200)
+                .limit(500)
+
+            if (!res1.error && res1.data) {
+                data = res1.data
+            } else {
+                // Fallback without rappel columns
+                console.warn('[AddModal] Full query failed, retrying without rappel:', res1.error?.message)
+                const res2 = await supabase
+                    .from('scrape_prospect')
+                    .select(`
+                        id_prospect, id_jobs, id_user, created_at,
+                        data_scrapping, deep_search, email_adresse_verified,
+                        ville, secteur
+                    `)
+                    .eq('id_user', user.id)
+                    .order('created_at', { ascending: false })
+                    .limit(500)
+                data = res2.data
+                error = res2.error
+            }
 
             if (error) throw error
 
-            // Fetch all prospect IDs already linked to ANY campaign
+            // Fetch prospect IDs already linked to ANY campaign — filtered to this user's data
             const { data: allLinks } = await supabase
                 .from('campaign_prospects')
                 .select('prospect_id, campaign_id')
@@ -138,16 +165,24 @@ export function AddProspectsToCampaignModal({
             const enrichedProspects: ProspectWithFlags[] = (data || [])
                 .filter((p: ScrapeProspect) => !inThisCampaign.has(String(p.id_prospect))) // hide already in this campaign
                 .map((p: ScrapeProspect) => {
-                    const hasEmail = !!p.email_adresse_verified
+                    // Normalize email — handle array-string artifacts like ["email@domain.com"]
+                    let emailRaw = p.email_adresse_verified
+                    if (typeof emailRaw === 'string' && emailRaw.startsWith('[')) {
+                        try { emailRaw = JSON.parse(emailRaw)?.[0] || null } catch { emailRaw = null }
+                    }
+                    if (Array.isArray(emailRaw)) emailRaw = emailRaw[0] || null
+                    const hasEmail = !!emailRaw
+
                     const deepSearch = typeof p.deep_search === 'string'
-                        ? JSON.parse(p.deep_search)
+                        ? (() => { try { return JSON.parse(p.deep_search as string) } catch { return null } })()
                         : p.deep_search
                     const hasDeepSearch = !!(deepSearch && Object.keys(deepSearch).length > 0)
-                    return { ...p, hasEmail, hasDeepSearch }
+                    return { ...p, email_adresse_verified: emailRaw, hasEmail, hasDeepSearch }
                 })
 
             setProspects(enrichedProspects)
         } catch (error: any) {
+            console.error('[AddModal] loadProspects error:', error)
             toast.error('Erreur lors du chargement des prospects')
         }
     }
