@@ -49,6 +49,9 @@ export function AddProspectsToCampaignModal({
     const [hasActiveSchedule, setHasActiveSchedule] = useState(false)
     const [quotas, setQuotas] = useState<{ used: number; limit: number } | null>(null)
     const [quotaLoading, setQuotaLoading] = useState(false)
+    // Filters
+    const [filterEmailOnly, setFilterEmailOnly] = useState(false)
+    const [filterExcludeOther, setFilterExcludeOther] = useState(false)
     // Prospect membership flags
     const [prospectIdsInThisCampaign, setProspectIdsInThisCampaign] = useState<Set<string>>(new Set())
     const [prospectIdsInOtherCampaign, setProspectIdsInOtherCampaign] = useState<Set<string>>(new Set())
@@ -223,72 +226,66 @@ export function AddProspectsToCampaignModal({
     const handleAddProspects = async () => {
         try {
             setLoading(true)
-            let prospectIds: string[] = []
 
             if (mode === 'prospects') {
-                prospectIds = Array.from(selectedProspectIds)
+                const prospectIds = Array.from(selectedProspectIds)
                 const selectedProspects = prospects.filter(p => prospectIds.includes(p.id_prospect))
                 const noEmail = selectedProspects.filter(p => !p.hasEmail)
-
                 if (noEmail.length > 0) {
                     toast.error(`${noEmail.length} prospect(s) sans email ne peuvent pas être ajoutés`)
                     setLoading(false)
                     return
                 }
-            } else {
-                const selectedJobIds = Array.from(selectedSearchIds)
-                if (selectedJobIds.length > 0) {
-                    const supabase = createClient()
-                    const { data, error } = await supabase
-                        .from('scrape_prospect')
-                        .select('id_prospect')
-                        .in('id_job_scrap', selectedJobIds)
-
-                    if (error) throw error
-                    prospectIds = data?.map((p: any) => p.id_prospect) || []
-                }
-            }
-
-            if (prospectIds.length === 0) {
-                toast.error('Aucun prospect sélectionné')
-                setLoading(false)
-                return
-            }
-
-            if (hasActiveSchedule && quotas) {
-                const remaining = quotas.limit - quotas.used
-                if (prospectIds.length > remaining) {
-                    toast.error(`Quota insuffisant`, {
-                        description: `${prospectIds.length} emails requis, ${remaining} crédits disponibles.`
-                    })
+                if (prospectIds.length === 0) {
+                    toast.error('Aucun prospect sélectionné')
                     setLoading(false)
                     return
                 }
+                if (hasActiveSchedule && quotas) {
+                    const remaining = quotas.limit - quotas.used
+                    if (prospectIds.length > remaining) {
+                        toast.error(`Quota insuffisant`, { description: `${prospectIds.length} emails requis, ${remaining} crédits disponibles.` })
+                        setLoading(false)
+                        return
+                    }
+                }
+                const response = await fetch(`/api/campaigns/${campaignId}/prospects`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prospectIds })
+                })
+                if (!response.ok) {
+                    const errData = await response.json().catch(() => ({}))
+                    throw new Error(errData.error || "Erreur lors de l'ajout")
+                }
+                const result = await response.json()
+                toast.success(`${result.added} prospect(s) ajouté(s) à la campagne`)
+                if (hasActiveSchedule) toast.info("Génération lancée", { description: "Les emails ont été mis en file d'attente." })
+                onOpenChange(false)
+                if (onSuccess) onSuccess()
+            } else {
+                // Par recherche — on envoie les searchIds à l'API qui gère la résolution
+                const searchIdsList = Array.from(selectedSearchIds)
+                if (searchIdsList.length === 0) {
+                    toast.error('Aucune recherche sélectionnée')
+                    setLoading(false)
+                    return
+                }
+                const response = await fetch(`/api/campaigns/${campaignId}/prospects`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ searchIds: searchIdsList })
+                })
+                if (!response.ok) {
+                    const errData = await response.json().catch(() => ({}))
+                    throw new Error(errData.error || "Erreur lors de l'ajout")
+                }
+                const result = await response.json()
+                toast.success(`${result.added} prospect(s) ajouté(s) à la campagne`)
+                onOpenChange(false)
+                if (onSuccess) onSuccess()
             }
 
-            const body = mode === 'prospects'
-                ? { prospectIds }
-                : { searchIds: Array.from(selectedSearchIds) }
-
-            const response = await fetch(`/api/campaigns/${campaignId}/prospects`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body)
-            })
-
-            if (!response.ok) {
-                const errData = await response.json().catch(() => ({}))
-                throw new Error(errData.error || "Erreur lors de l'ajout des prospects")
-            }
-
-            const result = await response.json()
-            toast.success(`${result.added} prospect(s) ajouté(s) à la campagne`)
-            if (hasActiveSchedule) {
-                toast.info("Génération lancée", { description: "Les emails ont été mis en file d'attente." })
-            }
-
-            onOpenChange(false)
-            if (onSuccess) onSuccess()
         } catch (error: any) {
             toast.error(error.message)
         } finally {
@@ -325,15 +322,22 @@ export function AddProspectsToCampaignModal({
     }
 
     const filteredProspects = prospects.filter(p => {
-        if (!searchTerm) return true
-        const data = typeof p.data_scrapping === 'string' ? JSON.parse(p.data_scrapping) : p.data_scrapping || {}
-        const name = data.title || data.name || ''
-        const company = data.company || data.companyName || p.secteur || ''
-        const email = Array.isArray(p.email_adresse_verified)
-            ? p.email_adresse_verified[0] || ''
-            : p.email_adresse_verified || ''
-        const q = searchTerm.toLowerCase()
-        return name.toLowerCase().includes(q) || company.toLowerCase().includes(q) || email.toLowerCase().includes(q)
+        // Filter: email only
+        if (filterEmailOnly && !p.hasEmail) return false
+        // Filter: exclude in other campaigns
+        if (filterExcludeOther && prospectIdsInOtherCampaign.has(String(p.id_prospect))) return false
+        // Search term
+        if (searchTerm) {
+            const data = typeof p.data_scrapping === 'string' ? JSON.parse(p.data_scrapping) : p.data_scrapping || {}
+            const name = data.title || data.nom_complet || data.name || data.Titre || (data.prenom ? `${data.prenom} ${data.nom || ''}`.trim() : data.nom) || ''
+            const company = data.company || data.companyName || data.societe || p.secteur || ''
+            const email = Array.isArray(p.email_adresse_verified)
+                ? p.email_adresse_verified[0] || ''
+                : (p.email_adresse_verified as string) || ''
+            const q = searchTerm.toLowerCase()
+            return name.toLowerCase().includes(q) || company.toLowerCase().includes(q) || email.toLowerCase().includes(q)
+        }
+        return true
     })
 
     const creditsRemaining = quotas ? quotas.limit - quotas.used : 0
@@ -424,6 +428,36 @@ export function AddProspectsToCampaignModal({
                                 </Button>
                             </div>
 
+                            {/* Filter chips */}
+                            <div className="flex flex-wrap gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setFilterEmailOnly(v => !v)}
+                                    className={cn(
+                                        "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-all",
+                                        filterEmailOnly
+                                            ? "bg-emerald-100 border-emerald-400 text-emerald-800"
+                                            : "bg-slate-100 border-slate-200 text-slate-500 hover:border-emerald-300 hover:text-emerald-700"
+                                    )}
+                                >
+                                    <Mail className="w-3 h-3" />
+                                    Avec email uniquement
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setFilterExcludeOther(v => !v)}
+                                    className={cn(
+                                        "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-all",
+                                        filterExcludeOther
+                                            ? "bg-indigo-100 border-indigo-400 text-indigo-800"
+                                            : "bg-slate-100 border-slate-200 text-slate-500 hover:border-indigo-300 hover:text-indigo-700"
+                                    )}
+                                >
+                                    <Users className="w-3 h-3" />
+                                    Hors autres campagnes
+                                </button>
+                            </div>
+
                             {/* Counter row */}
                             <div className="flex items-center justify-between text-xs text-slate-500">
                                 <span>
@@ -451,14 +485,16 @@ export function AddProspectsToCampaignModal({
                                 <ScrollArea className="h-[280px] sm:h-[320px]">
                                     <div className="p-2 space-y-1">
                                         {filteredProspects.map((prospect) => {
-                                            const data = typeof prospect.data_scrapping === 'string'
+                                            const rawData = typeof prospect.data_scrapping === 'string'
                                                 ? JSON.parse(prospect.data_scrapping)
                                                 : prospect.data_scrapping || {}
-                                            const name = data.title || data.name || 'Prospect'
-                                            const company = data.company || data.companyName || prospect.secteur || ''
+                                            const name = rawData.title || rawData.nom_complet || rawData.name || rawData.Titre
+                                                || (rawData.prenom ? `${rawData.prenom} ${rawData.nom || ''}`.trim() : rawData.nom)
+                                                || 'Prospect sans nom'
+                                            const company = rawData.company || rawData.companyName || rawData.societe || rawData.raison_sociale || prospect.secteur || ''
                                             const email = Array.isArray(prospect.email_adresse_verified)
                                                 ? prospect.email_adresse_verified[0]
-                                                : prospect.email_adresse_verified
+                                                : prospect.email_adresse_verified as string | undefined
                                             const isSelected = selectedProspectIds.has(prospect.id_prospect)
                                             const isInOther = prospectIdsInOtherCampaign.has(String(prospect.id_prospect))
 
