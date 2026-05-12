@@ -55,9 +55,7 @@ export function getBaseUrl(): string {
     if (process.env.NEXT_PUBLIC_APP_URL) {
         return process.env.NEXT_PUBLIC_APP_URL;
     }
-    if (process.env.VERCEL_URL) {
-        return `https://${process.env.VERCEL_URL}`;
-    }
+    // Force the production domain to avoid Vercel Authentication on preview deployments
     return 'https://saas-prospection.vercel.app';
 }
 
