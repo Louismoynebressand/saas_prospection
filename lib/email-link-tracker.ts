@@ -52,10 +52,13 @@ function generateShortCode(): string {
  * Retourne l'URL de base de l'application (pour les liens de tracking)
  */
 export function getBaseUrl(): string {
-    return process.env.NEXT_PUBLIC_APP_URL
-        || process.env.VERCEL_URL
-            ? `https://${process.env.VERCEL_URL}`
-            : 'https://superprospects.vercel.app'
+    if (process.env.NEXT_PUBLIC_APP_URL) {
+        return process.env.NEXT_PUBLIC_APP_URL;
+    }
+    if (process.env.VERCEL_URL) {
+        return `https://${process.env.VERCEL_URL}`;
+    }
+    return 'https://saas-prospection.vercel.app';
 }
 
 /**
