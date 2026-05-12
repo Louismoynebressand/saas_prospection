@@ -27,21 +27,26 @@ export async function GET(
         return new NextResponse('Invalid tracking code', { status: 400 })
     }
 
-    const supabaseAdmin = createClient(
+    const supabase = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL || 'http://localhost:54321',
-        process.env.SUPABASE_SERVICE_ROLE_KEY || 'dummy_key'
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'dummy_key'
     )
 
     try {
-        // 1. Lookup the tracked link
-        const { data: link, error } = await supabaseAdmin
-            .from('email_tracked_links')
-            .select('id, original_url, campaign_id, prospect_id, click_count, first_clicked_at')
-            .eq('short_code', code)
-            .single()
+        const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+            || request.headers.get('x-real-ip')
+            || 'unknown'
+        const userAgent = request.headers.get('user-agent') || ''
 
-        if (error || !link) {
-            console.error(`[Track] Code "${code}" not found:`, error?.message)
+        // 1. Process the click fully in the database (bypasses RLS securely via RPC)
+        const { data: originalUrl, error } = await supabase.rpc('process_tracked_link_click', {
+            p_short_code: code,
+            p_ip_address: ip,
+            p_user_agent: userAgent.slice(0, 500)
+        })
+
+        if (error || !originalUrl) {
+            console.error(`[Track] Code "${code}" not found or RPC error:`, error?.message)
             // Redirect to homepage instead of 404 to avoid revealing tracking info
             return NextResponse.redirect(
                 process.env.NEXT_PUBLIC_APP_URL || 'https://saas-prospection.vercel.app',
@@ -49,65 +54,8 @@ export async function GET(
             )
         }
 
-        const now = new Date().toISOString()
-        const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-            || request.headers.get('x-real-ip')
-            || 'unknown'
-        const userAgent = request.headers.get('user-agent') || ''
-
-        // 2. Update click stats on tracked link (non-blocking)
-        const updatePromise = supabaseAdmin
-            .from('email_tracked_links')
-            .update({
-                click_count: (link.click_count || 0) + 1,
-                last_clicked_at: now,
-                first_clicked_at: link.first_clicked_at || now,
-            })
-            .eq('id', link.id)
-
-        // 3. Insert click event (non-blocking)
-        const clickPromise = supabaseAdmin
-            .from('email_link_clicks')
-            .insert({
-                tracked_link_id: link.id,
-                clicked_at: now,
-                user_agent: userAgent.slice(0, 500),
-                ip_address: ip,
-            })
-
-        // 4. Increment links_click_count on campaign_prospects (non-blocking)
-        const cpPromise = supabaseAdmin.rpc('increment_links_click_count', {
-            p_campaign_id: link.campaign_id,
-            p_prospect_id: link.prospect_id,
-        }).then(({ error: rpcError }) => {
-            if (rpcError) {
-                // Fallback: manual increment
-                return supabaseAdmin
-                    .from('campaign_prospects')
-                    .select('links_click_count')
-                    .eq('campaign_id', link.campaign_id)
-                    .eq('prospect_id', link.prospect_id)
-                    .single()
-                    .then(({ data: cp }) => {
-                        if (cp) {
-                            return supabaseAdmin
-                                .from('campaign_prospects')
-                                .update({ links_click_count: (cp.links_click_count || 0) + 1 })
-                                .eq('campaign_id', link.campaign_id)
-                                .eq('prospect_id', link.prospect_id)
-                        }
-                    })
-            }
-        })
-
-        // Fire all updates in parallel, don't await (return redirect immediately)
-        Promise.all([updatePromise, clickPromise, cpPromise]).catch(err =>
-            console.error('[Track] Background update error:', err)
-        )
-
-        // 5. Redirect to original URL
-        const destination = link.original_url
-        return NextResponse.redirect(destination, { status: 302 })
+        // 2. Redirect to original URL
+        return NextResponse.redirect(originalUrl, { status: 302 })
 
     } catch (err) {
         console.error('[Track] Unexpected error:', err)
