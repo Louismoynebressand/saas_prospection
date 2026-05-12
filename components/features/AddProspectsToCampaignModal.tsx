@@ -209,24 +209,35 @@ export function AddProspectsToCampaignModal({
 
             const searchesWithCounts = await Promise.all(
                 (searchData || []).map(async (search: SearchJob) => {
-                    // Total prospects for this job
-                    const { count: total } = await supabase
+                    // Fetch all email values for this job to count robustly client-side
+                    const { data: prospectsData } = await supabase
                         .from('scrape_prospect')
-                        .select('*', { count: 'exact', head: true })
+                        .select('id_prospect, email_adresse_verified')
                         .eq('id_jobs', search.id_jobs)
                         .eq('id_user', user.id)
 
-                    // Prospects with a valid email
-                    const { count: withEmail } = await supabase
-                        .from('scrape_prospect')
-                        .select('*', { count: 'exact', head: true })
-                        .eq('id_jobs', search.id_jobs)
-                        .eq('id_user', user.id)
-                        .not('email_adresse_verified', 'is', null)
-                        .neq('email_adresse_verified', '')
-                        .neq('email_adresse_verified', '[]')
+                    const total = prospectsData?.length || 0
 
-                    return { ...search, prospectCount: total || 0, emailCount: withEmail || 0 }
+                    // Count prospects with a truly valid email (handles string, array, JSON string)
+                    const withEmail = (prospectsData || []).filter((p: any) => {
+                        const e = p.email_adresse_verified
+                        if (!e) return false
+                        if (Array.isArray(e)) return e.length > 0 && !!String(e[0]).trim()
+                        if (typeof e === 'string') {
+                            const trimmed = e.trim()
+                            if (!trimmed || trimmed === '[]' || trimmed === 'null') return false
+                            if (trimmed.startsWith('[')) {
+                                try {
+                                    const arr = JSON.parse(trimmed)
+                                    return Array.isArray(arr) && arr.length > 0 && !!String(arr[0]).trim()
+                                } catch { return false }
+                            }
+                            return trimmed.includes('@')
+                        }
+                        return false
+                    }).length
+
+                    return { ...search, prospectCount: total, emailCount: withEmail }
                 })
             )
 
@@ -355,6 +366,18 @@ export function AddProspectsToCampaignModal({
 
     const creditsRemaining = quotas ? quotas.limit - quotas.used : 0
     const selectedCount = mode === 'prospects' ? selectedProspectIds.size : selectedSearchIds.size
+
+    // For searches mode: total prospects with email across selected searches
+    const selectedSearchEmailCount = mode === 'searches'
+        ? searches
+            .filter(s => selectedSearchIds.has(s.id_jobs))
+            .reduce((sum, s) => sum + (s.emailCount ?? 0), 0)
+        : 0
+    const selectedSearchTotalCount = mode === 'searches'
+        ? searches
+            .filter(s => selectedSearchIds.has(s.id_jobs))
+            .reduce((sum, s) => sum + (s.prospectCount ?? 0), 0)
+        : 0
     const isQuotaExceeded = hasActiveSchedule && quotas !== null && mode === 'prospects' && selectedProspectIds.size > creditsRemaining
 
     return (
@@ -687,20 +710,34 @@ export function AddProspectsToCampaignModal({
                                 Augmenter le quota
                             </Button>
                         ) : (
-                            <Button
-                                onClick={handleAddProspects}
-                                disabled={loading || selectedCount === 0}
-                                className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 min-w-[140px]"
-                            >
-                                {loading
-                                    ? <Loader2 className="w-4 h-4 animate-spin" />
-                                    : null
-                                }
-                                {loading
-                                    ? 'Ajout en cours...'
-                                    : `Ajouter ${selectedCount > 0 ? selectedCount : ''} ${mode === 'prospects' ? 'prospect(s)' : 'recherche(s)'}`
-                                }
-                            </Button>
+                            <>
+                                {/* Show email count info for searches mode */}
+                                {mode === 'searches' && selectedCount > 0 && (
+                                    <div className="text-xs text-slate-500 text-right">
+                                        <span className="font-semibold text-emerald-700">{selectedSearchEmailCount} avec email</span>
+                                        {selectedSearchTotalCount > selectedSearchEmailCount && (
+                                            <span className="text-slate-400 ml-1">/ {selectedSearchTotalCount} total</span>
+                                        )}
+                                        <span className="block text-[10px] text-slate-400">prospects qui seront ajoutés</span>
+                                    </div>
+                                )}
+                                <Button
+                                    onClick={handleAddProspects}
+                                    disabled={loading || selectedCount === 0 || (mode === 'searches' && selectedSearchEmailCount === 0)}
+                                    className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 min-w-[160px]"
+                                >
+                                    {loading
+                                        ? <Loader2 className="w-4 h-4 animate-spin" />
+                                        : null
+                                    }
+                                    {loading
+                                        ? 'Ajout en cours...'
+                                        : mode === 'searches' && selectedCount > 0
+                                            ? `Ajouter ${selectedSearchEmailCount} prospect(s)`
+                                            : `Ajouter${selectedCount > 0 ? ` ${selectedCount}` : ''} prospect(s)`
+                                    }
+                                </Button>
+                            </>
                         )}
                     </div>
                 </div>
