@@ -35,6 +35,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { EmailGenerationModal } from "@/components/features/EmailGenerationModal"
+import { EmailLinkStats } from "@/components/features/EmailLinkStats"
 import { toast } from "sonner"
 
 // --- TYPES ---
@@ -1503,6 +1504,17 @@ export default function ProspectPage() {
                                                                     </div>
                                                                 </div>
                                                             </div>
+
+                                                             {/* Link click tracking stats */}
+                                                             <div className="mt-6 pt-4 border-t border-indigo-100">
+                                                                 <p className="text-xs font-semibold text-indigo-700 uppercase tracking-wider mb-3">
+                                                                     🖱️ Clics sur les liens de signature
+                                                                 </p>
+                                                                 <EmailLinkStats
+                                                                     prospectId={prospect?.id_prospect ?? 0}
+                                                                     campaignId={link.campaign_id}
+                                                                 />
+                                                             </div>
                                                         </div>
                                                     </div>
                                                 ) : (

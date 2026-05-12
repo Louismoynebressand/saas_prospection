@@ -8,7 +8,7 @@ import { QuickActions } from "@/components/dashboard/QuickActions"
 import { ActivityFeed } from "@/components/dashboard/ActivityFeed"
 import { LastJobWidget } from "@/components/dashboard/LastJobWidget"
 import { PlanningOverview } from "@/components/dashboard/PlanningOverview"
-import { Users, Search, Mail, ShieldCheck, Sparkles, Rocket, Send } from "lucide-react"
+import { Users, Search, Mail, ShieldCheck, Sparkles, Rocket, Send, MousePointerClick } from "lucide-react"
 import { motion } from "framer-motion"
 
 interface DashboardStats {
@@ -20,6 +20,10 @@ interface DashboardStats {
     activeCampaigns: number
     emailsSent: number
     emailsScheduled: number
+    linkClicksTotal: number
+    linkClicksPhone: number
+    linkClicksEmail: number
+    linkClicksWeb: number
 }
 
 export default function DashboardPage() {
@@ -31,7 +35,11 @@ export default function DashboardPage() {
         emailsGenerated: 0,
         activeCampaigns: 0,
         emailsSent: 0,
-        emailsScheduled: 0
+        emailsScheduled: 0,
+        linkClicksTotal: 0,
+        linkClicksPhone: 0,
+        linkClicksEmail: 0,
+        linkClicksWeb: 0,
     })
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
@@ -56,7 +64,8 @@ export default function DashboardPage() {
                 emailsGeneratedResult,
                 activeCampaignsResult,
                 emailsSentResult,
-                emailsScheduledResult
+                emailsScheduledResult,
+                linkClicksResult
             ] = await Promise.all([
                 // Total prospects scraped
                 supabase
@@ -109,12 +118,19 @@ export default function DashboardPage() {
                     .from('email_queue')
                     .select('*, cold_email_campaigns!inner(user_id)', { count: 'exact', head: true })
                     .eq('cold_email_campaigns.user_id', user.id)
-                    .eq('status', 'pending')
+                    .eq('status', 'pending'),
+
+                // Link click totals from the aggregate view
+                supabase
+                    .from('email_link_stats_by_campaign')
+                    .select('total_clicks, phone_clicks, email_clicks, website_clicks')
+                    .eq('user_id', user.id)
             ])
 
 
 
             // Correction with explicit assignments
+            const linkRows = linkClicksResult?.data || []
             const newStats = {
                 totalProspects: prospectsResult.count || 0,
                 totalSearches: searchesResult.count || 0,
@@ -123,7 +139,11 @@ export default function DashboardPage() {
                 emailsGenerated: emailsGeneratedResult.count || 0,
                 activeCampaigns: activeCampaignsResult.count || 0,
                 emailsSent: emailsSentResult.count || 0,
-                emailsScheduled: emailsScheduledResult.count || 0
+                emailsScheduled: emailsScheduledResult.count || 0,
+                linkClicksTotal: linkRows.reduce((s: number, r: any) => s + (r.total_clicks || 0), 0),
+                linkClicksPhone: linkRows.reduce((s: number, r: any) => s + (r.phone_clicks || 0), 0),
+                linkClicksEmail: linkRows.reduce((s: number, r: any) => s + (r.email_clicks || 0), 0),
+                linkClicksWeb: linkRows.reduce((s: number, r: any) => s + (r.website_clicks || 0), 0),
             }
 
             // Remove manual re-runs as the main queries are now corrected
@@ -162,12 +182,17 @@ export default function DashboardPage() {
             .on('postgres_changes', { event: '*', schema: 'public', table: 'email_queue' }, fetchDashboardStats)
             .subscribe()
 
+        const linksChannel = supabase.channel('dashboard_links')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'email_tracked_links' }, fetchDashboardStats)
+            .subscribe()
+
         return () => {
             supabase.removeChannel(prospectsChannel)
             supabase.removeChannel(jobsChannel)
             supabase.removeChannel(emailsChannel)
             supabase.removeChannel(campaignsChannel)
             supabase.removeChannel(queueChannel)
+            supabase.removeChannel(linksChannel)
         }
     }, [])
 
@@ -251,6 +276,26 @@ export default function DashboardPage() {
                         onRetry={fetchDashboardStats} isEmpty={!loading && stats.emailsScheduled === 0}
                         emptyMessage="Aucune planification" accentColor="amber"
                         emptyAction={{ label: "Planifier", href: "/emails" }} />
+                </motion.div>
+
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.8 }}>
+                    <KPIWidget
+                        title="Clics sur liens"
+                        icon={MousePointerClick}
+                        value={stats.linkClicksTotal}
+                        subtitle={
+                            stats.linkClicksTotal > 0
+                                ? `📞 ${stats.linkClicksPhone} · ✉️ ${stats.linkClicksEmail} · 🌐 ${stats.linkClicksWeb}`
+                                : "Liens traçables des signatures"
+                        }
+                        loading={loading}
+                        error={error || undefined}
+                        onRetry={fetchDashboardStats}
+                        isEmpty={!loading && stats.linkClicksTotal === 0}
+                        emptyMessage="Aucun clic encore"
+                        accentColor="indigo"
+                        emptyAction={{ label: "Voir les campagnes", href: "/emails" }}
+                    />
                 </motion.div>
             </div>
 

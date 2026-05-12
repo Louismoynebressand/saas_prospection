@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
+import {
+    extractSignatureLinks,
+    createTrackedLinksForProspect,
+    buildTrackedSignatureHtml
+} from '@/lib/email-link-tracker'
 
 export const dynamic = 'force-dynamic'
 
@@ -194,12 +199,58 @@ export async function POST(
 
         // Quota is now managed by the database trigger on cold_email_generations
 
-        // 3. Payload Webhook N8N
+        // ── Tracked links per prospect ────────────────────────────────────────
+        // Load campaign signature fields
+        const { data: campaign } = await supabase
+            .from('cold_email_campaigns')
+            .select(`
+                my_website, signature_name, signature_title, signature_company,
+                signature_phone, signature_email, signature_ps,
+                signature_show_phone, signature_show_email, signature_show_website,
+                signature_website_text, signature_custom_link_url, signature_custom_link_text,
+                signature_elements_order
+            `)
+            .eq('id', campaignId)
+            .single()
+
+        // Extract raw signature links (shared across all prospects for this campaign)
+        const signatureLinks = campaign ? extractSignatureLinks(campaign) : []
+
+        // Create tracked links per prospect and store signature HTML
+        const prospectSignatures: Record<string | number, string> = {}
+        if (signatureLinks.length > 0 && campaign) {
+            await Promise.all(
+                prospectIds.map(async (prospectId) => {
+                    try {
+                        const tracked = await createTrackedLinksForProspect(
+                            campaignId,
+                            prospectId,
+                            signatureLinks
+                        )
+                        const signatureHtml = buildTrackedSignatureHtml(campaign, tracked)
+                        prospectSignatures[prospectId] = signatureHtml
+
+                        // Store tracked signature HTML in campaign_prospects
+                        await supabase
+                            .from('campaign_prospects')
+                            .update({ signature_tracked_html: signatureHtml })
+                            .eq('campaign_id', campaignId)
+                            .eq('prospect_id', prospectId)
+                    } catch (trackErr) {
+                        console.error(`[LinkTracker] Failed for prospect ${prospectId}:`, trackErr)
+                    }
+                })
+            )
+        }
+
+        // 3. Payload Webhook N8N — enrichi avec les signatures trackées
         const webhookPayload = {
             user_id: user.id,
             job_id: job.id,
             campaign_id: campaignId,
-            prospect_ids: prospectIds
+            prospect_ids: prospectIds,
+            // Optionnel : map prospect_id → signature HTML pour que N8N puisse l'utiliser directement
+            prospect_signatures: prospectSignatures
         }
 
         // 4. Appel Webhook (avec Timeout) - On attend juste le déclenchement
