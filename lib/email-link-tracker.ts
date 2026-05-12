@@ -230,7 +230,7 @@ export function buildTrackedSignatureHtml(
                 if (phone && campaign.signature_show_phone !== false) {
                     const tl = trackingByType['phone']
                     const href = tl ? tl.tracking_url : `tel:${String(phone).replace(/\s/g, '')}`
-                    elements.push(`<div style="margin-bottom:4px;font-size:13px">📞 <a href="${href}" style="color:#4f46e5;text-decoration:none">${escHtml(phone)}</a></div>`)
+                    elements.push(`<div style="margin-bottom:4px;font-size:13px">📞 <a href="${href}" target="_blank" rel="noopener noreferrer" style="color:#4f46e5;text-decoration:none">${escHtml(phone)}</a></div>`)
                 }
                 break
             }
@@ -240,7 +240,7 @@ export function buildTrackedSignatureHtml(
                 if (sigEmail && campaign.signature_show_email !== false) {
                     const tl = trackingByType['email']
                     const href = tl ? tl.tracking_url : `mailto:${sigEmail}`
-                    elements.push(`<div style="margin-bottom:4px;font-size:13px">✉️ <a href="${href}" style="color:#4f46e5;text-decoration:none">${escHtml(sigEmail)}</a></div>`)
+                    elements.push(`<div style="margin-bottom:4px;font-size:13px">✉️ <a href="${href}" target="_blank" rel="noopener noreferrer" style="color:#4f46e5;text-decoration:none">${escHtml(sigEmail)}</a></div>`)
                 }
                 break
             }
@@ -251,7 +251,7 @@ export function buildTrackedSignatureHtml(
                     const tl = trackingByType['website']
                     const href = tl ? tl.tracking_url : website
                     const label = campaign.signature_website_text || 'Visitez notre site web'
-                    elements.push(`<div style="margin-bottom:4px;font-size:13px">🌐 <a href="${href}" style="color:#4f46e5;text-decoration:none">${escHtml(label)}</a></div>`)
+                    elements.push(`<div style="margin-bottom:4px;font-size:13px">🌐 <a href="${href}" target="_blank" rel="noopener noreferrer" style="color:#4f46e5;text-decoration:none">${escHtml(label)}</a></div>`)
                 }
                 break
             }
@@ -262,7 +262,7 @@ export function buildTrackedSignatureHtml(
                 if (customUrl && customText) {
                     const tl = trackingByType['custom']
                     const href = tl ? tl.tracking_url : customUrl
-                    elements.push(`<div style="margin-bottom:4px;font-size:13px">🔗 <a href="${href}" style="color:#4f46e5;text-decoration:none">${escHtml(customText)}</a></div>`)
+                    elements.push(`<div style="margin-bottom:4px;font-size:13px">🔗 <a href="${href}" target="_blank" rel="noopener noreferrer" style="color:#4f46e5;text-decoration:none">${escHtml(customText)}</a></div>`)
                 }
                 break
             }
