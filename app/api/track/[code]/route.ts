@@ -17,11 +17,6 @@ import { createClient } from '@supabase/supabase-js'
 export const runtime = 'edge'
 export const dynamic = 'force-dynamic'
 
-const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
-
 export async function GET(
     request: NextRequest,
     { params }: { params: Promise<{ code: string }> }
@@ -31,6 +26,11 @@ export async function GET(
     if (!code || code.length < 4) {
         return new NextResponse('Invalid tracking code', { status: 400 })
     }
+
+    const supabaseAdmin = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL || 'http://localhost:54321',
+        process.env.SUPABASE_SERVICE_ROLE_KEY || 'dummy_key'
+    )
 
     try {
         // 1. Lookup the tracked link
