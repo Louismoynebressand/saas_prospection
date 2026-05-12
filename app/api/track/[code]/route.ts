@@ -44,7 +44,7 @@ export async function GET(
             console.error(`[Track] Code "${code}" not found:`, error?.message)
             // Redirect to homepage instead of 404 to avoid revealing tracking info
             return NextResponse.redirect(
-                process.env.NEXT_PUBLIC_APP_URL || 'https://superprospects.vercel.app',
+                process.env.NEXT_PUBLIC_APP_URL || 'https://saas-prospection.vercel.app',
                 { status: 302 }
             )
         }
@@ -112,7 +112,7 @@ export async function GET(
     } catch (err) {
         console.error('[Track] Unexpected error:', err)
         return NextResponse.redirect(
-            process.env.NEXT_PUBLIC_APP_URL || 'https://superprospects.vercel.app',
+            process.env.NEXT_PUBLIC_APP_URL || 'https://saas-prospection.vercel.app',
             { status: 302 }
         )
     }
