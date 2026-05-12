@@ -103,7 +103,7 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
                 .eq('campaign_id', campaignId)
                 .in('status', ['pending', 'running'])
 
-            const total = (data || []).reduce((sum, job) => {
+            const total = (data || []).reduce((sum: number, job: any) => {
                 return sum + (Array.isArray(job.prospect_ids) ? job.prospect_ids.length : 0)
             }, 0)
             setInProgressCount(total)
