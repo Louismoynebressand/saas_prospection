@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { CalendarIcon, Clock, Mail, AlertTriangle, XCircle, Loader2, Save, Edit, Send, Plus, X, Calendar as CalendarIconLucide, Wand2, Zap, CheckCircle2 } from "lucide-react"
+import { CalendarIcon, Clock, Mail, AlertTriangle, XCircle, Loader2, Save, Edit, Send, Plus, X, Calendar as CalendarIconLucide, Wand2, Zap, CheckCircle2, Eye, User } from "lucide-react"
 import { format, addDays, isSameDay, startOfDay, isBefore, getYear } from "date-fns"
 import { fr } from "date-fns/locale"
 import { cn } from "@/lib/utils"
@@ -83,6 +83,11 @@ export function PlanningTab({ schedule, campaign, queueStats, onUpdate, onAddPro
 
     const [smtpConfigs, setSmtpConfigs] = useState<any[]>([])
 
+    // Today's sends
+    const [todaySent, setTodaySent] = useState<any[]>([])
+    const [loadingToday, setLoadingToday] = useState(false)
+    const [emailPreview, setEmailPreview] = useState<any | null>(null)
+
     // Timeline State
     const [daysToShow, setDaysToShow] = useState(30)
 
@@ -128,6 +133,57 @@ export function PlanningTab({ schedule, campaign, queueStats, onUpdate, onAddPro
             fetchAll()
         }
     }, [schedule, supabase])
+
+    // Load today's sent emails for this campaign
+    useEffect(() => {
+        if (!schedule?.campaign_id) return
+        const fetchTodaySent = async () => {
+            setLoadingToday(true)
+            try {
+                const todayStart = new Date()
+                todayStart.setHours(0, 0, 0, 0)
+
+                const { data } = await supabase
+                    .from('campaign_prospects')
+                    .select(`
+                        prospect_id,
+                        email_status,
+                        sent_at,
+                        generated_email_subject,
+                        generated_email_content,
+                        prospect:scrape_prospect(
+                            id_prospect,
+                            data_scrapping,
+                            deep_search,
+                            email_adresse_verified
+                        )
+                    `)
+                    .eq('campaign_id', schedule.campaign_id)
+                    .in('email_status', ['sent', 'delivered', 'opened', 'clicked', 'replied'])
+                    .gte('sent_at', todayStart.toISOString())
+                    .order('sent_at', { ascending: false })
+
+                if (data) {
+                    const enriched = data.map((item: any) => {
+                        const raw = (() => { try { return typeof item.prospect?.data_scrapping === 'string' ? JSON.parse(item.prospect.data_scrapping) : (item.prospect?.data_scrapping || {}) } catch { return {} } })()
+                        const deep = (() => { try { return typeof item.prospect?.deep_search === 'string' ? JSON.parse(item.prospect.deep_search) : (item.prospect?.deep_search || {}) } catch { return {} } })()
+                        const name = deep.nom_complet || raw.Titre || raw.title || raw.name || 'Prospect'
+                        const company = deep.nom_raison_sociale || raw.company || raw.companyName || raw.Société || ''
+                        let email = item.prospect?.email_adresse_verified
+                        if (typeof email === 'string' && email.startsWith('[')) { try { email = JSON.parse(email)?.[0] } catch {} }
+                        if (Array.isArray(email)) email = email[0]
+                        return { ...item, name, company, email }
+                    })
+                    setTodaySent(enriched)
+                }
+            } catch (err) {
+                console.error('Error fetching today sent:', err)
+            } finally {
+                setLoadingToday(false)
+            }
+        }
+        fetchTodaySent()
+    }, [schedule?.campaign_id, supabase])
 
     // Load holidays logic for edit (only if turning ON for the first time)
     useEffect(() => {
@@ -798,6 +854,151 @@ export function PlanningTab({ schedule, campaign, queueStats, onUpdate, onAddPro
                     </CardContent>
                 </Card>
             </div>
+
+            {/* TODAY'S SENDS */}
+            <Card className="border-slate-200 shadow-sm">
+                <CardHeader className="flex flex-row items-center justify-between bg-slate-50/50 border-b border-slate-100 px-6 py-4">
+                    <div>
+                        <CardTitle className="flex items-center gap-2 text-base">
+                            <Mail className="w-5 h-5 text-emerald-500" />
+                            Envois d'aujourd'hui
+                        </CardTitle>
+                        <CardDescription>
+                            {todaySent.length === 0 && !loadingToday
+                                ? "Aucun email envoyé aujourd'hui pour cette campagne"
+                                : `${todaySent.length} email${todaySent.length > 1 ? 's' : ''} envoyé${todaySent.length > 1 ? 's' : ''} aujourd'hui`
+                            }
+                        </CardDescription>
+                    </div>
+                    {loadingToday && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
+                </CardHeader>
+                <CardContent className="p-0">
+                    {todaySent.length === 0 && !loadingToday ? (
+                        <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                            <Mail className="w-8 h-8 opacity-20 mb-2" />
+                            <p className="text-sm">Aucun envoi aujourd'hui</p>
+                        </div>
+                    ) : (
+                        <div className="divide-y">
+                            {todaySent.map((item: any, i: number) => {
+                                const statusColors: Record<string, string> = {
+                                    sent: 'bg-blue-100 text-blue-700',
+                                    delivered: 'bg-teal-100 text-teal-700',
+                                    opened: 'bg-cyan-100 text-cyan-700',
+                                    clicked: 'bg-indigo-100 text-indigo-700',
+                                    replied: 'bg-emerald-100 text-emerald-700',
+                                }
+                                const statusLabels: Record<string, string> = {
+                                    sent: 'Envoyé', delivered: 'Délivré', opened: 'Ouvert',
+                                    clicked: 'Cliqué', replied: 'Répondu',
+                                }
+                                return (
+                                    <div
+                                        key={i}
+                                        className="flex items-center gap-4 px-6 py-3 hover:bg-slate-50 transition-colors cursor-pointer group"
+                                        onClick={() => setEmailPreview(item)}
+                                    >
+                                        {/* Avatar */}
+                                        <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
+                                            <User className="w-4 h-4 text-indigo-600" />
+                                        </div>
+                                        {/* Info */}
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-semibold text-slate-800 truncate">
+                                                {item.name}
+                                                {item.company && <span className="ml-1.5 text-xs font-normal text-slate-500">{item.company}</span>}
+                                            </p>
+                                            <p className="text-xs text-slate-400 truncate">
+                                                {item.email || '—'}
+                                            </p>
+                                        </div>
+                                        {/* Subject preview */}
+                                        <div className="flex-1 min-w-0 hidden md:block">
+                                            <p className="text-xs text-slate-600 truncate font-medium">{item.generated_email_subject || '(sans objet)'}</p>
+                                        </div>
+                                        {/* Time + status */}
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            <span className="text-[10px] text-slate-400">
+                                                {item.sent_at ? new Date(item.sent_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : ''}
+                                            </span>
+                                            <span className={cn('text-[10px] px-2 py-0.5 rounded-full font-semibold', statusColors[item.email_status] || 'bg-slate-100 text-slate-500')}>
+                                                {statusLabels[item.email_status] || item.email_status}
+                                            </span>
+                                            <Eye className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            {/* EMAIL PREVIEW DIALOG */}
+            <Dialog open={!!emailPreview} onOpenChange={(open) => { if (!open) setEmailPreview(null) }}>
+                <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Mail className="w-5 h-5 text-indigo-500" />
+                            Aperçu de l'email envoyé
+                        </DialogTitle>
+                        <DialogDescription className="flex items-center gap-2 flex-wrap">
+                            <span className="font-semibold text-slate-700">{emailPreview?.name}</span>
+                            {emailPreview?.company && <span className="text-slate-500">• {emailPreview.company}</span>}
+                            {emailPreview?.email && <span className="text-xs bg-slate-100 px-2 py-0.5 rounded font-mono">{emailPreview.email}</span>}
+                            {emailPreview?.sent_at && (
+                                <span className="text-xs text-slate-400 ml-auto">
+                                    Envoyé à {new Date(emailPreview.sent_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                            )}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {emailPreview && (
+                        <div className="space-y-4">
+                            {/* Subject */}
+                            <div className="border rounded-lg p-4 bg-slate-50">
+                                <p className="text-xs text-muted-foreground uppercase font-semibold tracking-wider mb-1">Objet</p>
+                                <p className="font-semibold text-slate-900 text-base">{emailPreview.generated_email_subject || '(sans objet)'}</p>
+                            </div>
+
+                            {/* Body */}
+                            <div className="border rounded-lg p-6 bg-white shadow-sm">
+                                <p className="text-xs text-muted-foreground uppercase font-semibold tracking-wider mb-3">Corps du message</p>
+                                {emailPreview.generated_email_content ? (
+                                    <div
+                                        className="prose prose-sm max-w-none text-slate-800 leading-relaxed"
+                                        dangerouslySetInnerHTML={{
+                                            __html: emailPreview.generated_email_content
+                                                .replace(/\n/g, '<br/>')
+                                        }}
+                                    />
+                                ) : (
+                                    <p className="text-muted-foreground text-sm italic">Contenu non disponible</p>
+                                )}
+                            </div>
+
+                            {/* Status badge */}
+                            <div className="flex items-center justify-between text-xs text-muted-foreground border-t pt-3">
+                                <span>Statut de l'email</span>
+                                <span className={cn('px-2 py-0.5 rounded-full font-semibold text-[10px]',
+                                    emailPreview.email_status === 'opened' ? 'bg-cyan-100 text-cyan-700' :
+                                    emailPreview.email_status === 'replied' ? 'bg-emerald-100 text-emerald-700' :
+                                    emailPreview.email_status === 'clicked' ? 'bg-indigo-100 text-indigo-700' :
+                                    'bg-blue-100 text-blue-700'
+                                )}>
+                                <span>{
+                                    ({
+                                        sent: 'Envoyé', delivered: 'Délivré', opened: 'Ouvert ✓',
+                                        clicked: 'Cliqué ✓', replied: 'Répondu ✓'
+                                    } as Record<string, string>)[emailPreview.email_status] || emailPreview.email_status
+                                }</span>
+                                </span>
+                            </div>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
 
             {/* Timeline / Forecast - INFINITE SCROLL */}
             <Card className="border-slate-200 shadow-sm overflow-hidden">
