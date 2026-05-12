@@ -130,10 +130,18 @@ export async function PATCH(
         if (newStatusTyped === 'not_generated') {
             updateData.generated_email_subject = null
             updateData.generated_email_content = null
+            updateData.signature_tracked_html = null
+            updateData.links_click_count = 0
             updateData.email_generated_at = null
             
             // Delete from cold_email_generations
             await supabase.from('cold_email_generations')
+                .delete()
+                .eq('campaign_id', campaignId)
+                .eq('prospect_id', prospectId)
+
+            // Delete tracked links to keep the database clean
+            await supabase.from('email_tracked_links')
                 .delete()
                 .eq('campaign_id', campaignId)
                 .eq('prospect_id', prospectId)

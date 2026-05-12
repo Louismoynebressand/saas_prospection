@@ -124,6 +124,19 @@ export async function POST(
                 }
                 console.log(`✅ Deleted old cold_email_generations for ${generatedIds.length} prospect(s)`)
 
+                // STEP 1.5: Delete old tracked links to prevent duplicates
+                const { error: deleteLinksError } = await supabase
+                    .from('email_tracked_links')
+                    .delete()
+                    .eq('campaign_id', campaignId)
+                    .in('prospect_id', generatedIds)
+
+                if (deleteLinksError) {
+                    console.error('❌ Failed to delete old tracked links:', deleteLinksError)
+                    return NextResponse.json({ error: 'Failed to clean up old tracked links' }, { status: 500 })
+                }
+                console.log(`✅ Deleted old tracked links for ${generatedIds.length} prospect(s)`)
+
                 // STEP 2: Reset campaign_prospects to 'pending' so UI shows loading state
                 const { error: resetError } = await supabase
                     .from('campaign_prospects')
@@ -131,6 +144,8 @@ export async function POST(
                         email_status: 'pending',
                         generated_email_subject: null,
                         generated_email_content: null,
+                        signature_tracked_html: null,
+                        links_click_count: 0,
                         email_generated_at: null,
                         updated_at: new Date().toISOString()
                     })
