@@ -162,14 +162,14 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
                 setProspects(prospectsList)
 
                 // Refresh open modals with fresh data
-                setDetailProspect(prev => {
+                setDetailProspect((prev: any) => {
                     if (!prev) return null;
                     const updatedCp = prospectsList.find((p: any) => p.prospect_id === prev.campaignLink?.prospect_id)
                     if (updatedCp) return { ...updatedCp.prospect, campaignLink: updatedCp }
                     return prev
                 })
 
-                setViewingProspect(prev => {
+                setViewingProspect((prev: any) => {
                     if (!prev) return null;
                     const updatedCp = prospectsList.find((p: any) => p.prospect_id === prev.campaignLink?.prospect_id)
                     if (updatedCp) return { ...updatedCp.prospect, campaignLink: updatedCp }
@@ -181,7 +181,7 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
                     .filter((p: any) => p.email_status === 'pending')
                     .map((p: any) => p.prospect_id?.toString())
                 if (pendingIds.length > 0) {
-                    setGeneratingIds(prev => new Set([...prev, ...pendingIds]))
+                    setGeneratingIds((prev: Set<string>) => new Set([...prev, ...pendingIds]))
                 }
             }
         } catch (error) {
