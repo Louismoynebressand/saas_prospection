@@ -617,7 +617,7 @@ export function ProspectDetailModal({
                                                 {/* Right side: Link Tracking Stats */}
                                                 <div className="w-full md:w-[380px] lg:w-[420px] bg-slate-50/80 border-l border-indigo-100/50 p-6 overflow-y-auto shrink-0">
                                                     <EmailLinkStats 
-                                                        prospectId={prospect.id} 
+                                                        prospectId={prospect.id_prospect} 
                                                         campaignId={campaignLink.campaign_id} 
                                                     />
                                                 </div>
