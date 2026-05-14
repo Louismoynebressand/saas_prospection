@@ -161,6 +161,21 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
                 const prospectsList = data.prospects || []
                 setProspects(prospectsList)
 
+                // Refresh open modals with fresh data
+                setDetailProspect(prev => {
+                    if (!prev) return null;
+                    const updatedCp = prospectsList.find((p: any) => p.prospect_id === prev.campaignLink?.prospect_id)
+                    if (updatedCp) return { ...updatedCp.prospect, campaignLink: updatedCp }
+                    return prev
+                })
+
+                setViewingProspect(prev => {
+                    if (!prev) return null;
+                    const updatedCp = prospectsList.find((p: any) => p.prospect_id === prev.campaignLink?.prospect_id)
+                    if (updatedCp) return { ...updatedCp.prospect, campaignLink: updatedCp }
+                    return prev
+                })
+
                 // Auto-mark 'pending' prospects as generating so spinner shows on reload
                 const pendingIds = prospectsList
                     .filter((p: any) => p.email_status === 'pending')

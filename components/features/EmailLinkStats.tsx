@@ -67,21 +67,25 @@ export function EmailLinkStats({ prospectId, campaignId, compact = false, classN
                 .select(`
                     id, link_type, link_label, original_url,
                     click_count, first_clicked_at, last_clicked_at,
-                    campaign:cold_email_campaigns(name)
+                    campaign:cold_email_campaigns(campaign_name)
                 `)
-                .eq('prospect_id', Number(prospectId))
+                .eq('prospect_id', prospectId)
                 .order('click_count', { ascending: false })
 
             if (campaignId) {
                 query = query.eq('campaign_id', campaignId)
             }
 
-            const { data } = await query
+            const { data, error } = await query
+
+            if (error) {
+                console.error("Error fetching email_tracked_links:", error)
+            }
 
             if (data) {
                 setLinks(data.map((d: any) => ({
                     ...d,
-                    campaign_name: d.campaign?.name,
+                    campaign_name: d.campaign?.campaign_name,
                 })))
             }
             setLoading(false)
