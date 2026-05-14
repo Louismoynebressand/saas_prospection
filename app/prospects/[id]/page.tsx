@@ -1551,7 +1551,7 @@ export default function ProspectPage() {
 
                                             {/* Content Body */}
                                             <div className="p-6">
-                                                {link.email_status === 'generated' && link.generated_email_content ? (
+                                                {['generated', 'sent', 'delivered', 'opened', 'clicked', 'bounced', 'replied'].includes(link.email_status) && link.generated_email_content ? (
                                                     <div className="max-w-4xl mx-auto border rounded-xl shadow-sm overflow-hidden bg-gray-50/50">
                                                         <div className="border-b bg-white p-4">
                                                             <p className="text-sm font-medium text-gray-500 mb-1">Objet</p>
@@ -1597,7 +1597,7 @@ export default function ProspectPage() {
                                                             </>
                                                         ) : (
                                                             <div className="flex items-center gap-2">
-                                                                <LoaderIcon className="w-4 h-4 animate-spin" /> Chargement...
+                                                                <LoaderIcon className="w-4 h-4 animate-spin" /> Chargement de l'email généré...
                                                             </div>
                                                         )}
                                                     </div>
