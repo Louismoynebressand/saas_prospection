@@ -14,6 +14,7 @@ import { ProspectDetailModal } from "./ProspectDetailModal"
 import { EmailViewerModal } from "./EmailViewerModal"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { EmailLinkStats } from "./EmailLinkStats"
 import { AlertCircle, AlertTriangle } from "lucide-react"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
@@ -361,15 +362,15 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
     const getStatusColor = (status: EmailStatus) => {
         switch (status) {
             case 'sending': return 'bg-amber-100 text-amber-800'
-            case 'sent': return 'bg-blue-100 text-blue-800'
-            case 'delivered': return 'bg-teal-100 text-teal-800'
-            case 'opened': return 'bg-cyan-100 text-cyan-800'
-            case 'clicked': return 'bg-indigo-100 text-indigo-800'
+            case 'sent': return 'bg-green-100 text-green-800 border-transparent'
+            case 'delivered': return 'bg-emerald-100 text-emerald-800 border-transparent'
+            case 'opened': return 'bg-cyan-100 text-cyan-800 border-transparent'
+            case 'clicked': return 'bg-indigo-100 text-indigo-800 border-indigo-300 shadow-sm shadow-indigo-100 animate-in zoom-in'
             case 'generated': return 'bg-violet-100 text-violet-800'
-            case 'bounced': return 'bg-red-100 text-red-800'
-            case 'replied': return 'bg-purple-100 text-purple-800'
+            case 'bounced': return 'bg-red-100 text-red-800 border-transparent'
+            case 'replied': return 'bg-purple-100 text-purple-800 border-transparent'
             case 'pending': return 'bg-orange-100 text-orange-800'
-            default: return 'bg-gray-100 text-gray-800'
+            default: return 'bg-gray-100 text-gray-800 border-transparent'
         }
     }
 
@@ -588,30 +589,41 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
                                                 <td className="p-4">{company}</td>
                                                 <td className="p-4 text-sm">{email}</td>
                                                 <td className="p-4" onClick={(e) => e.stopPropagation()}>
-                                                    <Select
-                                                        value={cp.email_status}
-                                                        onValueChange={(value) => handleUpdateStatus(cp.prospect_id, value as EmailStatus)}
-                                                    >
-                                                        <SelectTrigger className="w-[140px]">
-                                                            <SelectValue>
-                                                                <Badge className={getStatusColor(cp.email_status)}>
-                                                                    {getStatusLabel(cp.email_status)}
-                                                                </Badge>
-                                                            </SelectValue>
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="not_generated">Non généré</SelectItem>
-                                                            <SelectItem value="pending">⏳ En attente</SelectItem>
-                                                            <SelectItem value="generated">📝 Généré</SelectItem>
-                                                            <SelectItem value="sending">📤 En cours d'envoi</SelectItem>
-                                                            <SelectItem value="sent">✉️ Envoyé</SelectItem>
-                                                            <SelectItem value="delivered">✅ Délivré</SelectItem>
-                                                            <SelectItem value="opened">👁 Ouvert</SelectItem>
-                                                            <SelectItem value="clicked">🖱 Cliqué</SelectItem>
-                                                            <SelectItem value="bounced">❌ Rebond</SelectItem>
-                                                            <SelectItem value="replied">💬 Répondu</SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
+                                                    <div className="flex flex-col gap-2 items-start">
+                                                        <Select
+                                                            value={cp.email_status}
+                                                            onValueChange={(value) => handleUpdateStatus(cp.prospect_id, value as EmailStatus)}
+                                                        >
+                                                            <SelectTrigger className="w-[140px]">
+                                                                <SelectValue>
+                                                                    <Badge variant="outline" className={cn("text-xs font-bold py-1", getStatusColor(cp.email_status))}>
+                                                                        {getStatusLabel(cp.email_status)}
+                                                                    </Badge>
+                                                                </SelectValue>
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="not_generated">Non généré</SelectItem>
+                                                                <SelectItem value="pending">⏳ En attente</SelectItem>
+                                                                <SelectItem value="generated">📝 Généré</SelectItem>
+                                                                <SelectItem value="sending">📤 En cours d'envoi</SelectItem>
+                                                                <SelectItem value="sent">✉️ Envoyé</SelectItem>
+                                                                <SelectItem value="delivered">✅ Délivré</SelectItem>
+                                                                <SelectItem value="opened">👁 Ouvert</SelectItem>
+                                                                <SelectItem value="clicked">🎯 Cliqué</SelectItem>
+                                                                <SelectItem value="bounced">❌ Rebond</SelectItem>
+                                                                <SelectItem value="replied">💬 Répondu</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                        {(cp as any).links_click_count > 0 && (
+                                                            <div className="w-[140px]">
+                                                                <EmailLinkStats 
+                                                                    prospectId={cp.prospect_id} 
+                                                                    campaignId={campaignId} 
+                                                                    compact={true} 
+                                                                />
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </td>
                                                 <td className="p-4" onClick={(e) => e.stopPropagation()}>
                                                     <div className="flex justify-end gap-2">

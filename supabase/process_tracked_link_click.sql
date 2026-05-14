@@ -32,9 +32,14 @@ BEGIN
     INSERT INTO email_link_clicks (tracked_link_id, clicked_at, ip_address, user_agent)
     VALUES (v_link.id, v_now, p_ip_address, p_user_agent);
 
-    -- 4. Increment campaign prospect stats
+    -- 4. Mise à jour des stats globales du prospect
     UPDATE campaign_prospects
-    SET links_click_count = COALESCE(links_click_count, 0) + 1
+    SET links_click_count = COALESCE(links_click_count, 0) + 1,
+        email_status = CASE
+            WHEN email_status IN ('not_generated', 'pending', 'generated', 'sending', 'sent', 'delivered', 'opened') THEN 'clicked'
+            ELSE email_status
+        END,
+        email_clicked_at = COALESCE(email_clicked_at, v_now)
     WHERE campaign_id = v_link.campaign_id
       AND prospect_id = v_link.prospect_id;
 

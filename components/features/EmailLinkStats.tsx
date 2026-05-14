@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Badge } from "@/components/ui/badge"
-import { Phone, Mail, Globe, Link, MousePointerClick, Calendar } from "lucide-react"
+import { Phone, Mail, Globe, Link, MousePointerClick, Calendar, ArrowUpRight, Activity } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
@@ -27,10 +27,10 @@ interface EmailLinkStatsProps {
 }
 
 const LINK_ICONS: Record<string, React.ReactNode> = {
-    phone: <Phone className="h-3.5 w-3.5 text-blue-600" />,
-    email: <Mail className="h-3.5 w-3.5 text-violet-600" />,
-    website: <Globe className="h-3.5 w-3.5 text-emerald-600" />,
-    custom: <Link className="h-3.5 w-3.5 text-amber-600" />,
+    phone: <Phone className="h-4 w-4 text-blue-500" />,
+    email: <Mail className="h-4 w-4 text-violet-500" />,
+    website: <Globe className="h-4 w-4 text-emerald-500" />,
+    custom: <Link className="h-4 w-4 text-amber-500" />,
 }
 
 const LINK_TYPE_LABELS: Record<string, string> = {
@@ -40,11 +40,18 @@ const LINK_TYPE_LABELS: Record<string, string> = {
     custom: 'Lien perso',
 }
 
-const LINK_COLORS: Record<string, string> = {
-    phone: 'bg-blue-50 border-blue-200 text-blue-800',
-    email: 'bg-violet-50 border-violet-200 text-violet-800',
-    website: 'bg-emerald-50 border-emerald-200 text-emerald-800',
-    custom: 'bg-amber-50 border-amber-200 text-amber-800',
+const LINK_GRADIENTS: Record<string, string> = {
+    phone: 'from-blue-500/10 to-transparent border-blue-200/50',
+    email: 'from-violet-500/10 to-transparent border-violet-200/50',
+    website: 'from-emerald-500/10 to-transparent border-emerald-200/50',
+    custom: 'from-amber-500/10 to-transparent border-amber-200/50',
+}
+
+const LINK_COLORS_COMPACT: Record<string, string> = {
+    phone: 'bg-blue-50 border-blue-200 text-blue-700',
+    email: 'bg-violet-50 border-violet-200 text-violet-700',
+    website: 'bg-emerald-50 border-emerald-200 text-emerald-700',
+    custom: 'bg-amber-50 border-amber-200 text-amber-700',
 }
 
 export function EmailLinkStats({ prospectId, campaignId, compact = false, className }: EmailLinkStatsProps) {
@@ -89,8 +96,8 @@ export function EmailLinkStats({ prospectId, campaignId, compact = false, classN
 
     if (links.length === 0) {
         return compact ? null : (
-            <div className={cn("text-sm text-muted-foreground italic", className)}>
-                Aucun lien traçable généré pour ce prospect.
+            <div className={cn("text-sm text-slate-400 italic flex items-center justify-center p-6 border border-dashed rounded-xl bg-slate-50/50", className)}>
+                Aucun lien traçable configuré pour ce prospect.
             </div>
         )
     }
@@ -98,14 +105,14 @@ export function EmailLinkStats({ prospectId, campaignId, compact = false, classN
     // ── Compact view (for table cell / popover) ──────────────────────────────
     if (compact) {
         if (totalClicks === 0) return (
-            <span className="text-xs text-muted-foreground">—</span>
+            <span className="text-xs text-slate-300 font-medium">—</span>
         )
         return (
-            <div className={cn("flex items-center gap-1 flex-wrap", className)}>
+            <div className={cn("flex items-center gap-1.5 flex-wrap", className)}>
                 {clickedLinks.map(l => (
                     <span
                         key={l.id}
-                        className={cn("inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border font-medium", LINK_COLORS[l.link_type])}
+                        className={cn("inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md border font-bold shadow-sm transition-transform hover:scale-105", LINK_COLORS_COMPACT[l.link_type])}
                         title={`${LINK_TYPE_LABELS[l.link_type]}: ${l.click_count} clic(s)`}
                     >
                         {LINK_ICONS[l.link_type]}
@@ -118,57 +125,88 @@ export function EmailLinkStats({ prospectId, campaignId, compact = false, classN
 
     // ── Full view (for prospect detail page) ─────────────────────────────────
     return (
-        <div className={cn("space-y-3", className)}>
-            {/* Summary */}
-            <div className="flex items-center gap-3 flex-wrap">
-                <div className="flex items-center gap-1.5 text-sm font-medium">
-                    <MousePointerClick className="h-4 w-4 text-indigo-600" />
-                    <span>{totalClicks} clic{totalClicks > 1 ? 's' : ''} total</span>
+        <div className={cn("space-y-4", className)}>
+            {/* Summary Header */}
+            <div className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-slate-900 to-slate-800 text-white shadow-lg overflow-hidden relative">
+                <div className="absolute top-0 right-0 p-4 opacity-10">
+                    <Activity className="w-24 h-24" />
                 </div>
-                <span className="text-muted-foreground text-xs">
-                    sur {links.length} lien{links.length > 1 ? 's' : ''} traqué{links.length > 1 ? 's' : ''}
-                </span>
+                <div className="relative z-10 flex flex-col">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Engagement Liens</span>
+                    <div className="flex items-center gap-2">
+                        <MousePointerClick className="h-5 w-5 text-indigo-400" />
+                        <span className="text-2xl font-bold">{totalClicks} clic{totalClicks > 1 ? 's' : ''} total</span>
+                    </div>
+                </div>
+                <div className="relative z-10 text-right">
+                    <span className="block text-3xl font-black text-white/90">{clickedLinks.length}</span>
+                    <span className="text-[10px] uppercase tracking-widest text-slate-400">Liens cliqués</span>
+                </div>
             </div>
 
             {/* Per-link breakdown */}
-            <div className="space-y-2">
-                {links.map(link => (
-                    <div
-                        key={link.id}
-                        className={cn(
-                            "flex items-center gap-3 p-3 rounded-lg border",
-                            link.click_count > 0
-                                ? LINK_COLORS[link.link_type]
-                                : "bg-slate-50 border-slate-200 text-slate-500"
-                        )}
-                    >
-                        <div className="shrink-0">{LINK_ICONS[link.link_type]}</div>
-                        <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                                <span className="text-xs font-semibold">{LINK_TYPE_LABELS[link.link_type]}</span>
-                                {link.campaign_name && !campaignId && (
-                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">{link.campaign_name}</Badge>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {links.map(link => {
+                    const isClicked = link.click_count > 0
+                    return (
+                        <div
+                            key={link.id}
+                            className={cn(
+                                "group relative overflow-hidden rounded-xl border bg-white p-4 transition-all duration-300 shadow-sm",
+                                isClicked 
+                                    ? `bg-gradient-to-br ${LINK_GRADIENTS[link.link_type]} shadow-md hover:shadow-lg` 
+                                    : "opacity-75 hover:opacity-100 bg-slate-50 border-slate-200"
+                            )}
+                        >
+                            <div className="flex justify-between items-start mb-3">
+                                <div className="flex items-center gap-2">
+                                    <div className={cn(
+                                        "p-2 rounded-lg",
+                                        isClicked ? "bg-white shadow-sm border border-slate-100" : "bg-slate-200/50"
+                                    )}>
+                                        {LINK_ICONS[link.link_type]}
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                                            {LINK_TYPE_LABELS[link.link_type]}
+                                        </span>
+                                        {link.campaign_name && !campaignId && (
+                                            <span className="text-[10px] text-slate-400 truncate max-w-[120px]">
+                                                {link.campaign_name}
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <div className={cn(
+                                        "text-2xl font-black tabular-nums leading-none",
+                                        isClicked ? "text-slate-900" : "text-slate-300"
+                                    )}>
+                                        {link.click_count}
+                                    </div>
+                                    <span className="text-[10px] font-medium uppercase tracking-widest text-slate-400">Clics</span>
+                                </div>
+                            </div>
+
+                            <div className="space-y-1">
+                                <div className="flex items-center gap-1.5 text-sm font-medium text-slate-700 truncate">
+                                    <ArrowUpRight className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                    <a href={link.original_url} target="_blank" rel="noopener noreferrer" className="hover:text-indigo-600 hover:underline truncate">
+                                        {link.link_label || link.original_url}
+                                    </a>
+                                </div>
+                                {link.last_clicked_at ? (
+                                    <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
+                                        <Calendar className="h-3 w-3" />
+                                        Dernier : <span className="text-slate-700 font-semibold">{format(new Date(link.last_clicked_at), 'd MMM yyyy, HH:mm', { locale: fr })}</span>
+                                    </div>
+                                ) : (
+                                    <div className="text-[11px] text-slate-400 italic">Jamais cliqué</div>
                                 )}
                             </div>
-                            <p className="text-[11px] truncate opacity-70">{link.link_label || link.original_url}</p>
-                            {link.last_clicked_at && (
-                                <p className="text-[10px] opacity-60 flex items-center gap-1 mt-0.5">
-                                    <Calendar className="h-2.5 w-2.5" />
-                                    Dernier clic : {format(new Date(link.last_clicked_at), 'd MMM à HH:mm', { locale: fr })}
-                                </p>
-                            )}
                         </div>
-                        <div className="shrink-0 text-right">
-                            <span className={cn(
-                                "text-lg font-bold",
-                                link.click_count > 0 ? "text-current" : "text-slate-300"
-                            )}>
-                                {link.click_count}
-                            </span>
-                            <p className="text-[10px] opacity-70">clic{link.click_count > 1 ? 's' : ''}</p>
-                        </div>
-                    </div>
-                ))}
+                    )
+                })}
             </div>
         </div>
     )
@@ -177,11 +215,12 @@ export function EmailLinkStats({ prospectId, campaignId, compact = false, classN
 // ── Tiny badge for use in tables ─────────────────────────────────────────────
 
 export function EmailLinkClicksBadge({ clickCount }: { clickCount: number }) {
-    if (!clickCount || clickCount === 0) return <span className="text-xs text-muted-foreground">—</span>
+    if (!clickCount || clickCount === 0) return <span className="text-xs text-slate-300 font-medium">—</span>
     return (
-        <span className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded-full">
+        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md shadow-sm">
             <MousePointerClick className="h-3 w-3" />
             {clickCount}
         </span>
     )
 }
+

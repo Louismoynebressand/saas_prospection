@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { toast } from "sonner"
+import { EmailLinkStats } from "./EmailLinkStats"
 
 // --- TYPES ---
 interface ScrappedData {
@@ -182,21 +183,23 @@ export function ProspectDetailModal({
 
     const getStatusColor = (status?: string) => {
         switch (status) {
-            case 'sent': return 'bg-green-100 text-green-800'
-            case 'generated': return 'bg-blue-100 text-blue-800'
-            case 'bounced': return 'bg-red-100 text-red-800'
-            case 'replied': return 'bg-purple-100 text-purple-800'
-            default: return 'bg-gray-100 text-gray-800'
+            case 'sent': return 'bg-green-100 text-green-800 border-transparent'
+            case 'generated': return 'bg-blue-100 text-blue-800 border-transparent'
+            case 'bounced': return 'bg-red-100 text-red-800 border-transparent'
+            case 'replied': return 'bg-purple-100 text-purple-800 border-transparent'
+            case 'clicked': return 'bg-indigo-100 text-indigo-800 border-indigo-300 shadow-sm shadow-indigo-100 animate-in zoom-in'
+            default: return 'bg-gray-100 text-gray-800 border-transparent'
         }
     }
 
-    const getStatusLabel = (status?: string) => {
+    const getStatusLabel = (status?: string, clickCount?: number) => {
         switch (status) {
             case 'sent': return 'Envoyé'
             case 'generated': return 'Généré'
             case 'bounced': return 'Rebond'
             case 'replied': return 'Répondu'
             case 'not_generated': return 'Non généré'
+            case 'clicked': return clickCount && clickCount > 1 ? `Cliqué (${clickCount} fois) 🎯` : 'Cliqué 🎯'
             default: return 'Aucun'
         }
     }
@@ -293,8 +296,8 @@ export function ProspectDetailModal({
                                 <span className="text-xl md:text-2xl font-bold truncate">{companyName}</span>
                                 {renderDeepScanBadge()}
                                 {campaignLink && (
-                                    <Badge className={getStatusColor(campaignLink.email_status)}>
-                                        {getStatusLabel(campaignLink.email_status)}
+                                    <Badge variant="outline" className={cn("text-xs uppercase tracking-wider font-bold py-1", getStatusColor(campaignLink.email_status))}>
+                                        {getStatusLabel(campaignLink.email_status, campaignLink.links_click_count)}
                                     </Badge>
                                 )}
                             </div>
@@ -595,7 +598,8 @@ export function ProspectDetailModal({
                                     </CardHeader>
                                     <CardContent className="p-0">
                                         {campaignLink.generated_email_content ? (
-                                            <div className="flex flex-col md:flex-row h-[500px]">
+                                            <div className="flex flex-col md:flex-row h-auto min-h-[500px]">
+                                                {/* Left side: Email Content */}
                                                 <div className="flex-1 p-6 bg-white overflow-y-auto">
                                                     <div className="max-w-3xl mx-auto space-y-4">
                                                         <div className="border-b pb-4">
@@ -607,6 +611,14 @@ export function ProspectDetailModal({
                                                             className="prose prose-sm max-w-none text-gray-700"
                                                         />
                                                     </div>
+                                                </div>
+                                                
+                                                {/* Right side: Link Tracking Stats */}
+                                                <div className="w-full md:w-[380px] lg:w-[420px] bg-slate-50/80 border-l border-indigo-100/50 p-6 overflow-y-auto shrink-0">
+                                                    <EmailLinkStats 
+                                                        prospectId={prospect.id} 
+                                                        campaignId={campaignLink.campaign_id} 
+                                                    />
                                                 </div>
                                             </div>
                                         ) : (

@@ -95,7 +95,7 @@ CREATE OR REPLACE VIEW public.email_link_stats_by_prospect AS
 SELECT
     etl.prospect_id,
     etl.campaign_id,
-    c.name AS campaign_name,
+    c.campaign_name AS campaign_name,
     c.user_id,
     etl.link_type,
     etl.link_label,
