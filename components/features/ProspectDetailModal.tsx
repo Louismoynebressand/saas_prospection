@@ -298,7 +298,7 @@ export function ProspectDetailModal({
                                 {renderDeepScanBadge()}
                                 {campaignLink && (
                                     <Badge variant="outline" className={cn("text-xs uppercase tracking-wider font-bold py-1", getStatusColor(campaignLink.email_status))}>
-                                        {getStatusLabel(campaignLink.email_status, campaignLink.links_click_count)}
+                                        {getStatusLabel(campaignLink.email_status, (campaignLink as any).links_click_count)}
                                     </Badge>
                                 )}
                             </div>
