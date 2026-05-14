@@ -733,6 +733,54 @@ export default function ProspectPage() {
         }
     }
 
+    const handleManualVerifyEmail = async (e: React.MouseEvent) => {
+        e.stopPropagation()
+        if (!displayEmail) return
+
+        toast.info("🔍 Vérification SMTP de l'email en cours...", { duration: 6000 })
+        setIsSavingEdit(true)
+        
+        try {
+            const res = await fetch('/api/email-verifier/check', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ emails: [displayEmail.trim()] })
+            })
+            
+            const data = await res.json().catch(() => ({}))
+            
+            if (res.ok) {
+                toast.success("📧 Vérification terminée, mise à jour de la fiche...", { duration: 3000 })
+                
+                const supabase = createClient()
+                const { data: fresh } = await supabase
+                    .from('scrape_prospect')
+                    .select('succed_validation_smtp_email, check_email, email_adresse_verified')
+                    .eq('id_prospect', id)
+                    .single()
+                
+                if (fresh) {
+                    setProspect(prev => prev ? { ...prev, ...fresh } as any : null)
+                    
+                    if (fresh.succed_validation_smtp_email === true) {
+                        toast.success("✅ L'email a été validé avec succès !");
+                    } else if (fresh.succed_validation_smtp_email === false) {
+                        toast.error("❌ L'email est invalide ou introuvable.");
+                    } else {
+                        toast.info("ℹ️ L'email a été traité mais le statut est indéterminé.");
+                    }
+                }
+            } else {
+                toast.warning(`Vérification échouée : ${data.error || 'Erreur'}`, { duration: 5000 })
+            }
+        } catch (err) {
+            console.error("Fetch verification error:", err)
+            toast.warning("Vérification email non lancée (erreur réseau)", { duration: 4000 })
+        } finally {
+            setIsSavingEdit(false)
+        }
+    }
+
     // --- COMPONENTS ---
     const CopyButton = ({ text, label }: { text: string | undefined | null, label: string }) => {
         const [copied, setCopied] = useState(false)
@@ -988,7 +1036,20 @@ export default function ProspectPage() {
                                         <div className="space-y-2 p-3 bg-muted/30 rounded-lg border">
                                             <div className="flex items-center justify-between mb-1">
                                                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Email</span>
-                                                {renderEmailBadge()}
+                                                <div className="flex items-center gap-2">
+                                                    {!isEditing && displayEmail && emailStatus === 'non_verifie' && (
+                                                        <Button 
+                                                            variant="outline" 
+                                                            size="sm" 
+                                                            className="h-6 text-[10px] px-2 py-0 border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100"
+                                                            onClick={handleManualVerifyEmail}
+                                                            disabled={isSavingEdit}
+                                                        >
+                                                            {isSavingEdit ? "Vérification..." : "Vérifier l'email"}
+                                                        </Button>
+                                                    )}
+                                                    {renderEmailBadge()}
+                                                </div>
                                             </div>
                                             <div className="flex items-center gap-2 font-medium overflow-hidden">
                                                 <Mail className="w-4 h-4 text-muted-foreground shrink-0" />

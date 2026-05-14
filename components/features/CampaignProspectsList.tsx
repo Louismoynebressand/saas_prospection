@@ -18,6 +18,7 @@ import { EmailLinkStats } from "./EmailLinkStats"
 import { AlertCircle, AlertTriangle } from "lucide-react"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
+import { cn } from "@/lib/utils"
 import type { CampaignProspectLink, EmailStatus, Campaign } from "@/types"
 
 interface CampaignProspectsListProps {
