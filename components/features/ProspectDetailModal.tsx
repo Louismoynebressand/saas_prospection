@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { toast } from "sonner"
+import { cn } from "@/lib/utils"
 import { EmailLinkStats } from "./EmailLinkStats"
 
 // --- TYPES ---
