@@ -692,27 +692,36 @@ export default function ProspectPage() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ emails: [editForm.email.trim()] })
                 }).then(async (res) => {
+                    const data = await res.json().catch(() => ({}))
                     if (res.ok) {
-                        toast.success("📧 Vérification lancée — mise à jour dans quelques secondes", { duration: 5000 })
-                        // Poll after 15s and 30s to refresh the prospect status
+                        toast.success("📧 Vérification terminée, mise à jour de la fiche...", { duration: 3000 })
+                        
+                        // Puisque n8n a répondu au webhook, l'insertion Supabase a eu lieu.
+                        // On récupère instantanément les données mises à jour via le trigger SQL.
                         const supabase = createClient()
-                        const refreshProspect = async () => {
-                            const { data: fresh } = await supabase
-                                .from('scrape_prospect')
-                                .select('succed_validation_smtp_email, check_email, email_adresse_verified')
-                                .eq('id_prospect', id)
-                                .single()
-                            if (fresh && prospect) {
-                                setProspect({ ...prospect, ...fresh } as any)
+                        const { data: fresh } = await supabase
+                            .from('scrape_prospect')
+                            .select('succed_validation_smtp_email, check_email, email_adresse_verified')
+                            .eq('id_prospect', id)
+                            .single()
+                        
+                        if (fresh) {
+                            setProspect(prev => prev ? { ...prev, ...fresh } as any : null)
+                            
+                            // Afficher un retour visuel direct du résultat
+                            if (fresh.succed_validation_smtp_email === true) {
+                                toast.success("✅ L'email a été validé avec succès !");
+                            } else if (fresh.succed_validation_smtp_email === false) {
+                                toast.error("❌ L'email est invalide ou introuvable.");
+                            } else {
+                                toast.info("ℹ️ L'email a été traité mais le statut est indéterminé.");
                             }
                         }
-                        setTimeout(refreshProspect, 15000)
-                        setTimeout(refreshProspect, 30000)
                     } else {
-                        const err = await res.json().catch(() => ({}))
-                        toast.warning(`Vérification non lancée : ${err.error || 'Erreur'}`, { duration: 5000 })
+                        toast.warning(`Vérification échouée : ${data.error || 'Erreur'}`, { duration: 5000 })
                     }
-                }).catch(() => {
+                }).catch((err) => {
+                    console.error("Fetch verification error:", err)
                     toast.warning("Vérification email non lancée (erreur réseau)", { duration: 4000 })
                 })
             }

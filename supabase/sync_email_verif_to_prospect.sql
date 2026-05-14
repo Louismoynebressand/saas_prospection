@@ -16,8 +16,8 @@ DECLARE
     v_email TEXT;
     v_rows_updated INT;
 BEGIN
-    -- La colonne email dans email_verification_results s'appelle "email"
-    v_email := trim(NEW.email);
+    -- La colonne email dans email_verification_results s'appelle "email_checked"
+    v_email := trim(NEW.email_checked);
 
     IF v_email IS NULL OR v_email = '' THEN
         RETURN NEW;
