@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { ProspectListTable } from "@/components/features/ProspectListTable"
 import { JobStepper } from "@/components/features/JobStepper"
+import { ScrapingProgressWidget } from "@/components/features/ScrapingProgressWidget"
 import { Skeleton } from "@/components/ui/skeleton"
 
 export default function SearchDetailsPage() {
@@ -126,8 +127,19 @@ export default function SearchDetailsPage() {
                 </div>
             </div>
 
-            {/* Job Progress Stepper */}
-            <JobStepper job={search} />
+            {/* Job Progress Widget (if running) or Stepper (if done) */}
+            {['done', 'ALLfinish', 'all_finished'].includes(search.statut?.toLowerCase() || '') ? (
+                <JobStepper job={search} />
+            ) : (
+                <div className="mb-6">
+                    <ScrapingProgressWidget 
+                        jobId={search.id_jobs} 
+                        maxResults={search.request_count || 0} 
+                        enrichmentEnabled={search.deepscan || false} 
+                        onComplete={() => fetchSearch()}
+                    />
+                </div>
+            )}
 
             <div className="grid gap-4 md:grid-cols-2">
                 <Card>

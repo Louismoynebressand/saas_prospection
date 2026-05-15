@@ -60,12 +60,26 @@ export function ScrapingProgressWidget({ jobId, maxResults, enrichmentEnabled = 
                 .select('*', { count: 'exact', head: true })
                 .eq('id_jobs', jobIdStr)
 
-            // 2. Count Emails (where email_adresse_verified is not null)
-            const { count: emailsCount } = await supabase
+            // 2. Count Emails (Accurately parsing email_adresse_verified to ignore empty strings or '[]')
+            const { data: emailsData } = await supabase
                 .from('scrape_prospect')
-                .select('*', { count: 'exact', head: true })
+                .select('email_adresse_verified')
                 .eq('id_jobs', jobIdStr)
                 .not('email_adresse_verified', 'is', null)
+                
+            let emailsCount = 0;
+            if (emailsData) {
+                emailsCount = emailsData.filter((row: any) => {
+                    const e = row.email_adresse_verified;
+                    if (!e) return false;
+                    if (Array.isArray(e) && e.length === 0) return false;
+                    if (typeof e === 'string') {
+                        const trimmed = e.trim();
+                        if (trimmed === '' || trimmed === '[]' || trimmed === 'null') return false;
+                    }
+                    return true;
+                }).length;
+            }
 
             // 3. Count Enriched (where deep_search is not null)
             const { count: enrichedCount } = await supabase
