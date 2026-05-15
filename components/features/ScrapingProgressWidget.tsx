@@ -127,7 +127,7 @@ export function ScrapingProgressWidget({ jobId, maxResults, enrichmentEnabled = 
             if (error) throw error
 
             if (job && mountedRef.current) {
-                if (['done', 'ALLfinish'].includes(job.statut)) {
+                if (['done', 'ALLfinish', 'all_finished'].includes(job.statut)) {
                     setStatus('completed')
                     setProgress(100)
                     if (onComplete) onComplete()
@@ -204,7 +204,7 @@ export function ScrapingProgressWidget({ jobId, maxResults, enrichmentEnabled = 
                 { event: 'UPDATE', schema: 'public', table: 'scrape_jobs', filter: `id_jobs=eq.${jobIdStr}` },
                 (payload: any) => {
                     const newStatus = payload.new?.statut
-                    if (['done', 'ALLfinish'].includes(newStatus)) {
+                    if (['done', 'ALLfinish', 'all_finished'].includes(newStatus)) {
                         setStatus('completed')
                         setProgress(100)
                         fetchStats()
