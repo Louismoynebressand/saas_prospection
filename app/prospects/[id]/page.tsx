@@ -192,9 +192,9 @@ export default function ProspectPage() {
     const [isSendingEmail, setIsSendingEmail] = useState(false)
 
     // --- DATA FETCHING ---
-    const fetchProspectData = async (targetId: string) => {
+    const fetchProspectData = async (targetId: string, hideLoading = false) => {
         try {
-            setLoading(true)
+            if (!hideLoading) setLoading(true)
             const supabase = createClient()
 
             // 1. Fetch Prospect Core Data
@@ -288,7 +288,7 @@ export default function ProspectPage() {
             console.error('Error fetching prospect:', error)
             toast.error("Impossible de charger le prospect")
         } finally {
-            setLoading(false)
+            if (!hideLoading) setLoading(false)
         }
     }
 
@@ -354,6 +354,24 @@ export default function ProspectPage() {
     useEffect(() => {
         fetchProspectData(id)
         fetchCampaignLinks(id)
+
+        const supabase = createClient()
+        const channel = supabase
+            .channel(`prospect_detail_page_${id}`)
+            .on('postgres_changes', {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'scrape_prospect',
+                filter: `id_prospect=eq.${id}`
+            }, () => {
+                // Fetch silently without full page loading flicker
+                fetchProspectData(id, true)
+            })
+            .subscribe()
+
+        return () => {
+            supabase.removeChannel(channel)
+        }
     }, [id])
 
     // --- ACTIONS ---
