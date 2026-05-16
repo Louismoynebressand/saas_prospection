@@ -130,27 +130,27 @@ export function ProspectDetailModal({
     const mapsUrl = scrapped["URL Google Maps"]
     const website = scrapped["Site web"] || (deep.socials?.instagram || deep.socials?.facebook)
 
+    const displayEmail = (prospect?.email_adresse_verified && prospect?.email_adresse_verified.length > 0)
+        ? (Array.isArray(prospect.email_adresse_verified) ? prospect.email_adresse_verified[0] : prospect.email_adresse_verified)
+        : (scrapped.Email || (deep.emails && deep.emails[0]))
+
     // Email Status Logic
     let emailStatus = 'inconnu'
     let emailStatusLabel = 'Inconnu'
 
-    if (prospect?.check_email_tentative?.toLowerCase().includes("pas de domaine")) {
-        emailStatus = 'pas_domaine'
-        emailStatusLabel = 'Pas de domaine'
-    } else if (prospect?.succed_validation_smtp_email === true) {
+    if (prospect?.succed_validation_smtp_email === true) {
         emailStatus = 'valide'
         emailStatusLabel = 'Vérifié ✓'
     } else if (prospect?.succed_validation_smtp_email === false) {
         emailStatus = 'echec'
-        emailStatusLabel = 'Échec'
-    } else if (prospect?.check_email === false) {
+        emailStatusLabel = 'Invalide / Échec'
+    } else if (prospect?.check_email_tentative?.toLowerCase().includes("pas de domaine") && !displayEmail) {
+        emailStatus = 'pas_domaine'
+        emailStatusLabel = 'Pas de domaine'
+    } else if (prospect?.check_email === false || displayEmail) {
         emailStatus = 'non_verifie'
         emailStatusLabel = 'Non vérifié'
     }
-
-    const displayEmail = (prospect?.email_adresse_verified && prospect?.email_adresse_verified.length > 0)
-        ? (Array.isArray(prospect.email_adresse_verified) ? prospect.email_adresse_verified[0] : prospect.email_adresse_verified)
-        : (scrapped.Email || (deep.emails && deep.emails[0]))
 
     const renderEmailBadge = () => {
         if (!displayEmail) {

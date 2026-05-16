@@ -517,24 +517,6 @@ export default function ProspectPage() {
     const mapsUrl = scrapped["URL Google Maps"];
     const website = scrapped["Site web"] || (deep.socials?.instagram || deep.socials?.facebook);
 
-    // Email Status Logic
-    let emailStatus = 'inconnu';
-    let emailStatusLabel = 'Inconnu';
-
-    if (prospect?.check_email_tentative?.toLowerCase().includes("pas de domaine")) {
-        emailStatus = 'pas_domaine';
-        emailStatusLabel = 'Pas de domaine';
-    } else if (prospect?.succed_validation_smtp_email === true) {
-        emailStatus = 'valide';
-        emailStatusLabel = 'Check Email Réussi';
-    } else if (prospect?.succed_validation_smtp_email === false) {
-        emailStatus = 'echec';
-        emailStatusLabel = 'Check Email Échoué';
-    } else if (prospect?.check_email === false) {
-        emailStatus = 'non_verifie';
-        emailStatusLabel = 'Non Vérifié';
-    }
-
     const rawDisplayEmail = (prospect?.email_adresse_verified && prospect?.email_adresse_verified.length > 0)
         ? (Array.isArray(prospect.email_adresse_verified) ? prospect.email_adresse_verified[0] : prospect.email_adresse_verified)
         : (scrapped.Email || (deep.emails && deep.emails[0]));
@@ -557,6 +539,25 @@ export default function ProspectPage() {
         return s || null;
     }
     const displayEmail = cleanEmail(rawDisplayEmail);
+
+    // Email Status Logic
+    let emailStatus = 'inconnu';
+    let emailStatusLabel = 'Inconnu';
+
+    if (prospect?.succed_validation_smtp_email === true) {
+        emailStatus = 'valide';
+        emailStatusLabel = 'Vérifié ✓';
+    } else if (prospect?.succed_validation_smtp_email === false) {
+        emailStatus = 'echec';
+        emailStatusLabel = 'Invalide / Échec';
+    } else if (prospect?.check_email_tentative?.toLowerCase().includes("pas de domaine") && !displayEmail) {
+        emailStatus = 'pas_domaine';
+        emailStatusLabel = 'Pas de domaine';
+    } else if (prospect?.check_email === false || displayEmail) {
+        emailStatus = 'non_verifie';
+        emailStatusLabel = 'Non Vérifié';
+    }
+
 
     const renderEmailBadge = () => {
         if (!displayEmail) {
