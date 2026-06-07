@@ -20,10 +20,11 @@ export async function GET(request: Request) {
 
         const supabase = await createClient()
 
-        // 1. Fetch prospects that haven't replied/bounced and have received at least one email
+        // 1. Fetch prospects that haven't replied/bounced and have received at least one email, AND whose campaign is active
         const { data: activeProspects, error: prospectsError } = await supabase
             .from('campaign_prospects')
-            .select('id, prospect_id, campaign_id, current_step, last_email_sent_at, email_status')
+            .select('id, prospect_id, campaign_id, current_step, last_email_sent_at, email_status, cold_email_campaigns!inner(status)')
+            .in('cold_email_campaigns.status', ['active', 'ACTIVE'])
             .not('email_status', 'in', '("replied","bounced","unsubscribed","pending")')
             .not('last_email_sent_at', 'is', null)
 

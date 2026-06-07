@@ -16,9 +16,12 @@ import { CampaignSchedulerModal } from "@/components/features/CampaignSchedulerM
 import { PlanningTab } from "@/components/features/PlanningTab"
 import { AddProspectsToCampaignModal } from "@/components/features/AddProspectsToCampaignModal"
 import { PersonalizationTab } from "@/components/features/PersonalizationTab"
+import { CampaignStepsTab } from "@/components/features/CampaignStepsTab"
 import { AIBadge } from "@/components/ui/ai-badge"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
+import { Play, Pause, ListOrdered } from "lucide-react"
+import { toast } from "sonner"
 
 export default function CampaignDetailPage() {
     const params = useParams()
@@ -89,6 +92,23 @@ export default function CampaignDetailPage() {
         window.location.reload()
     }
 
+    const togglePause = async () => {
+        try {
+            const res = await fetch(`/api/campaigns/${campaignId}/toggle-pause`, {
+                method: 'PATCH',
+            })
+            const data = await res.json()
+            if (data.success) {
+                setCampaign(prev => prev ? { ...prev, status: data.newStatus } : null)
+                toast.success(`Campagne ${data.newStatus === 'ACTIVE' ? 'relancée' : 'mise en pause'}`)
+            } else {
+                toast.error(data.error || "Erreur lors du changement de statut")
+            }
+        } catch (error) {
+            toast.error("Erreur lors du changement de statut")
+        }
+    }
+
     if (loading) {
         return (
             <div className="flex items-center justify-center min-h-[60vh]">
@@ -144,6 +164,18 @@ export default function CampaignDetailPage() {
                         </p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
+                        <Button
+                            variant={campaign.status === 'ACTIVE' ? "outline" : "default"}
+                            size="sm"
+                            onClick={togglePause}
+                            className={campaign.status === 'ACTIVE' ? "text-amber-600 border-amber-200 hover:bg-amber-50" : "bg-emerald-600 hover:bg-emerald-700"}
+                        >
+                            {campaign.status === 'ACTIVE' ? (
+                                <><Pause className="w-4 h-4 mr-1.5" /> Suspendre</>
+                            ) : (
+                                <><Play className="w-4 h-4 mr-1.5" /> Relancer</>
+                            )}
+                        </Button>
                         <div className="hidden md:block">
                             <CampaignSchedulerModal campaignId={campaignId} onScheduled={handleScheduleUpdate} hasSchedule={!!schedule} />
                         </div>
@@ -151,7 +183,7 @@ export default function CampaignDetailPage() {
                             "px-2.5 py-1 rounded-full text-xs font-semibold border transition-all duration-300",
                             campaign.status === 'ACTIVE'
                                 ? "bg-emerald-50 text-emerald-700 border-emerald-200 shadow-[0_0_10px_rgba(16,185,129,0.15)]"
-                                : "bg-slate-100 text-slate-500 border-slate-200"
+                                : "bg-amber-50 text-amber-700 border-amber-200"
                         )}>
                             <div className="flex items-center gap-1.5">
                                 {campaign.status === 'ACTIVE' && (
@@ -160,7 +192,7 @@ export default function CampaignDetailPage() {
                                         <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
                                     </div>
                                 )}
-                                {campaign.status === 'ACTIVE' ? 'Actif' : campaign.status}
+                                {campaign.status === 'ACTIVE' ? 'Actif' : 'En pause'}
                             </div>
                         </div>
                     </div>
@@ -182,6 +214,10 @@ export default function CampaignDetailPage() {
                         <TabsTrigger value="planning" className="flex items-center gap-1.5 px-3 py-2 text-sm whitespace-nowrap">
                             <Clock className="w-3.5 h-3.5 shrink-0" />
                             Planification
+                        </TabsTrigger>
+                        <TabsTrigger value="sequence" className="flex items-center gap-1.5 px-3 py-2 text-sm whitespace-nowrap">
+                            <ListOrdered className="w-3.5 h-3.5 shrink-0" />
+                            Séquence
                         </TabsTrigger>
                         <TabsTrigger value="configuration" className="flex items-center gap-1.5 px-3 py-2 text-sm whitespace-nowrap">
                             <Settings className="w-3.5 h-3.5 shrink-0" />
@@ -207,6 +243,10 @@ export default function CampaignDetailPage() {
                             campaign={campaign}
                             onUpdate={(updated) => setCampaign(updated)}
                         />
+                    </TabsContent>
+
+                    <TabsContent value="sequence" className="space-y-4">
+                        <CampaignStepsTab campaignId={campaignId} />
                     </TabsContent>
 
                     <TabsContent value="planning" className="space-y-4">
