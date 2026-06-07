@@ -114,7 +114,7 @@ export function ProspectDetailModal({
                 .eq('campaign_id', campaignLink.campaign_id)
                 .eq('prospect_id', prospect?.id_prospect)
                 .order('created_at', { ascending: true })
-                .then(({ data }) => {
+                .then(({ data }: { data: any }) => {
                     if (data) setEmailsHistory(data)
                     setLoadingHistory(false)
                 })
