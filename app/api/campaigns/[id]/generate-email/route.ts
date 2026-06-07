@@ -102,52 +102,13 @@ export async function POST(
                 console.log(`🔒 Skipped ${originalCount - prospectIds.length} locked prospects (sent/bounced)`)
             }
 
-            // Check if any of the prospects already have a generated email (= regeneration)
+            // Check if any of the prospects already have a generated email
             const generatedIds = existingLinks
                 .filter(link => ['generated', 'pending'].includes(link.email_status))
                 .map(link => link.prospect_id)
 
             if (generatedIds.length > 0) {
-                isRegeneration = true
-                console.log(`♻️ Regeneration detected for ${generatedIds.length} prospect(s). Cleaning up old data first...`)
-
-                // WE NO LONGER DELETE FROM cold_email_generations
-                // This preserves the history of emails (Step 1, Step 2, etc.)
-                console.log(`✅ Keeping old cold_email_generations for history`)
-
-                // STEP 1.5: Delete old tracked links to prevent duplicates
-                const { error: deleteLinksError } = await supabase
-                    .from('email_tracked_links')
-                    .delete()
-                    .eq('campaign_id', campaignId)
-                    .in('prospect_id', generatedIds)
-
-                if (deleteLinksError) {
-                    console.error('❌ Failed to delete old tracked links:', deleteLinksError)
-                    return NextResponse.json({ error: 'Failed to clean up old tracked links' }, { status: 500 })
-                }
-                console.log(`✅ Deleted old tracked links for ${generatedIds.length} prospect(s)`)
-
-                // STEP 2: Reset campaign_prospects to 'pending' so UI shows loading state
-                const { error: resetError } = await supabase
-                    .from('campaign_prospects')
-                    .update({
-                        email_status: 'pending',
-                        generated_email_subject: null,
-                        generated_email_content: null,
-                        signature_tracked_html: null,
-                        links_click_count: 0,
-                        email_generated_at: null,
-                        updated_at: new Date().toISOString()
-                    })
-                    .eq('campaign_id', campaignId)
-                    .in('prospect_id', generatedIds)
-
-                if (resetError) {
-                    console.error('❌ Failed to reset campaign_prospects status:', resetError)
-                } else {
-                    console.log(`✅ Reset ${generatedIds.length} prospect(s) to pending status`)
-                }
+                console.log(`♻️ Regeneration/Follow-up detected for ${generatedIds.length} prospect(s). Keeping old data for history.`)
             }
         }
 
@@ -178,29 +139,20 @@ export async function POST(
             return NextResponse.json({ error: 'Failed to create tracking job' }, { status: 500 })
         }
 
-        // 2. Init campaign_prospects for NEW prospects only (already-existing ones were handled above)
-        const newProspectIds = (existingLinks || []).length === 0
-            ? prospectIds
-            : prospectIds.filter(id => !(existingLinks || []).some(l => l.prospect_id == id))
-
-        if (newProspectIds.length > 0) {
-            const linksToInsert = newProspectIds.map(prospectId => ({
-                campaign_id: campaignId,
-                prospect_id: prospectId,
+        // 2. Mettre à jour TOUS les prospects à 'pending' pour que le spinner s'affiche
+        const { error: resetError } = await supabase
+            .from('campaign_prospects')
+            .update({
                 email_status: 'pending',
                 updated_at: new Date().toISOString()
-            }))
+            })
+            .eq('campaign_id', campaignId)
+            .in('prospect_id', prospectIds)
 
-            const { error: linksError } = await supabase
-                .from('campaign_prospects')
-                .upsert(linksToInsert, {
-                    onConflict: 'campaign_id,prospect_id',
-                    ignoreDuplicates: false
-                })
-
-            if (linksError) {
-                console.error('⚠️ Warning: Failed to upsert campaign links:', linksError)
-            }
+        if (resetError) {
+            console.error('❌ Failed to set prospects to pending status:', resetError)
+        } else {
+            console.log(`✅ Set ${prospectIds.length} prospect(s) to pending status`)
         }
 
         // Quota is now managed by the database trigger on cold_email_generations
