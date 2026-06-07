@@ -303,8 +303,10 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
                 })
             })
 
-            if (!response.ok) throw new Error('Erreur envoi')
-
+            if (!response.ok) {
+                const data = await response.json().catch(() => ({}))
+                throw new Error(data.error || 'Erreur envoi')
+            }
             const result = await response.json()
             
             if (result.sent === 0 && result.results && result.results.length > 0) {
