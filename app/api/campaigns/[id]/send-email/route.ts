@@ -54,24 +54,53 @@ export async function POST(
             sendingConfig = cfg
         }
 
-        // Récupérer les prospects et leur dernier email généré
-        const { data: campaignProspects, error: cpError } = await supabase
+        // Récupérer les prospects
+        const { data: campaignProspectsData, error: cpError } = await supabase
             .from('campaign_prospects')
-            .select(`
-                *,
-                cold_email_generations (
-                    id, step, subject, message, created_at
-                ),
-                scrape_prospect (
-                    email_adresse_verified
-                )
-            `)
+            .select('*')
             .eq('campaign_id', campaignId)
             .in('prospect_id', targetProspectIds)
 
-        if (cpError || !campaignProspects || campaignProspects.length === 0) {
+        if (cpError) {
+            return NextResponse.json({ error: 'DB Error on prospects: ' + cpError.message }, { status: 500 })
+        }
+
+        if (!campaignProspectsData || campaignProspectsData.length === 0) {
             return NextResponse.json({ error: 'No prospects found in campaign' }, { status: 404 })
         }
+
+        // Fetch cold_email_generations separately
+        const { data: generationsData, error: genError } = await supabase
+            .from('cold_email_generations')
+            .select('id, prospect_id, step, subject, message, created_at')
+            .eq('campaign_id', campaignId)
+            .in('prospect_id', targetProspectIds)
+
+        if (genError) {
+            return NextResponse.json({ error: 'DB Error on generations: ' + genError.message }, { status: 500 })
+        }
+
+        // Fetch scrape_prospect separately
+        const { data: scrapeData, error: scrapeError } = await supabase
+            .from('scrape_prospect')
+            .select('id_prospect, email_adresse_verified')
+            .in('id_prospect', targetProspectIds)
+
+        if (scrapeError) {
+            return NextResponse.json({ error: 'DB Error on scrape: ' + scrapeError.message }, { status: 500 })
+        }
+
+        // Merge them in memory
+        const campaignProspects = campaignProspectsData.map(cp => {
+            const cpGens = generationsData?.filter(g => g.prospect_id === cp.prospect_id) || []
+            const sp = scrapeData?.find(s => s.id_prospect === cp.prospect_id) || null
+            return {
+                ...cp,
+                cold_email_generations: cpGens,
+                scrape_prospect: sp
+            }
+        })
+
 
         const results = []
 
