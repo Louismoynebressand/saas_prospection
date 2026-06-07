@@ -17,6 +17,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { EmailLinkStats } from "./EmailLinkStats"
+import { supabase } from "@/lib/supabase/client"
 
 // --- TYPES ---
 interface ScrappedData {
@@ -101,6 +102,24 @@ export function ProspectDetailModal({
     onGenerateEmail,
     onSendEmail
 }: ProspectDetailModalProps) {
+    const [emailsHistory, setEmailsHistory] = useState<any[]>([])
+    const [loadingHistory, setLoadingHistory] = useState(false)
+
+    useEffect(() => {
+        if (open && campaignLink) {
+            setLoadingHistory(true)
+            supabase.from('cold_email_generations')
+                .select('*')
+                .eq('campaign_id', campaignLink.campaign_id)
+                .eq('prospect_id', prospect?.id_prospect)
+                .order('created_at', { ascending: true })
+                .then(({ data }) => {
+                    if (data) setEmailsHistory(data)
+                    setLoadingHistory(false)
+                })
+        }
+    }, [open, campaignLink, prospect])
+
     if (!prospect) return null
 
     const safeParse = (data: any) => {
@@ -598,13 +617,50 @@ export function ProspectDetailModal({
                                         </div>
                                     </CardHeader>
                                     <CardContent className="p-0">
-                                        {campaignLink.generated_email_content ? (
+                                        {loadingHistory ? (
+                                            <div className="p-12 text-center text-muted-foreground bg-white/50">
+                                                <Sparkles className="w-8 h-8 mx-auto mb-3 animate-spin opacity-50" />
+                                                <p>Chargement de l'historique des emails...</p>
+                                            </div>
+                                        ) : emailsHistory.length > 0 ? (
+                                            <div className="flex flex-col gap-4 p-4 bg-slate-50/50">
+                                                {emailsHistory.map((email) => (
+                                                    <div key={email.id} className="flex flex-col md:flex-row h-auto min-h-[300px] border border-indigo-100 rounded-lg overflow-hidden bg-white shadow-sm">
+                                                        {/* Left side: Email Content */}
+                                                        <div className="flex-1 p-6 overflow-y-auto">
+                                                            <div className="max-w-3xl mx-auto space-y-4">
+                                                                <div className="border-b pb-4 flex justify-between items-start">
+                                                                    <div>
+                                                                        <Badge variant="outline" className="mb-2 bg-indigo-50 text-indigo-700">
+                                                                            Étape {email.step || 1}
+                                                                        </Badge>
+                                                                        <p className="text-sm text-gray-500 mb-1">Objet</p>
+                                                                        <p className="font-semibold text-lg text-gray-900">{email.subject || '(Sans objet)'}</p>
+                                                                    </div>
+                                                                </div>
+                                                                <div
+                                                                    dangerouslySetInnerHTML={{ __html: email.message }}
+                                                                    className="prose prose-sm max-w-none text-gray-700"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                                {/* Toujours afficher les stats du prospect à la fin */}
+                                                <div className="w-full bg-white border border-indigo-100 rounded-lg p-6 overflow-y-auto shrink-0 shadow-sm">
+                                                    <EmailLinkStats 
+                                                        prospectId={prospect.id_prospect} 
+                                                        campaignId={campaignLink.campaign_id} 
+                                                    />
+                                                </div>
+                                            </div>
+                                        ) : campaignLink.generated_email_content ? (
+                                            // Fallback pour les anciens prospects qui ont l'email stocké sur campaign_prospects
                                             <div className="flex flex-col md:flex-row h-auto min-h-[500px]">
-                                                {/* Left side: Email Content */}
                                                 <div className="flex-1 p-6 bg-white overflow-y-auto">
                                                     <div className="max-w-3xl mx-auto space-y-4">
                                                         <div className="border-b pb-4">
-                                                            <p className="text-sm text-gray-500 mb-1">Objet</p>
+                                                            <p className="text-sm text-gray-500 mb-1">Objet (Ancien format)</p>
                                                             <p className="font-semibold text-lg text-gray-900">{campaignLink.generated_email_subject}</p>
                                                         </div>
                                                         <div
@@ -613,8 +669,6 @@ export function ProspectDetailModal({
                                                         />
                                                     </div>
                                                 </div>
-                                                
-                                                {/* Right side: Link Tracking Stats */}
                                                 <div className="w-full md:w-[380px] lg:w-[420px] bg-slate-50/80 border-l border-indigo-100/50 p-6 overflow-y-auto shrink-0">
                                                     <EmailLinkStats 
                                                         prospectId={prospect.id_prospect} 

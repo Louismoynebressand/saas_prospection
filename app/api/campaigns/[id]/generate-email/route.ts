@@ -111,18 +111,9 @@ export async function POST(
                 isRegeneration = true
                 console.log(`♻️ Regeneration detected for ${generatedIds.length} prospect(s). Cleaning up old data first...`)
 
-                // STEP 1: Delete old cold_email_generations rows (MUST come before webhook)
-                const { error: deleteGenError } = await supabase
-                    .from('cold_email_generations')
-                    .delete()
-                    .eq('campaign_id', campaignId)
-                    .in('prospect_id', generatedIds)
-
-                if (deleteGenError) {
-                    console.error('❌ Failed to delete old cold_email_generations:', deleteGenError)
-                    return NextResponse.json({ error: 'Failed to clean up old generated emails before regeneration' }, { status: 500 })
-                }
-                console.log(`✅ Deleted old cold_email_generations for ${generatedIds.length} prospect(s)`)
+                // WE NO LONGER DELETE FROM cold_email_generations
+                // This preserves the history of emails (Step 1, Step 2, etc.)
+                console.log(`✅ Keeping old cold_email_generations for history`)
 
                 // STEP 1.5: Delete old tracked links to prevent duplicates
                 const { error: deleteLinksError } = await supabase

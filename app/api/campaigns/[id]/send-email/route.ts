@@ -54,10 +54,15 @@ export async function POST(
             sendingConfig = cfg
         }
 
-        // Récupérer les prospects de la campagne
+        // Récupérer les prospects et leur dernier email généré
         const { data: campaignProspects, error: cpError } = await supabase
             .from('campaign_prospects')
-            .select('*')
+            .select(`
+                *,
+                cold_email_generations (
+                    id, step, subject, message, created_at
+                )
+            `)
             .eq('campaign_id', campaignId)
             .in('prospect_id', targetProspectIds)
 
@@ -68,8 +73,18 @@ export async function POST(
         const results = []
 
         for (const cp of campaignProspects) {
-            // Vérifier que l'email est généré
-            if (cp.email_status === 'not_generated' || !cp.generated_email_content) {
+            // Récupérer le dernier email généré (celui avec le step le plus grand, ou plus récent)
+            const sortedEmails = cp.cold_email_generations?.sort((a: any, b: any) => {
+                if (b.step !== a.step) return (b.step || 1) - (a.step || 1)
+                return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+            }) || []
+            
+            const latestEmail = sortedEmails.length > 0 ? sortedEmails[0] : null
+
+            // Fallback for backward compatibility
+            const hasBackwardCompatContent = !!cp.generated_email_content
+            
+            if (cp.email_status === 'not_generated' || (!latestEmail && !hasBackwardCompatContent)) {
                 results.push({ prospect_id: cp.prospect_id, success: false, error: 'Email not generated yet' })
                 continue
             }
@@ -80,11 +95,15 @@ export async function POST(
                 //    → On obtient un email_send_id à passer à n8n
                 // ----------------------------------------------------------------
                 let htmlContent = ''
-                if (typeof cp.generated_email_content === 'string') {
+                if (latestEmail?.message) {
+                    htmlContent = latestEmail.message
+                } else if (typeof cp.generated_email_content === 'string') {
                     htmlContent = cp.generated_email_content
                 } else if (cp.generated_email_content) {
                     htmlContent = cp.generated_email_content.body || cp.generated_email_content.html || ''
                 }
+
+                const subject = latestEmail?.subject || cp.generated_email_subject || ''
 
                 const { data: emailSend, error: insertError } = await supabase
                     .from('email_sends')
@@ -96,7 +115,7 @@ export async function POST(
                         provider: sendingConfig?.provider === 'mailgun_api' ? 'mailgun' : 'smtp',
                         from_email: (sendingConfig?.from_email as string) || '',
                         to_email: cp.prospect_email || '',
-                        subject: cp.generated_email_subject || '',
+                        subject: subject,
                         html: htmlContent,
                         status: 'prepared',
                     })
