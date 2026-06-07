@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
     Building2, Mail, Phone, MapPin, Globe, User,
     Star, Clock, CheckCircle2, XCircle, AlertCircle, Sparkles, Users, Store,
