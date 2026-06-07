@@ -17,10 +17,11 @@ import { PlanningTab } from "@/components/features/PlanningTab"
 import { AddProspectsToCampaignModal } from "@/components/features/AddProspectsToCampaignModal"
 import { PersonalizationTab } from "@/components/features/PersonalizationTab"
 import { CampaignStepsTab } from "@/components/features/CampaignStepsTab"
+import { CampaignAnalyticsTab } from "@/components/features/CampaignAnalyticsTab"
 import { AIBadge } from "@/components/ui/ai-badge"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
-import { Play, Pause, ListOrdered } from "lucide-react"
+import { Play, Pause, ListOrdered, BarChart2 } from "lucide-react"
 import { toast } from "sonner"
 
 export default function CampaignDetailPage() {
@@ -219,6 +220,10 @@ export default function CampaignDetailPage() {
                             <ListOrdered className="w-3.5 h-3.5 shrink-0" />
                             Séquence
                         </TabsTrigger>
+                        <TabsTrigger value="analytics" className="flex items-center gap-1.5 px-3 py-2 text-sm whitespace-nowrap">
+                            <BarChart2 className="w-3.5 h-3.5 shrink-0" />
+                            Statistiques
+                        </TabsTrigger>
                         <TabsTrigger value="configuration" className="flex items-center gap-1.5 px-3 py-2 text-sm whitespace-nowrap">
                             <Settings className="w-3.5 h-3.5 shrink-0" />
                             Paramètres
@@ -247,6 +252,10 @@ export default function CampaignDetailPage() {
 
                     <TabsContent value="sequence" className="space-y-4">
                         <CampaignStepsTab campaignId={campaignId} />
+                    </TabsContent>
+
+                    <TabsContent value="analytics" className="space-y-4">
+                        <CampaignAnalyticsTab campaignId={campaignId} />
                     </TabsContent>
 
                     <TabsContent value="planning" className="space-y-4">
