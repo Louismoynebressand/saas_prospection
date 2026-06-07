@@ -61,6 +61,9 @@ export async function POST(
                 *,
                 cold_email_generations (
                     id, step, subject, message, created_at
+                ),
+                scrape_prospect (
+                    email_adresse_verified
                 )
             `)
             .eq('campaign_id', campaignId)
@@ -105,6 +108,22 @@ export async function POST(
 
                 const subject = latestEmail?.subject || cp.generated_email_subject || ''
 
+                // Extraire l'email correctement
+                let prospectEmail = ''
+                const rawEmail = (cp as any).scrape_prospect?.email_adresse_verified
+                if (Array.isArray(rawEmail) && rawEmail.length > 0) {
+                    prospectEmail = rawEmail[0]
+                } else if (typeof rawEmail === 'string' && rawEmail.trim().startsWith('[')) {
+                    try {
+                        const parsed = JSON.parse(rawEmail)
+                        prospectEmail = Array.isArray(parsed) && parsed.length > 0 ? parsed[0] : rawEmail
+                    } catch {
+                        prospectEmail = rawEmail
+                    }
+                } else if (typeof rawEmail === 'string' && rawEmail.length > 0) {
+                    prospectEmail = rawEmail
+                }
+
                 const { data: emailSend, error: insertError } = await supabase
                     .from('email_sends')
                     .insert({
@@ -114,7 +133,7 @@ export async function POST(
                         sending_account_id: smtpConfigurationId || null,
                         provider: sendingConfig?.provider === 'mailgun_api' ? 'mailgun' : 'smtp',
                         from_email: (sendingConfig?.from_email as string) || '',
-                        to_email: cp.prospect_email || '',
+                        to_email: prospectEmail,
                         subject: subject,
                         html: htmlContent,
                         status: 'prepared',
