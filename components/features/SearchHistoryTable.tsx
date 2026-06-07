@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
-import { MoreHorizontal, Search as SearchIcon, Loader2, Sparkles, XCircle, RefreshCw, AlertTriangle } from "lucide-react"
+import { MoreHorizontal, Search as SearchIcon, Loader2, Sparkles, XCircle, RefreshCw, AlertTriangle, Trash2 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { authenticatedFetch } from "@/lib/fetch-client"
 import { ScrapeJob } from "@/types"
@@ -13,7 +13,17 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { toast } from "sonner"
 import { v4 as uuidv4 } from "uuid"
-
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 export function SearchHistoryTable({ limit }: { limit?: number }) {
     const router = useRouter()
     const supabase = createClient()
@@ -21,6 +31,8 @@ export function SearchHistoryTable({ limit }: { limit?: number }) {
     const [counts, setCounts] = useState<Record<string, number>>({})
     const [loading, setLoading] = useState(true)
     const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({})
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+    const [searchToDelete, setSearchToDelete] = useState<ScrapeJob | null>(null)
 
     const fetchSearches = useCallback(async () => {
         try {
@@ -144,6 +156,38 @@ export function SearchHistoryTable({ limit }: { limit?: number }) {
             toast.error("Erreur lors du relancement", { description: err.message })
         } finally {
             setActionLoading(prev => ({ ...prev, [`relaunch-${job.id_jobs}`]: false }))
+        }
+    }
+
+    // ── Delete a job ───────────────────────────────────────────────────────────
+    const confirmDelete = (job: ScrapeJob) => {
+        setSearchToDelete(job)
+        setDeleteDialogOpen(true)
+    }
+
+    const executeDelete = async () => {
+        if (!searchToDelete) return
+
+        setActionLoading(prev => ({ ...prev, [`delete-${searchToDelete.id_jobs}`]: true }))
+        setDeleteDialogOpen(false)
+        
+        try {
+            const response = await authenticatedFetch(`/api/searches/${searchToDelete.id_jobs}`, {
+                method: 'DELETE'
+            })
+
+            if (!response.ok) {
+                const err = await response.json()
+                throw new Error(err.error || 'Erreur lors de la suppression')
+            }
+
+            toast.success("Recherche supprimée", { description: "La recherche et toutes ses données associées ont été supprimées." })
+            fetchSearches()
+        } catch (err: any) {
+            toast.error("Erreur lors de la suppression", { description: err.message })
+        } finally {
+            setActionLoading(prev => ({ ...prev, [`delete-${searchToDelete.id_jobs}`]: false }))
+            setSearchToDelete(null)
         }
     }
 
@@ -278,15 +322,61 @@ export function SearchHistoryTable({ limit }: { limit?: number }) {
                                         </Button>
                                     </div>
                                 ) : (
-                                    <Button variant="ghost" size="sm" className="h-7">
-                                        <MoreHorizontal className="h-4 w-4" />
-                                    </Button>
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button variant="ghost" size="sm" className="h-7" disabled={actionLoading[`delete-${job.id_jobs}`]}>
+                                                {actionLoading[`delete-${job.id_jobs}`] ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreHorizontal className="h-4 w-4" />}
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end">
+                                            <DropdownMenuItem 
+                                                className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
+                                                onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    confirmDelete(job)
+                                                }}
+                                            >
+                                                <Trash2 className="h-4 w-4 mr-2" />
+                                                Supprimer la recherche
+                                            </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
                                 )}
                             </TableCell>
                         </TableRow>
                     ))}
                 </TableBody>
             </Table>
+
+            <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+                            <AlertTriangle className="h-5 w-5" />
+                            Supprimer cette recherche ?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription className="space-y-2">
+                            <p>
+                                Êtes-vous sûr de vouloir supprimer la recherche <strong>{searchToDelete ? formatSearchTitle(searchToDelete) : ''}</strong> ?
+                            </p>
+                            <p className="font-medium text-destructive">
+                                Attention : Cette action est irréversible. Tous les prospects trouvés, les emails générés, ainsi que l'historique d'envoi et les liens aux campagnes associés seront définitivement supprimés.
+                            </p>
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={actionLoading[`delete-${searchToDelete?.id_jobs}`]}>Annuler</AlertDialogCancel>
+                        <AlertDialogAction 
+                            onClick={(e) => { e.preventDefault(); executeDelete(); }}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            disabled={actionLoading[`delete-${searchToDelete?.id_jobs}`]}
+                        >
+                            {actionLoading[`delete-${searchToDelete?.id_jobs}`] ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                            Supprimer définitivement
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     )
 }
