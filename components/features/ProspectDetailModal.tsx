@@ -17,7 +17,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { EmailLinkStats } from "./EmailLinkStats"
-import { supabase } from "@/lib/supabase/client"
+import { createClient } from "@/lib/supabase/client"
 
 // --- TYPES ---
 interface ScrappedData {
@@ -104,6 +104,7 @@ export function ProspectDetailModal({
 }: ProspectDetailModalProps) {
     const [emailsHistory, setEmailsHistory] = useState<any[]>([])
     const [loadingHistory, setLoadingHistory] = useState(false)
+    const supabase = createClient()
 
     useEffect(() => {
         if (open && campaignLink) {
