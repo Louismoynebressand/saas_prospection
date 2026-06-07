@@ -1,28 +1,26 @@
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
-import { cookies } from "next/headers"
+import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
+import { createClient as createAdminClient } from "@supabase/supabase-js"
 
 // Initialize Supabase with service role key to bypass RLS if needed for cascading deletes
-const supabaseAdmin = createClient(
+const supabaseAdmin = createAdminClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
 export async function DELETE(
     request: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const supabase = createRouteHandlerClient({ cookies })
+        const { id: searchId } = await params;
+        const supabase = await createClient()
         
         // 1. Authenticate user
         const { data: { user }, error: userError } = await supabase.auth.getUser()
         if (userError || !user) {
             return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
         }
-
-        const searchId = params.id
 
         // 2. Verify ownership
         const { data: search, error: searchError } = await supabase
