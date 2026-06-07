@@ -78,6 +78,20 @@ export default function SettingsPage() {
 
             if (error) throw error
 
+            // Update user metadata in auth so Topbar updates instantly
+            let metadataUpdate: any = {}
+            if (field === 'first_name') metadataUpdate = { first_name: value, firstName: value }
+            if (field === 'last_name') metadataUpdate = { last_name: value, lastName: value }
+            if (field === 'company_name') metadataUpdate = { company_name: value, companyName: value }
+
+            const { error: authError } = await supabase.auth.updateUser({
+                data: metadataUpdate
+            })
+
+            if (authError) {
+                console.error("Auth metadata update failed:", authError)
+            }
+
             const fieldNameMap: any = {
                 first_name: "Prénom",
                 last_name: "Nom",
