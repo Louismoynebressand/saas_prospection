@@ -74,6 +74,15 @@ export async function PATCH(
         const currentStatus = (current?.email_status || 'not_generated') as EmailStatus
         const newStatusTyped = newStatus as EmailStatus
 
+        // Vérifier si le prospect a du contenu généré dans cold_email_generations
+        const { count: genCount } = await supabase
+            .from('cold_email_generations')
+            .select('*', { count: 'exact', head: true })
+            .eq('campaign_id', campaignId)
+            .eq('prospect_id', prospectId)
+
+        const hasEmailContent = !!(current?.generated_email_subject || current?.generated_email_content || (genCount && genCount > 0))
+
         // Vérifier si c'est un retour arrière depuis un statut irréversible
         const isGoingBackwards = STATUS_RANK[newStatusTyped] < STATUS_RANK[currentStatus]
         const isFromIrreversible = IRREVERSIBLE_FROM.has(currentStatus)
@@ -101,7 +110,6 @@ export async function PATCH(
         }
 
         // Si on repasse en 'not_generated', il faut confirmer la suppression du mail
-        const hasEmailContent = !!(current?.generated_email_subject || current?.generated_email_content)
         if (newStatusTyped === 'not_generated' && hasEmailContent && !force) {
             return NextResponse.json({
                 error: `⚠️ Attention, repasser ce prospect en "Non généré" va supprimer définitivement le contenu de l'email généré. Le quota utilisé ne sera pas recrédité. Confirmez-vous ?`,
@@ -133,18 +141,29 @@ export async function PATCH(
             updateData.signature_tracked_html = null
             updateData.links_click_count = 0
             updateData.email_generated_at = null
-            
-            // Delete from cold_email_generations
-            await supabase.from('cold_email_generations')
+            // Delete from cold_email_generations with robust error handling
+            const { error: delGenError } = await supabase.from('cold_email_generations')
                 .delete()
                 .eq('campaign_id', campaignId)
                 .eq('prospect_id', prospectId)
+            
+            if (delGenError) console.error("❌ Failed to delete from cold_email_generations:", delGenError)
 
             // Delete tracked links to keep the database clean
-            await supabase.from('email_tracked_links')
+            const { error: delLinksError } = await supabase.from('email_tracked_links')
                 .delete()
                 .eq('campaign_id', campaignId)
                 .eq('prospect_id', prospectId)
+                
+            if (delLinksError) console.error("❌ Failed to delete from email_tracked_links:", delLinksError)
+                
+            // Delete actual sent emails history to fully reset the prospect
+            const { error: delSendsError } = await supabase.from('email_sends')
+                .delete()
+                .eq('campaign_id', campaignId)
+                .eq('lead_id', prospectId)
+                
+            if (delSendsError) console.error("❌ Failed to delete from email_sends:", delSendsError)
         }
 
         const { data: updated, error: updateError } = await supabase

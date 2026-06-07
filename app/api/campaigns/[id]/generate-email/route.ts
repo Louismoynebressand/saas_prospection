@@ -249,13 +249,35 @@ export async function POST(
             )
         }
 
-        // 3. Payload Webhook N8N — enrichi avec les signatures trackées
+        // Calculate the next step for each prospect
+        const prospectSteps: Record<string | number, number> = {}
+        const { data: pastGenerations } = await supabase
+            .from('cold_email_generations')
+            .select('prospect_id, step')
+            .eq('campaign_id', campaignId)
+            .in('prospect_id', prospectIds)
+
+        for (const id of prospectIds) {
+            const history = (pastGenerations || []).filter((g: any) => g.prospect_id == id)
+            if (history.length > 0) {
+                const maxStep = Math.max(...history.map((g: any) => g.step || 1))
+                prospectSteps[id] = maxStep + 1
+            } else {
+                prospectSteps[id] = 1
+            }
+        }
+        
+        // Compute a global step (fallback) which is the max step among all prospects
+        const globalStep = prospectIds.length > 0 ? Math.max(...Object.values(prospectSteps)) : 1;
+
+        // 3. Payload Webhook N8N — enrichi avec les signatures trackées et le step
         const webhookPayload = {
             user_id: user.id,
             job_id: job.id,
             campaign_id: campaignId,
             prospect_ids: prospectIds,
-            // Optionnel : map prospect_id → signature HTML pour que N8N puisse l'utiliser directement
+            step: globalStep, // Fallback global pour N8N
+            prospect_steps: prospectSteps, // Map détaillée par prospect
             prospect_signatures: prospectSignatures
         }
 
