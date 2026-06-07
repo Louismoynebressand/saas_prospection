@@ -40,7 +40,7 @@ export async function DELETE(
         // 3. Fetch all prospects for this search to handle cascading delete
         const { data: prospects, error: fetchProspectsError } = await supabaseAdmin
             .from('scrape_prospect')
-            .select('prospect_id')
+            .select('id_prospect')
             .eq('id_jobs', searchId)
 
         if (fetchProspectsError) {
@@ -48,7 +48,7 @@ export async function DELETE(
             return NextResponse.json({ error: "Erreur lors de la récupération des prospects associés" }, { status: 500 })
         }
 
-        const prospectIds = prospects?.map(p => p.prospect_id) || []
+        const prospectIds = prospects?.map(p => p.id_prospect) || []
 
         // 4. Chunk deletion to avoid URL limits in Supabase REST API
         if (prospectIds.length > 0) {
@@ -56,8 +56,8 @@ export async function DELETE(
             for (let i = 0; i < prospectIds.length; i += chunkSize) {
                 const chunk = prospectIds.slice(i, i + chunkSize)
 
-                // Delete sending histories
-                await supabaseAdmin.from('email_sends').delete().in('prospect_id', chunk)
+                // Delete sending histories (uses lead_id)
+                await supabaseAdmin.from('email_sends').delete().in('lead_id', chunk)
                 
                 // Delete generated emails
                 await supabaseAdmin.from('cold_email_generations').delete().in('prospect_id', chunk)
