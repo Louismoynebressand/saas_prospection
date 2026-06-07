@@ -7,7 +7,8 @@ import { logInfo, logError } from '@/lib/logger'
 const generateEmailSchema = z.object({
     campaignId: z.string().uuid(),
     prospectIds: z.array(z.union([z.string(), z.number()])).min(1),
-    agent_instructions: z.string().optional() // OVERRIDE for Playground
+    agent_instructions: z.string().optional(), // OVERRIDE for Playground
+    step: z.number().optional().default(1) // Step sequence
 })
 
 /**
@@ -33,25 +34,55 @@ export async function POST(request: NextRequest) {
         const validated = generateEmailSchema.parse(body)
 
         const supabase = await createClient()
-        const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-        if (authError || !user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        const authHeader = request.headers.get('authorization');
+        const isInternalCron = process.env.CRON_SECRET && authHeader === `Bearer ${process.env.CRON_SECRET}`;
+
+        if (isInternalCron) {
+            const { data: campaign } = await supabase
+                .from('cold_email_campaigns')
+                .select('user_id')
+                .eq('id', validated.campaignId)
+                .single()
+            if (campaign) userId = campaign.user_id
+        } else {
+            const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+            if (authError || !user) {
+                return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+            }
+
+            userId = user.id
         }
 
-        userId = user.id
+        if (!userId) {
+            return NextResponse.json({ error: 'User not found' }, { status: 400 })
+        }
 
         // FETCH INSTRUCTIONS if not overridden
         let finalInstructions = validated.agent_instructions
         if (!finalInstructions) {
-            const { data: campaign } = await supabase
-                .from('cold_email_campaigns')
+            // Check step specific instructions first
+            const { data: stepInfo } = await supabase
+                .from('campaign_steps')
                 .select('agent_instructions')
-                .eq('id', validated.campaignId)
+                .eq('campaign_id', validated.campaignId)
+                .eq('step_order', validated.step)
                 .single()
 
-            if (campaign?.agent_instructions) {
-                finalInstructions = campaign.agent_instructions
+            if (stepInfo?.agent_instructions) {
+                finalInstructions = stepInfo.agent_instructions
+            } else {
+                // Fallback to campaign level instructions
+                const { data: campaign } = await supabase
+                    .from('cold_email_campaigns')
+                    .select('agent_instructions')
+                    .eq('id', validated.campaignId)
+                    .single()
+
+                if (campaign?.agent_instructions) {
+                    finalInstructions = campaign.agent_instructions
+                }
             }
         }
 
@@ -59,6 +90,7 @@ export async function POST(request: NextRequest) {
             userId,
             campaignId: validated.campaignId,
             prospectCount: validated.prospectIds.length,
+            step: validated.step,
             hasInstructions: !!finalInstructions
         })
 
@@ -74,7 +106,7 @@ export async function POST(request: NextRequest) {
         const { data: quota, error: quotaError } = await supabase
             .from('quotas')
             .select('cold_emails_used, cold_emails_limit')
-            .eq('user_id', user.id)
+            .eq('user_id', userId)
             .single()
 
         // Note: On ne bloque pas strictement ici si pas de quota trouvé pour éviter de bloquer l'UX 
@@ -88,7 +120,7 @@ export async function POST(request: NextRequest) {
         const { data: job, error: jobError } = await supabase
             .from('cold_email_jobs')
             .insert({
-                user_id: user.id,
+                user_id: userId,
                 campaign_id: validated.campaignId,
                 prospect_ids: validated.prospectIds, // Stocké en jsonb
                 status: 'pending',
@@ -129,7 +161,7 @@ export async function POST(request: NextRequest) {
                 .update({
                     cold_emails_used: (quota.cold_emails_used || 0) + validated.prospectIds.length
                 })
-                .eq('user_id', user.id)
+                .eq('user_id', userId)
 
             if (usageError) {
                 console.error('❌ Failed to update quota usage:', usageError)
@@ -138,12 +170,20 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        // 5. Payload Webhook N8N
+        // 5. Fetch enriched prospect data to pass to n8n
+        const { data: prospects } = await supabase
+            .from('scrape_prospect')
+            .select('*')
+            .in('id', validated.prospectIds)
+
+        // 6. Payload Webhook N8N
         const webhookPayload = {
-            user_id: user.id,
+            user_id: userId,
             job_id: job.id,
             campaign_id: validated.campaignId,
             prospect_ids: validated.prospectIds,
+            prospects_data: prospects || [], // Enriched context for the AI prompt
+            step: validated.step, // Step information for follow-ups
             agent_instructions: finalInstructions // Add this field
         }
 
