@@ -237,6 +237,53 @@ export async function POST(
             }
         }
 
+        // =================================================================================
+        // AUTO VERIFICATION: Trigger deep-search/check email for unverified prospects
+        // =================================================================================
+        if (created && created.length > 0) {
+            // Fetch the prospect details to check their verification status
+            const { data: prospectDetails } = await supabase
+                .from('scrape_prospect')
+                .select('id_prospect, check_email, email_scrap_etat')
+                .in('id_prospect', created.map(c => c.prospect_id))
+
+            if (prospectDetails) {
+                const unverifiedIds = prospectDetails
+                    .filter(p => p.check_email !== true && p.email_scrap_etat !== 'verifie' && p.email_scrap_etat !== 'verified')
+                    .map(p => p.id_prospect)
+
+                if (unverifiedIds.length > 0) {
+                    console.log(`[Auto Verify] Triggering verification for ${unverifiedIds.length} unverified prospects...`)
+                    const HARDCODED_URL = "https://n8n.srv903375.hstgr.cloud/webhook/neuraflow_scrappeur_deep-search-prospect-&-check-email"
+                    const deepSearchWebhook = process.env.N8N_DEEP_SEARCH_WEBHOOK || process.env.NEXT_PUBLIC_N8N_DEEP_SEARCH_WEBHOOK || HARDCODED_URL
+
+                    // Create a deep_search_job so the UI tracks it (and for n8n to reference)
+                    const { data: job } = await supabase
+                        .from('deep_search_jobs')
+                        .insert({
+                            user_id: user.id,
+                            prospect_ids: unverifiedIds,
+                            prospects_total: unverifiedIds.length,
+                            status: 'pending'
+                        })
+                        .select()
+                        .single()
+
+                    if (job) {
+                        fetch(deepSearchWebhook, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                user_id: user.id,
+                                job_id: job.id,
+                                prospect_ids: unverifiedIds
+                            })
+                        }).catch(err => console.error("[Auto Verify] Webhook Failed:", err))
+                    }
+                }
+            }
+        }
+
         return NextResponse.json({
             success: true,
             added: created?.length || 0,

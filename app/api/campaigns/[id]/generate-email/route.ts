@@ -60,6 +60,7 @@ export async function POST(
             .select('prospect_ids')
             .eq('campaign_id', campaignId)
             .in('status', ['pending', 'running'])
+            .gte('created_at', new Date(Date.now() - 60 * 60 * 1000).toISOString())
 
         const totalInProgress = (activeJobs || []).reduce((sum: number, job: any) => {
             return sum + (Array.isArray(job.prospect_ids) ? job.prospect_ids.length : 0)
