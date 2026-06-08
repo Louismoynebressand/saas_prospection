@@ -176,7 +176,7 @@ export function AddProspectsToCampaignModal({
                         ? (() => { try { return JSON.parse(p.deep_search as string) } catch { return null } })()
                         : p.deep_search
                     const hasDeepSearch = !!(deepSearch && Object.keys(deepSearch).length > 0)
-                    return { ...p, email_adresse_verified: emailNormalized, hasEmail, hasDeepSearch }
+                    return { ...p, email_adresse_verified: emailNormalized || undefined, hasEmail, hasDeepSearch }
                 })
 
             setProspects(enrichedProspects)
