@@ -7,7 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
-import { Loader2, UserPlus, Mail, Send, Eye, Zap, Server, Star, Settings, Trash2 } from "lucide-react"
+import { Loader2, UserPlus, Mail, Send, Eye, Zap, Server, Star, Settings, Trash2, Search, X, Filter } from "lucide-react"
 import { AddProspectsToCampaignModal } from "./AddProspectsToCampaignModal"
 import { ProspectViewModal } from "./ProspectViewModal"
 import { ProspectDetailModal } from "./ProspectDetailModal"
@@ -52,6 +52,10 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
     const [checkingJob, setCheckingJob] = useState(false)
     const [showCap50Dialog, setShowCap50Dialog] = useState(false)
     const [pendingGenerateIds, setPendingGenerateIds] = useState<string[]>([])
+
+    // Search & filter state
+    const [searchQuery, setSearchQuery] = useState('')
+    const [filterStatus, setFilterStatus] = useState<string>('all')
 
     // Supabase Realtime: subscribe to campaign_prospects changes
     useEffect(() => {
@@ -415,6 +419,36 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
         sent: prospects.filter(p => p.email_status === 'sent').length
     }
 
+    // Filtered prospects based on search and status
+    const filteredProspects = prospects.filter(cp => {
+        const prospect = (cp as any).scrape_prospect as any
+        let data: any = {}
+        try {
+            data = typeof prospect?.data_scrapping === 'string'
+                ? JSON.parse(prospect.data_scrapping)
+                : prospect?.data_scrapping || {}
+        } catch (e) { /* ignore */ }
+
+        const name = data.title || data.nom_complet || data.name || data.Titre || (data.nom ? `${data.prenom || ''} ${data.nom}`.trim() : null) || ''
+        const company = data.company || data.companyName || data.societe || prospect?.secteur || ''
+        const rawEmail = prospect?.email_adresse_verified
+        let email = ''
+        if (Array.isArray(rawEmail) && rawEmail.length > 0) email = rawEmail[0]
+        else if (typeof rawEmail === 'string' && rawEmail.trim().startsWith('[')) {
+            try { const p = JSON.parse(rawEmail); email = Array.isArray(p) && p.length > 0 ? p[0] : rawEmail } catch { email = rawEmail }
+        } else if (typeof rawEmail === 'string') email = rawEmail
+
+        const q = searchQuery.toLowerCase()
+        const matchesSearch = !searchQuery ||
+            name.toLowerCase().includes(q) ||
+            company.toLowerCase().includes(q) ||
+            email.toLowerCase().includes(q)
+
+        const matchesStatus = filterStatus === 'all' || cp.email_status === filterStatus
+
+        return matchesSearch && matchesStatus
+    })
+
     const canGenerateSelected = Array.from(selectedProspects).some(id => {
         const p = prospects.find(pr => pr.prospect_id === id)
         return p?.email_status === 'not_generated'
@@ -520,6 +554,51 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
             {/* Prospects table */}
             <Card>
                 <CardContent className="p-0">
+                    {/* Search and filter bar */}
+                    {!loading && prospects.length > 0 && (
+                        <div className="flex flex-col sm:flex-row gap-2 px-4 py-3 border-b bg-slate-50/50">
+                            <div className="relative flex-1">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                                <input
+                                    type="text"
+                                    placeholder="Rechercher par nom, société, email..."
+                                    className="w-full pl-8 pr-8 py-1.5 text-sm border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                                    value={searchQuery}
+                                    onChange={e => setSearchQuery(e.target.value)}
+                                />
+                                {searchQuery && (
+                                    <button
+                                        onClick={() => setSearchQuery('')}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                    >
+                                        <X className="h-3.5 w-3.5" />
+                                    </button>
+                                )}
+                            </div>
+                            <select
+                                value={filterStatus}
+                                onChange={e => setFilterStatus(e.target.value)}
+                                className="text-sm border rounded-md px-2 py-1.5 bg-background focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                            >
+                                <option value="all">Tous les statuts</option>
+                                <option value="not_generated">Non généré</option>
+                                <option value="pending">En attente</option>
+                                <option value="generated">Généré</option>
+                                <option value="sending">En cours d'envoi</option>
+                                <option value="sent">Envoyé</option>
+                                <option value="delivered">Délivré</option>
+                                <option value="opened">Ouvert</option>
+                                <option value="clicked">Cliqué</option>
+                                <option value="bounced">Rebond</option>
+                                <option value="replied">Répondu</option>
+                            </select>
+                            {(searchQuery || filterStatus !== 'all') && (
+                                <span className="text-xs text-muted-foreground self-center whitespace-nowrap">
+                                    {filteredProspects.length} / {prospects.length}
+                                </span>
+                            )}
+                        </div>
+                    )}
                     {loading ? (
                         <div className="flex justify-center items-center py-12">
                             <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
@@ -533,6 +612,13 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
                                     Ajouter des prospects
                                 </Button>
                             )}
+                        </div>
+                    ) : filteredProspects.length === 0 ? (
+                        <div className="text-center py-12">
+                            <p className="text-muted-foreground mb-2">Aucun prospect correspondant</p>
+                            <Button variant="ghost" size="sm" onClick={() => { setSearchQuery(''); setFilterStatus('all') }}>
+                                <X className="w-3.5 h-3.5 mr-1" /> Réinitialiser les filtres
+                            </Button>
                         </div>
                     ) : (
                         <div className="overflow-x-auto">
@@ -553,7 +639,7 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {prospects.map((cp) => {
+                                    {filteredProspects.map((cp) => {
                                         const prospect = (cp as any).scrape_prospect as any
                                         let data: any = {}
                                         try {

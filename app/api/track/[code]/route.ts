@@ -3,19 +3,21 @@
  * 
  * Endpoint de redirection pour les liens traçables.
  * - Cherche le short_code en base
- * - Incrémente les compteurs de clics
+ * - Incrémente les compteurs de clics via RPC SECURITY DEFINER
  * - Enregistre l'événement de clic
  * - Redirige vers l'URL originale
  * 
  * Utilise service_role pour bypasser RLS (pas d'auth user dans un email).
- * Utilise edge runtime pour une latence minimale.
+ * IMPORTANT: Doit utiliser Node.js runtime (pas edge) car SUPABASE_SERVICE_ROLE_KEY
+ * n'est pas disponible en edge runtime.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-export const runtime = 'edge'
 export const dynamic = 'force-dynamic'
+// No 'export const runtime = "edge"' — uses Node.js runtime by default
+// This is needed because SUPABASE_SERVICE_ROLE_KEY is a server-only env var
 
 export async function GET(
     request: NextRequest,
@@ -27,9 +29,10 @@ export async function GET(
         return new NextResponse('Invalid tracking code', { status: 400 })
     }
 
+    // Use service role to bypass RLS — this endpoint is called from emails, no user session available
     const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL || 'http://localhost:54321',
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'dummy_key'
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
     try {
@@ -38,7 +41,7 @@ export async function GET(
             || 'unknown'
         const userAgent = request.headers.get('user-agent') || ''
 
-        // 1. Process the click fully in the database (bypasses RLS securely via RPC)
+        // 1. Process the click fully in the database (secure via SECURITY DEFINER RPC)
         const { data: originalUrl, error } = await supabase.rpc('process_tracked_link_click', {
             p_short_code: code,
             p_ip_address: ip,
