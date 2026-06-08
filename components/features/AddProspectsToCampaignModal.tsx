@@ -15,7 +15,7 @@ import {
     Mail, MailX, AlertTriangle, CheckCircle2, CreditCard
 } from "lucide-react"
 import type { ScrapeProspect, ProspectWithFlags } from "@/types"
-import { cn } from "@/lib/utils"
+import { cn, extractProspectEmail } from "@/lib/utils"
 
 interface SearchJob {
     id_jobs: number
@@ -169,13 +169,7 @@ export function AddProspectsToCampaignModal({
             const enrichedProspects: ProspectWithFlags[] = (data || [])
                 .filter((p: ScrapeProspect) => !inThisCampaign.has(String(p.id_prospect))) // hide already in this campaign
                 .map((p: ScrapeProspect) => {
-                    // Normalize email — handle array-string artifacts like ["email@domain.com"]
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    let emailNormalized: any = p.email_adresse_verified
-                    if (typeof emailNormalized === 'string' && emailNormalized.startsWith('[')) {
-                        try { emailNormalized = JSON.parse(emailNormalized)?.[0] || undefined } catch { emailNormalized = undefined }
-                    }
-                    if (Array.isArray(emailNormalized)) emailNormalized = emailNormalized[0] || undefined
+                    const emailNormalized = extractProspectEmail(p)
                     const hasEmail = !!emailNormalized
 
                     const deepSearch = typeof p.deep_search === 'string'
@@ -209,32 +203,18 @@ export function AddProspectsToCampaignModal({
 
             const searchesWithCounts = await Promise.all(
                 (searchData || []).map(async (search: SearchJob) => {
-                    // Fetch all email values for this job to count robustly client-side
+                    // Fetch all prospects with full data for email checking
                     const { data: prospectsData } = await supabase
                         .from('scrape_prospect')
-                        .select('id_prospect, email_adresse_verified')
+                        .select('id_prospect, email_adresse_verified, data_scrapping, deep_search')
                         .eq('id_jobs', search.id_jobs)
                         .eq('id_user', user.id)
 
                     const total = prospectsData?.length || 0
 
-                    // Count prospects with a truly valid email (handles string, array, JSON string)
+                    // Count prospects with a truly valid email (handles string, array, JSON string + deep_search + data_scrapping)
                     const withEmail = (prospectsData || []).filter((p: any) => {
-                        const e = p.email_adresse_verified
-                        if (!e) return false
-                        if (Array.isArray(e)) return e.length > 0 && !!String(e[0]).trim()
-                        if (typeof e === 'string') {
-                            const trimmed = e.trim()
-                            if (!trimmed || trimmed === '[]' || trimmed === 'null') return false
-                            if (trimmed.startsWith('[')) {
-                                try {
-                                    const arr = JSON.parse(trimmed)
-                                    return Array.isArray(arr) && arr.length > 0 && !!String(arr[0]).trim()
-                                } catch { return false }
-                            }
-                            return trimmed.includes('@')
-                        }
-                        return false
+                        return !!extractProspectEmail(p);
                     }).length
 
                     return { ...search, prospectCount: total, emailCount: withEmail }
@@ -355,9 +335,7 @@ export function AddProspectsToCampaignModal({
             const data = typeof p.data_scrapping === 'string' ? JSON.parse(p.data_scrapping) : p.data_scrapping || {}
             const name = data.title || data.nom_complet || data.name || data.Titre || (data.prenom ? `${data.prenom} ${data.nom || ''}`.trim() : data.nom) || ''
             const company = data.company || data.companyName || data.societe || p.secteur || ''
-            const email = Array.isArray(p.email_adresse_verified)
-                ? p.email_adresse_verified[0] || ''
-                : (p.email_adresse_verified as string) || ''
+            const email = extractProspectEmail(p) || ''
             const q = searchTerm.toLowerCase()
             return name.toLowerCase().includes(q) || company.toLowerCase().includes(q) || email.toLowerCase().includes(q)
         }
@@ -528,9 +506,7 @@ export function AddProspectsToCampaignModal({
                                                 || (rawData.prenom ? `${rawData.prenom} ${rawData.nom || ''}`.trim() : rawData.nom)
                                                 || 'Prospect sans nom'
                                             const company = rawData.company || rawData.companyName || rawData.societe || rawData.raison_sociale || prospect.secteur || ''
-                                            const email = Array.isArray(prospect.email_adresse_verified)
-                                                ? prospect.email_adresse_verified[0]
-                                                : prospect.email_adresse_verified as string | undefined
+                                            const email = extractProspectEmail(prospect)
                                             const isSelected = selectedProspectIds.has(prospect.id_prospect)
                                             const isInOther = prospectIdsInOtherCampaign.has(String(prospect.id_prospect))
 

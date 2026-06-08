@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { extractProspectEmail } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -118,28 +119,17 @@ export async function POST(
         else if (searchIds && Array.isArray(searchIds)) {
             const { data: prospects, error: prospectError } = await supabase
                 .from('scrape_prospect')
-                .select('id_prospect, email_adresse_verified')
+                .select('id_prospect, email_adresse_verified, data_scrapping, deep_search')
                 .in('id_jobs', searchIds)
                 .eq('id_user', user.id)
-                .not('email_adresse_verified', 'is', null)
-                .neq('email_adresse_verified', '')
-                .neq('email_adresse_verified', '[]')
 
             if (prospectError) {
                 return NextResponse.json({ error: prospectError.message }, { status: 500 })
             }
 
-            // Extra JS filter to exclude empty array values
+            // Extra JS filter to exclude those without valid emails
             finalProspectIds = (prospects || [])
-                .filter((p: any) => {
-                    const e = p.email_adresse_verified
-                    if (!e) return false
-                    if (Array.isArray(e)) return e.length > 0 && !!e[0]
-                    if (typeof e === 'string' && e.startsWith('[')) {
-                        try { const arr = JSON.parse(e); return arr.length > 0 && !!arr[0] } catch { return false }
-                    }
-                    return true
-                })
+                .filter((p: any) => !!extractProspectEmail(p))
                 .map((p: any) => p.id_prospect)
         } else {
             return NextResponse.json({ error: 'Either prospectIds or searchIds required' }, { status: 400 })

@@ -11,6 +11,7 @@ import { AIBadge } from "@/components/ui/ai-badge"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Loader2, CheckCircle2, Search, Mail, Eye, ArrowRight, Sparkles } from "lucide-react"
 import { toast } from "sonner"
+import { extractProspectEmail } from "@/lib/utils"
 
 interface ScrapingProgressWidgetProps {
     jobId: string | number
@@ -60,25 +61,15 @@ export function ScrapingProgressWidget({ jobId, maxResults, enrichmentEnabled = 
                 .select('*', { count: 'exact', head: true })
                 .eq('id_jobs', jobIdStr)
 
-            // 2. Count Emails (Accurately parsing email_adresse_verified to ignore empty strings or '[]')
+            // 2. Count Emails (Accurately checking all fields using extractProspectEmail)
             const { data: emailsData } = await supabase
                 .from('scrape_prospect')
-                .select('email_adresse_verified')
+                .select('email_adresse_verified, data_scrapping, deep_search')
                 .eq('id_jobs', jobIdStr)
-                .not('email_adresse_verified', 'is', null)
                 
             let emailsCount = 0;
             if (emailsData) {
-                emailsCount = emailsData.filter((row: any) => {
-                    const e = row.email_adresse_verified;
-                    if (!e) return false;
-                    if (Array.isArray(e) && e.length === 0) return false;
-                    if (typeof e === 'string') {
-                        const trimmed = e.trim();
-                        if (trimmed === '' || trimmed === '[]' || trimmed === 'null') return false;
-                    }
-                    return true;
-                }).length;
+                emailsCount = emailsData.filter((row: any) => !!extractProspectEmail(row)).length;
             }
 
             // 3. Count Enriched (where deep_search is not null)
