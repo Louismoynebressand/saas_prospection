@@ -7,7 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
-import { Loader2, UserPlus, Mail, Send, Eye, Zap, Server, Star, Settings, Trash2, Search, X, Filter } from "lucide-react"
+import { Loader2, UserPlus, Mail, Send, Eye, Zap, Server, Star, Settings, Trash2, Search, X, Filter, Link2, RefreshCw } from "lucide-react"
 import { AddProspectsToCampaignModal } from "./AddProspectsToCampaignModal"
 import { ProspectViewModal } from "./ProspectViewModal"
 import { ProspectDetailModal } from "./ProspectDetailModal"
@@ -56,6 +56,10 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
     // Search & filter state
     const [searchQuery, setSearchQuery] = useState('')
     const [filterStatus, setFilterStatus] = useState<string>('all')
+
+    // Link tracking regeneration
+    const [regeneratingLinks, setRegeneratingLinks] = useState(false)
+    const [trackingStats, setTrackingStats] = useState<{ total: number; withClicks: number } | null>(null)
 
     // Supabase Realtime: subscribe to campaign_prospects changes
     useEffect(() => {
@@ -215,6 +219,32 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
             toast.error(error.message)
         } finally {
             setBatchActionLoading(false)
+        }
+    }
+
+    const handleRegenerateTracking = async () => {
+        try {
+            setRegeneratingLinks(true)
+            const response = await fetch(`/api/campaigns/${campaignId}/regenerate-tracking`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            })
+            const data = await response.json()
+            if (!response.ok) {
+                toast.error(data.error || 'Erreur lors de la régénération des liens')
+                return
+            }
+            if (data.total_links_created === 0) {
+                toast.warning('Aucun lien créé — vérifiez que la signature a bien un téléphone, email, site web ou lien personnalisé configuré.')
+            } else {
+                toast.success(`${data.total_links_created} lien(s) de tracking régénéré(s) pour ${data.regenerated} prospect(s) ✅`, { duration: 5000 })
+                setTrackingStats({ total: data.total_links_created, withClicks: 0 })
+            }
+        } catch (error: any) {
+            toast.error('Erreur : ' + error.message)
+        } finally {
+            setRegeneratingLinks(false)
         }
     }
 
@@ -466,13 +496,34 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
                 <CardHeader className="pb-2 pt-4 px-4">
                     <div className="flex items-center justify-between gap-3">
                         <CardTitle className="text-base md:text-xl font-bold">Prospects</CardTitle>
-                        {onAddProspects && (
-                            <Button onClick={onAddProspects} size="sm" className="gap-1.5 shrink-0">
-                                <UserPlus className="w-3.5 h-3.5" />
-                                <span className="hidden sm:inline">Ajouter des prospects</span>
-                                <span className="sm:hidden">Ajouter</span>
-                            </Button>
-                        )}
+                        <div className="flex items-center gap-2">
+                            {/* Regenerate tracking links button */}
+                            {prospects.length > 0 && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleRegenerateTracking}
+                                    disabled={regeneratingLinks}
+                                    title="Régénérer les liens de tracking pour tous les prospects (à faire après modification de la signature)"
+                                    className="gap-1.5 text-xs text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-700"
+                                >
+                                    {regeneratingLinks ? (
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    ) : (
+                                        <Link2 className="w-3.5 h-3.5" />
+                                    )}
+                                    <span className="hidden sm:inline">Liens tracking</span>
+                                    <RefreshCw className="w-3 h-3" />
+                                </Button>
+                            )}
+                            {onAddProspects && (
+                                <Button onClick={onAddProspects} size="sm" className="gap-1.5 shrink-0">
+                                    <UserPlus className="w-3.5 h-3.5" />
+                                    <span className="hidden sm:inline">Ajouter des prospects</span>
+                                    <span className="sm:hidden">Ajouter</span>
+                                </Button>
+                            )}
+                        </div>
                     </div>
                 </CardHeader>
                 <CardContent className="px-4 pb-3">
