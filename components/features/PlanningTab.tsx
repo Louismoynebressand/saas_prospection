@@ -143,14 +143,23 @@ export function PlanningTab({ schedule, campaign, queueStats, onUpdate, onAddPro
                 const todayStart = new Date()
                 todayStart.setHours(0, 0, 0, 0)
 
-                const { data } = await supabase
+                // PRIMARY: email_sends table covers both manual and automatic sends
+                const { data: emailSendsData } = await supabase
+                    .from('email_sends')
+                    .select('id, lead_id, to_email, subject, status, created_at, sent_at')
+                    .eq('campaign_id', schedule.campaign_id)
+                    .in('status', ['accepted', 'sent', 'delivered', 'opened', 'clicked', 'replied'])
+                    .gte('created_at', todayStart.toISOString())
+                    .order('created_at', { ascending: false })
+
+                // FALLBACK: campaign_prospects with sent_at (for older records)
+                const { data: cpData } = await supabase
                     .from('campaign_prospects')
                     .select(`
                         prospect_id,
                         email_status,
                         sent_at,
                         generated_email_subject,
-                        generated_email_content,
                         prospect:scrape_prospect(
                             id_prospect,
                             data_scrapping,
@@ -159,23 +168,80 @@ export function PlanningTab({ schedule, campaign, queueStats, onUpdate, onAddPro
                         )
                     `)
                     .eq('campaign_id', schedule.campaign_id)
-                    .in('email_status', ['sent', 'delivered', 'opened', 'clicked', 'replied'])
+                    .in('email_status', ['sent', 'delivered', 'opened', 'clicked', 'replied', 'bounced'])
                     .gte('sent_at', todayStart.toISOString())
-                    .order('sent_at', { ascending: false })
 
-                if (data) {
-                    const enriched = data.map((item: any) => {
-                        const raw = (() => { try { return typeof item.prospect?.data_scrapping === 'string' ? JSON.parse(item.prospect.data_scrapping) : (item.prospect?.data_scrapping || {}) } catch { return {} } })()
-                        const deep = (() => { try { return typeof item.prospect?.deep_search === 'string' ? JSON.parse(item.prospect.deep_search) : (item.prospect?.deep_search || {}) } catch { return {} } })()
+                // Build prospect map from cpData
+                const prospectMap: Record<string, any> = {}
+                if (cpData) {
+                    cpData.forEach((cp: any) => {
+                        prospectMap[cp.prospect_id] = cp
+                    })
+                }
+
+                // Merge: use email_sends as base, enrich with prospect data
+                const leadIds = emailSendsData?.map((s: any) => s.lead_id).filter(Boolean) || []
+                
+                // Get prospect data for these leads
+                let prospectData: any[] = []
+                if (leadIds.length > 0) {
+                    const { data: prospects } = await supabase
+                        .from('scrape_prospect')
+                        .select('id_prospect, data_scrapping, deep_search, email_adresse_verified')
+                        .in('id_prospect', leadIds)
+                    prospectData = prospects || []
+                }
+
+                const prospectById: Record<string, any> = {}
+                prospectData.forEach((p: any) => { prospectById[p.id_prospect] = p })
+
+                // Deduplicate by lead_id (keep latest)
+                const seen = new Set<string>()
+                const enriched: any[] = []
+
+                // Process email_sends first (most reliable source)
+                if (emailSendsData) {
+                    for (const send of emailSendsData) {
+                        if (!send.lead_id || seen.has(String(send.lead_id))) continue
+                        seen.add(String(send.lead_id))
+                        const p = prospectById[send.lead_id]
+                        const raw = (() => { try { return typeof p?.data_scrapping === 'string' ? JSON.parse(p.data_scrapping) : (p?.data_scrapping || {}) } catch { return {} } })()
+                        const deep = (() => { try { return typeof p?.deep_search === 'string' ? JSON.parse(p.deep_search) : (p?.deep_search || {}) } catch { return {} } })()
                         const name = deep.nom_complet || raw.Titre || raw.title || raw.name || 'Prospect'
                         const company = deep.nom_raison_sociale || raw.company || raw.companyName || raw.Société || ''
-                        let email = item.prospect?.email_adresse_verified
+                        let email = send.to_email || p?.email_adresse_verified
                         if (typeof email === 'string' && email.startsWith('[')) { try { email = JSON.parse(email)?.[0] } catch {} }
                         if (Array.isArray(email)) email = email[0]
-                        return { ...item, name, company, email }
-                    })
-                    setTodaySent(enriched)
+                        const cpRecord = prospectMap[send.lead_id]
+                        enriched.push({
+                            prospect_id: send.lead_id,
+                            email_status: cpRecord?.email_status || send.status,
+                            sent_at: send.sent_at || send.created_at,
+                            generated_email_subject: send.subject || cpRecord?.generated_email_subject,
+                            prospect: p,
+                            name, company, email,
+                            source: 'email_sends'
+                        })
+                    }
                 }
+
+                // Also add from campaign_prospects if not already seen (e.g. older records with sent_at)
+                if (cpData) {
+                    for (const cp of cpData) {
+                        if (seen.has(String(cp.prospect_id))) continue
+                        seen.add(String(cp.prospect_id))
+                        const raw = (() => { try { return typeof cp.prospect?.data_scrapping === 'string' ? JSON.parse(cp.prospect.data_scrapping) : (cp.prospect?.data_scrapping || {}) } catch { return {} } })()
+                        const deep = (() => { try { return typeof cp.prospect?.deep_search === 'string' ? JSON.parse(cp.prospect.deep_search) : (cp.prospect?.deep_search || {}) } catch { return {} } })()
+                        const name = deep.nom_complet || raw.Titre || raw.title || raw.name || 'Prospect'
+                        const company = deep.nom_raison_sociale || raw.company || raw.companyName || raw.Société || ''
+                        let email = cp.prospect?.email_adresse_verified
+                        if (typeof email === 'string' && email.startsWith('[')) { try { email = JSON.parse(email)?.[0] } catch {} }
+                        if (Array.isArray(email)) email = email[0]
+                        enriched.push({ ...cp, name, company, email, source: 'campaign_prospects' })
+                    }
+                }
+
+                setTodaySent(enriched)
             } catch (err) {
                 console.error('Error fetching today sent:', err)
             } finally {
@@ -184,6 +250,7 @@ export function PlanningTab({ schedule, campaign, queueStats, onUpdate, onAddPro
         }
         fetchTodaySent()
     }, [schedule?.campaign_id, supabase])
+
 
     // Load holidays logic for edit (only if turning ON for the first time)
     useEffect(() => {

@@ -443,10 +443,12 @@ export function CampaignProspectsList({ campaignId, campaign, onAddProspects, re
         }
     }
 
+    const SENT_STATUSES = ['sent', 'sending', 'delivered', 'opened', 'clicked', 'replied', 'bounced']
+
     const stats = {
         total: prospects.length,
-        generated: prospects.filter(p => p.email_status === 'generated' || p.email_status === 'sent').length,
-        sent: prospects.filter(p => p.email_status === 'sent').length
+        generated: prospects.filter(p => p.email_status === 'generated' || SENT_STATUSES.includes(p.email_status || '')).length,
+        sent: prospects.filter(p => SENT_STATUSES.includes(p.email_status || '')).length
     }
 
     // Filtered prospects based on search and status

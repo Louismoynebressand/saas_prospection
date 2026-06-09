@@ -249,6 +249,26 @@ export function CampaignConfigEditor({ campaign, onUpdate }: CampaignConfigEdito
                                             .eq('id', campaign.id)
 
                                         if (error) throw error
+
+                                        // Auto-regenerate tracked links for all prospects in this campaign
+                                        // so that future sends use the fresh signature with correct phone/email/website
+                                        try {
+                                            const regen = await fetch(`/api/campaigns/${campaign.id}/regenerate-tracking`, {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({})
+                                            })
+                                            const regenData = await regen.json()
+                                            if (regen.ok && regenData.total_links_created > 0) {
+                                                toast.success(`✅ Signature enregistrée — ${regenData.total_links_created} lien(s) de tracking mis à jour pour ${regenData.regenerated} prospect(s)`, { duration: 6000 })
+                                            } else if (regen.ok) {
+                                                toast.success('✅ Signature enregistrée')
+                                            }
+                                        } catch (regenErr) {
+                                            // Non-blocking: signature is saved even if tracking regen fails
+                                            console.warn('Tracking regen failed (non-blocking):', regenErr)
+                                            toast.success('✅ Signature enregistrée')
+                                        }
                                     } catch (error) {
                                         console.error('Auto-save signature error:', error)
                                         throw error
