@@ -26,16 +26,29 @@ export function ProspectViewModal({
 }: ProspectViewModalProps) {
     if (!prospect) return null
 
-    // Parse data_scrapping
-    const prospectData = typeof prospect.data_scrapping === 'string'
-        ? JSON.parse(prospect.data_scrapping)
-        : prospect.data_scrapping || {}
+    // Safe JSON parse helper — handles sentinel strings like "aucune_donnée_trouve"
+    const safeParse = (raw: any): Record<string, any> => {
+        if (!raw) return {}
+        if (typeof raw === 'object' && !Array.isArray(raw)) return raw
+        if (typeof raw === 'string') {
+            const trimmed = raw.trim()
+            if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+                try { return JSON.parse(trimmed) } catch { return {} }
+            }
+        }
+        return {}
+    }
 
-    const prospectName = prospectData.title || prospectData.name || 'Prospect'
-    const prospectCompany = prospectData.company || prospectData.companyName || prospect.secteur
-    const prospectTitle = prospectData.jobTitle || prospectData.position
-    const prospectPhone = prospectData.phone || prospectData.telephone
-    const prospectWebsite = prospectData.website || prospectData.url
+    // Parse data_scrapping
+    const prospectData = safeParse(prospect.data_scrapping)
+    const deepData = safeParse(prospect.deep_search)
+
+    const prospectName = prospectData.Titre || prospectData.title || prospectData.nom_complet || deepData.nom_raison_sociale || deepData.nom_complet || 'Prospect'
+    const prospectCompany = prospectData.company || prospectData.companyName || prospect.secteur || deepData.nom_raison_sociale || ''
+    const prospectTitle = prospectData.jobTitle || prospectData.position || ''
+    const prospectPhone = prospectData['Téléphone'] || prospectData.telephone || prospectData.phone || prospectData.Phone || ''
+    const prospectWebsite = prospectData['Site web'] || prospectData.website || prospectData.url || ''
+
 
     const getStatusColor = (status?: string) => {
         switch (status) {

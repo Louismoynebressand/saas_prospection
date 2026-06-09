@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { safeJsonParse } from "@/lib/safe-parse"
 import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
 import {
@@ -332,7 +333,7 @@ export function AddProspectsToCampaignModal({
         if (filterExcludeOther && prospectIdsInOtherCampaign.has(String(p.id_prospect))) return false
         // Search term
         if (searchTerm) {
-            const data = typeof p.data_scrapping === 'string' ? JSON.parse(p.data_scrapping) : p.data_scrapping || {}
+            const data = safeJsonParse(p.data_scrapping)
             const name = data.title || data.nom_complet || data.name || data.Titre || (data.prenom ? `${data.prenom} ${data.nom || ''}`.trim() : data.nom) || ''
             const company = data.company || data.companyName || data.societe || p.secteur || ''
             const email = extractProspectEmail(p) || ''
@@ -499,9 +500,7 @@ export function AddProspectsToCampaignModal({
                                 <ScrollArea className="h-[280px] sm:h-[320px]">
                                     <div className="p-2 space-y-1">
                                         {filteredProspects.map((prospect) => {
-                                            const rawData = typeof prospect.data_scrapping === 'string'
-                                                ? JSON.parse(prospect.data_scrapping)
-                                                : prospect.data_scrapping || {}
+                                            const rawData = safeJsonParse(prospect.data_scrapping)
                                             const name = rawData.title || rawData.nom_complet || rawData.name || rawData.Titre
                                                 || (rawData.prenom ? `${rawData.prenom} ${rawData.nom || ''}`.trim() : rawData.nom)
                                                 || 'Prospect sans nom'

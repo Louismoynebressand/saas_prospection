@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { authenticatedFetch } from "@/lib/fetch-client"
 import { ScrapeProspect, Campaign } from "@/types"
+import { safeJsonParse } from "@/lib/safe-parse"
 import { motion, AnimatePresence } from "framer-motion"
 import confetti from "canvas-confetti"
 import { Button } from "@/components/ui/button"
@@ -125,7 +126,7 @@ export function EmailGenerationModal({ open, onOpenChange, prospect, onSuccess }
         }
     }
 
-    const isDeepSearchMissing = !prospect.deep_search || Object.keys(typeof prospect.deep_search === 'string' ? JSON.parse(prospect.deep_search) : prospect.deep_search || {}).length === 0
+    const isDeepSearchMissing = !prospect.deep_search || Object.keys(safeJsonParse(prospect.deep_search)).length === 0
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>

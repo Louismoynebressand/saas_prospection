@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { Loader2, Sparkles, Wand2, Mail, CheckCircle2, Zap, Cloud, CloudOff } from "lucide-react"
+import { safeJsonParse } from "@/lib/safe-parse"
 
 interface PersonalizationTabProps {
     campaign: Campaign
@@ -120,9 +121,7 @@ export function PersonalizationTab({ campaign, onUpdate }: PersonalizationTabPro
             if (data) {
                 const mapped = data.map((item: any) => ({
                     id_prospect: item.prospect.id_prospect,
-                    data: typeof item.prospect.data_scrapping === 'string'
-                        ? JSON.parse(item.prospect.data_scrapping)
-                        : item.prospect.data_scrapping
+                    data: safeJsonParse(item.prospect.data_scrapping)
                 }))
                 setProspects(mapped.map((p: any) => {
                     const d = p.data || {}
