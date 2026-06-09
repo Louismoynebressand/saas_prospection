@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { logInfo, logError } from '@/lib/logger'
+import {
+    extractSignatureLinks,
+    createTrackedLinksForProspect,
+    buildTrackedSignatureHtml
+} from '@/lib/email-link-tracker'
 
 // Schema pour valider le payload
 const generateEmailSchema = z.object({
@@ -176,6 +181,81 @@ export async function POST(request: NextRequest) {
             .select('*')
             .in('id', validated.prospectIds)
 
+        // ── STEP 4.5: Génération des liens de tracking pour chaque prospect ──────
+        // Charger les données de signature de la campagne
+        const { data: campaignForSig } = await supabase
+            .from('cold_email_campaigns')
+            .select(`
+                id, my_website,
+                signature_name, signature_title, signature_company,
+                signature_phone, signature_email, signature_ps,
+                signature_show_phone, signature_show_email, signature_show_website,
+                signature_website_text, signature_custom_link_url, signature_custom_link_text,
+                signature_elements_order
+            `)
+            .eq('id', validated.campaignId)
+            .single()
+
+        // Map prospectId → tracked links + signature HTML
+        const prospectTrackingData: Record<string, {
+            tracked_links: Array<{ type: string; label: string; original_url: string; tracking_url: string; short_code: string }>
+            signature_tracked_html: string
+        }> = {}
+
+        if (campaignForSig) {
+            const signatureLinks = extractSignatureLinks(campaignForSig)
+
+            if (signatureLinks.length > 0) {
+                for (const prospectId of validated.prospectIds) {
+                    try {
+                        const pId = Number(prospectId)
+
+                        // Supprimer les anciens liens trackés pour ce prospect/campagne
+                        await supabase
+                            .from('email_tracked_links')
+                            .delete()
+                            .eq('campaign_id', validated.campaignId)
+                            .eq('prospect_id', pId)
+
+                        // Créer les nouveaux liens trackés
+                        const trackedLinks = await createTrackedLinksForProspect(
+                            validated.campaignId,
+                            pId,
+                            signatureLinks
+                        )
+
+                        // Construire le HTML de signature avec liens trackés
+                        const signatureTrackedHtml = buildTrackedSignatureHtml(campaignForSig, trackedLinks)
+
+                        // Mettre à jour campaign_prospects avec la signature trackée
+                        await supabase
+                            .from('campaign_prospects')
+                            .update({
+                                signature_tracked_html: signatureTrackedHtml,
+                                links_click_count: 0,
+                                updated_at: new Date().toISOString()
+                            })
+                            .eq('campaign_id', validated.campaignId)
+                            .eq('prospect_id', pId)
+
+                        // Sauvegarder pour le payload N8N
+                        prospectTrackingData[String(prospectId)] = {
+                            tracked_links: trackedLinks.map(tl => ({
+                                type: tl.link_type,
+                                label: tl.link_label,
+                                original_url: tl.original_url,
+                                tracking_url: tl.tracking_url,
+                                short_code: tl.short_code
+                            })),
+                            signature_tracked_html: signatureTrackedHtml
+                        }
+                    } catch (trackErr: any) {
+                        console.error(`[Generate] Tracking links failed for prospect ${prospectId}:`, trackErr.message)
+                    }
+                }
+            }
+        }
+
         // 6. Payload Webhook N8N
         const webhookPayload = {
             user_id: userId,
@@ -183,8 +263,15 @@ export async function POST(request: NextRequest) {
             campaign_id: validated.campaignId,
             prospect_ids: validated.prospectIds,
             prospects_data: prospects || [], // Enriched context for the AI prompt
-            step: validated.step, // Step information for follow-ups
-            agent_instructions: finalInstructions // Add this field
+            step: validated.step,
+            agent_instructions: finalInstructions,
+            // ── Données de tracking ──
+            // Pour chaque prospect, N8N doit utiliser signature_tracked_html
+            // (qui contient déjà les liens avec shortcodes de tracking)
+            // ou utiliser tracked_links pour construire sa propre signature
+            prospect_tracking: prospectTrackingData,
+            // Format des URLs de tracking : https://saas-prospection.vercel.app/api/track/[short_code]
+            // Remplace les URLs brutes (tel:, mailto:, https://) par ces URLs dans la signature
         }
 
         // 6. Appel Webhook (avec Timeout)
