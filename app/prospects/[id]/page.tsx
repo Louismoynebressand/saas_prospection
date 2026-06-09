@@ -237,50 +237,46 @@ export default function ProspectPage() {
             }
             setScrapped(parsedScrapped)
 
-            // 3. Fetch Deep Search Data
-            // Try fetch from dedicated table first
-            const { data: deepRow } = await supabase
-                .from('prospect_deep_search_data')
-                .select('data')
-                .eq('id_prospect', targetId)
-                .single()
-
+            // 3. Fetch Deep Search Data — only from scrape_prospect.deep_search column
+            // (prospect_deep_search_data table is not guaranteed to exist)
             let parsedDeep: DeepSearchData = {}
 
-            // Priority 1: dedicated table
-            if (deepRow && deepRow.data) {
-                if (typeof deepRow.data === 'string') {
-                    try {
-                        parsedDeep = JSON.parse(deepRow.data)
-                    } catch (e) { console.error("Failed to parse deep row", e) }
-                } else {
-                    parsedDeep = deepRow.data
-                }
-            }
-            // Priority 2: column in scrape_prospect (fallback)
-            else if (prospectData.deep_search) {
-                if (typeof prospectData.deep_search === 'string') {
-                    try {
-                        parsedDeep = JSON.parse(prospectData.deep_search)
-                    } catch (e) { console.error("Failed to parse deep column", e) }
-                } else {
-                    parsedDeep = prospectData.deep_search
+            const rawDeep = prospectData.deep_search
+            if (rawDeep) {
+                if (typeof rawDeep === 'object' && rawDeep !== null && !Array.isArray(rawDeep)) {
+                    // Already a JSONB object
+                    parsedDeep = rawDeep as DeepSearchData
+                } else if (typeof rawDeep === 'string') {
+                    const trimmed = rawDeep.trim()
+                    // Only attempt JSON parse if it looks like a JSON object or array
+                    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+                        try {
+                            parsedDeep = JSON.parse(trimmed)
+                        } catch (e) {
+                            console.warn('Failed to parse deep_search JSON:', trimmed.substring(0, 80))
+                        }
+                    } else {
+                        // Sentinel value like "aucune_donnée_trouve" — silently ignore
+                        console.info('deep_search is a non-JSON sentinel value:', trimmed)
+                    }
                 }
             }
             setDeep(parsedDeep)
 
             // 4. Navigation (previous/next)
-            const { data: allIds } = await supabase
-                .from('scrape_prospect')
-                .select('id_prospect')
-                .eq('campagne_id', prospectData.campagne_id) // Assuming context of same import campaign
-                .order('created_at', { ascending: false })
+            if (prospectData.campagne_id) {
+                const { data: allIds } = await supabase
+                    .from('scrape_prospect')
+                    .select('id_prospect')
+                    .eq('campagne_id', prospectData.campagne_id)
+                    .order('created_at', { ascending: false })
 
-            if (allIds) {
-                const currentIndex = allIds.findIndex((x: { id_prospect: string }) => x.id_prospect === targetId)
-                if (currentIndex !== -1) {
-                    setPrevId(currentIndex < allIds.length - 1 ? allIds[currentIndex + 1].id_prospect : null)
-                    setNextId(currentIndex > 0 ? allIds[currentIndex - 1].id_prospect : null)
+                if (allIds) {
+                    const currentIndex = allIds.findIndex((x: { id_prospect: string }) => x.id_prospect === targetId)
+                    if (currentIndex !== -1) {
+                        setPrevId(currentIndex < allIds.length - 1 ? allIds[currentIndex + 1].id_prospect : null)
+                        setNextId(currentIndex > 0 ? allIds[currentIndex - 1].id_prospect : null)
+                    }
                 }
             }
 
