@@ -85,7 +85,7 @@ BEGIN
         provider, provider_message_id, from_email, to_email,
         subject, html, body_text, status, sent_at, created_at
     ) VALUES (
-        v_user_id, NEW.campaign_id, NULL, v_smtp_id,
+        v_user_id, NEW.campaign_id, NEW.prospect_id::text, v_smtp_id,
         v_provider, NEW.provider_message_id, v_from_email,
         COALESCE(v_to_email, 'unknown@unknown.com'),
         v_subject, v_body, v_body,

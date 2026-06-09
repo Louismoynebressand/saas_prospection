@@ -201,20 +201,67 @@ export function PlanningTab({ schedule, campaign, queueStats, onUpdate, onAddPro
 
                 // Process email_sends first (most reliable source)
                 if (emailSendsData) {
+                    // Also fetch prospects by email for rows where lead_id is NULL (old auto-sends)
+                    const nullLeadEmails = emailSendsData
+                        .filter((s: any) => !s.lead_id && s.to_email)
+                        .map((s: any) => s.to_email)
+                    
+                    let prospectByEmail: Record<string, any> = {}
+                    if (nullLeadEmails.length > 0) {
+                        // Try to find prospects via campaign_prospects joined with email
+                        const { data: cpForEmails } = await supabase
+                            .from('campaign_prospects')
+                            .select(`
+                                prospect_id,
+                                email_status,
+                                sent_at,
+                                generated_email_subject,
+                                prospect:scrape_prospect(id_prospect, data_scrapping, deep_search, email_adresse_verified)
+                            `)
+                            .eq('campaign_id', schedule.campaign_id)
+                        
+                        if (cpForEmails) {
+                            cpForEmails.forEach((cp: any) => {
+                                let pEmail = cp.prospect?.email_adresse_verified
+                                if (typeof pEmail === 'string' && pEmail.startsWith('[')) { try { pEmail = JSON.parse(pEmail)?.[0] } catch {} }
+                                if (Array.isArray(pEmail)) pEmail = pEmail[0]
+                                if (pEmail) prospectByEmail[String(pEmail).toLowerCase()] = { ...cp, pEmail }
+                            })
+                        }
+                    }
+
                     for (const send of emailSendsData) {
-                        if (!send.lead_id || seen.has(String(send.lead_id))) continue
-                        seen.add(String(send.lead_id))
-                        const p = prospectById[send.lead_id]
+                        // Use lead_id if available, otherwise use send.id for dedup
+                        const dedupKey = send.lead_id ? `lead_${send.lead_id}` : `send_${send.id}`
+                        if (seen.has(dedupKey)) continue
+                        seen.add(dedupKey)
+
+                        let p = send.lead_id ? prospectById[send.lead_id] : null
+                        let cpRecord = send.lead_id ? prospectMap[send.lead_id] : null
+
+                        // For null lead_id, try to find by email
+                        if (!p && send.to_email) {
+                            const cpMatch = prospectByEmail[send.to_email.toLowerCase()]
+                            if (cpMatch) {
+                                p = cpMatch.prospect
+                                cpRecord = cpMatch
+                                // Mark this prospect as seen by lead_id too
+                                if (cpMatch.prospect_id) {
+                                    seen.add(`lead_${cpMatch.prospect_id}`)
+                                    prospectMap[cpMatch.prospect_id] = cpMatch
+                                }
+                            }
+                        }
+
                         const raw = (() => { try { return typeof p?.data_scrapping === 'string' ? JSON.parse(p.data_scrapping) : (p?.data_scrapping || {}) } catch { return {} } })()
                         const deep = (() => { try { return typeof p?.deep_search === 'string' ? JSON.parse(p.deep_search) : (p?.deep_search || {}) } catch { return {} } })()
-                        const name = deep.nom_complet || raw.Titre || raw.title || raw.name || 'Prospect'
+                        const name = deep.nom_complet || raw.Titre || raw.title || raw.name || (send.to_email ? send.to_email.split('@')[0] : 'Prospect')
                         const company = deep.nom_raison_sociale || raw.company || raw.companyName || raw.Société || ''
                         let email = send.to_email || p?.email_adresse_verified
                         if (typeof email === 'string' && email.startsWith('[')) { try { email = JSON.parse(email)?.[0] } catch {} }
                         if (Array.isArray(email)) email = email[0]
-                        const cpRecord = prospectMap[send.lead_id]
                         enriched.push({
-                            prospect_id: send.lead_id,
+                            prospect_id: send.lead_id || cpRecord?.prospect_id,
                             email_status: cpRecord?.email_status || send.status,
                             sent_at: send.sent_at || send.created_at,
                             generated_email_subject: send.subject || cpRecord?.generated_email_subject,
